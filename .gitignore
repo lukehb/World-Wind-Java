@@ -1,1 +1,4 @@
-/WorldWind/target/
+/WorldWind/ww-core/target/
+/WorldWind/ww-extensions/target/
+/WorldWind/ww-performance/target/
+/WorldWind/ww-tests/target/

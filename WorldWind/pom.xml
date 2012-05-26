@@ -17,6 +17,7 @@
         <module>ww-extensions</module>
         <module>ww-performance</module>
         <module>ww-tests</module>
+        <module>ww-server</module>
     </modules>
     
     <licenses>

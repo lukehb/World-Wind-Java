@@ -24,7 +24,7 @@ public class TextLayer extends AbstractLayer
     private final GeographicTextRenderer textRenderer;
     private final Collection<GeographicText> geographicTexts;
 
-    public TextLayer(String name)
+    public TextLayer()
     {
         this.textRenderer = new GeographicTextRenderer();
         this.geographicTexts = new ConcurrentLinkedQueue<GeographicText>();

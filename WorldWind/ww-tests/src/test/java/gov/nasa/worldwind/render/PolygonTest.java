@@ -6,8 +6,6 @@
 
 package gov.nasa.worldwind.render;
 
-import junit.framework.TestCase;
-
 import gov.nasa.worldwind.WorldWind;
 import gov.nasa.worldwind.geom.Extent;
 import gov.nasa.worldwind.geom.Position;
@@ -17,6 +15,10 @@ import gov.nasa.worldwind.globes.Globe;
 
 import java.util.Arrays;
 import java.util.List;
+
+import org.junit.Test;
+
+import static org.junit.Assert.assertEquals;
 
 /**
  * Unit tests for {@link Polygon}.
@@ -36,6 +38,7 @@ public class PolygonTest
         Position.fromDegrees(28, -106, 0));
     protected Sector sector = Sector.boundingSector(this.positions);
 
+    @Test
     public void testGetExtentClampToGround()
     {
         double[] minAndMaxElevations = this.globe.getMinAndMaxElevations(this.sector);
@@ -49,9 +52,10 @@ public class PolygonTest
 
         Extent actual = pgon.getExtent(this.globe, this.verticalExaggeration);
 
-        TestCase.assertEquals(expected, actual);
+        assertEquals(expected, actual);
     }
 
+    @Test
     public void testGetExtentAbsolute()
     {
         Extent expected = Sector.computeBoundingBox(this.globe, this.verticalExaggeration, this.sector, 0, 100);
@@ -61,9 +65,10 @@ public class PolygonTest
 
         Extent actual = pgon.getExtent(this.globe, this.verticalExaggeration);
 
-        TestCase.assertEquals(expected, actual);
+        assertEquals(expected, actual);
     }
 
+    @Test
     public void testGetExtentRelative()
     {
         double[] minAndMaxElevations = this.globe.getMinAndMaxElevations(this.sector);
@@ -76,6 +81,6 @@ public class PolygonTest
 
         Extent actual = pgon.getExtent(this.globe, this.verticalExaggeration);
 
-        TestCase.assertEquals(expected, actual);
+        assertEquals(expected, actual);
     }
 }

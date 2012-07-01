@@ -8,7 +8,7 @@
          Applet component Jar files. All Jar files created for the release are signed with the World Wind digital
          signature when the signature files are available. -->
     <target name="demosite.release" depends="clean.demosite.release,
-                                             worldwind.jarfile,
+                                             worldwind.core.jarfile,
                                              worldwind.extensions.jarfile,
                                              webview.webstart.jarfiles,
                                              applet.jarfile,
@@ -27,7 +27,7 @@
                 <type type="file"/>
             </fileset>
             <fileset dir="${basedir}">
-                <include name="${worldwind.jarfile}"/>
+                <include name="${worldwind.core.jarfile}"/>
                 <include name="${worldwind.extensions.jarfile}"/>
                 <include name="${webview.webstart.jarfile.macosx}"/>
                 <include name="${webview.webstart.jarfile.windows}"/>
@@ -39,7 +39,7 @@
         <!-- Sign all Jar files built for the demosite deployment. -->
         <get src="${applet.launcher.url}" dest="${demosite.release.dir}/applet-launcher.jar"/>
         <antcall target="jarsigner">
-            <param name="jarfile" value="${demosite.release.dir}/${worldwind.jarfile}"/>
+            <param name="jarfile" value="${demosite.release.dir}/${worldwind.core.jarfile}"/>
         </antcall>
         <antcall target="jarsigner">
             <param name="jarfile" value="${demosite.release.dir}/${worldwind.extensions.jarfile}"/>
@@ -70,11 +70,11 @@
          'gov.nasa.worldwindx.examples.applet.WWJApplet'. Excludes files added by Subversion, and files added by the
          operating system. The resultant Jar file is dependent on the World Wind core Jar file and the World Wind
          extensions Jar file, and has those Jar files added to its class-path. -->
-    <target name="applet.jarfile" depends="worldwind.jarfile, worldwind.extensions.jarfile"
+    <target name="applet.jarfile" depends="worldwind.core.jarfile, worldwind.extensions.jarfile"
             description="Builds the World Wind Applet component Jar file 'WWJApplet.jar'.">
         <jar jarfile="${basedir}/${applet.jarfile}">
             <manifest>
-                <attribute name="Class-Path" value="${worldwind.jarfile} ${worldwind.extensions.jarfile}"/>
+                <attribute name="Class-Path" value="${worldwind.core.jarfile} ${worldwind.extensions.jarfile}"/>
                 <attribute name="Main-Class" value="${applet.jarfile.mainclass}"/>
             </manifest>
             <fileset dir="${worldwind.classes.dir}">
@@ -89,11 +89,11 @@
          Java class 'gov.nasa.worldwindx.examples.applet.WWJAppletMinimal'. Excludes files added by Subversion, and
          files added by the operating system.The resultant Jar file is dependent on the World Wind core Jar file and the
          World Wind extensions Jar file, and has those Jar files added to its class-path. -->
-    <target name="applet.minimal.jarfile" depends="worldwind.jarfile, worldwind.extensions.jarfile"
+    <target name="applet.minimal.jarfile" depends="worldwind.core.jarfile, worldwind.extensions.jarfile"
             description="Builds the minimal World Wind Applet component Jar file 'WWJAppletMinimal.jar'.">
         <jar jarfile="${basedir}/${applet.minimal.jarfile}">
             <manifest>
-                <attribute name="Class-Path" value="${worldwind.jarfile} ${worldwind.extensions.jarfile}"/>
+                <attribute name="Class-Path" value="${worldwind.core.jarfile} ${worldwind.extensions.jarfile}"/>
                 <attribute name="Main-Class" value="${applet.minimal.jarfile.mainclass}"/>
             </manifest>
             <fileset dir="${worldwind.classes.dir}">
@@ -121,7 +121,7 @@
             keystore.storepass=NASAWorldWind
             keystore.tsaurl=https://timestamp.geotrust.com/tsa -->
     <target name="applet.release" depends="clean.applet.release,
-                                           worldwind.jarfile,
+                                           worldwind.core.jarfile,
                                            worldwind.extensions.jarfile,
                                            webview.webstart.jarfiles,
                                            applet.jarfile,
@@ -136,7 +136,7 @@
                 <type type="file"/>
             </fileset>
             <fileset dir="${basedir}">
-                <include name="${worldwind.jarfile}"/>
+                <include name="${worldwind.core.jarfile}"/>
                 <include name="${worldwind.extensions.jarfile}"/>
                 <include name="${webview.webstart.jarfile.macosx}"/>
                 <include name="${webview.webstart.jarfile.windows}"/>
@@ -148,7 +148,7 @@
         <get src="${applet.launcher.url}" dest="${applet.release.dir}/applet-launcher.jar"/>
         <!-- Sign all Jar files built for the Applet component deployment. -->
         <antcall target="jarsigner">
-            <param name="jarfile" value="${applet.release.dir}/${worldwind.jarfile}"/>
+            <param name="jarfile" value="${applet.release.dir}/${worldwind.core.jarfile}"/>
         </antcall>
         <antcall target="jarsigner">
             <param name="jarfile" value="${applet.release.dir}/${worldwind.extensions.jarfile}"/>

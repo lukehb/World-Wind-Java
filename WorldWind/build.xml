@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="ISO-8859-1"?>
 <!--$Id$-->
-<project name="worldwind" default="worldwind.jarfile" basedir=".">
+<project name="worldwind" default="worldwind.core.jarfile" basedir=".">
     <description>
         Build script for the World Wind Java SDK. Compiles the World Wind source, creates World Wind API documentation,
-        and builds World Wind JAR files. The default target 'worldwind.jarfile' builds the World Wind core JAR file. Use
+        and builds World Wind JAR files. The default target 'worldwind.core.jarfile' builds the World Wind core JAR file. Use
         the target 'build' creates all the necessary World Wind JAR files and World Wind API documentation.
     </description>
 
@@ -22,42 +22,91 @@
     <!-- Import the World Wind general utility targets. -->
     <import file="build/util.xml"/>
     <!-- Import the World Wind Server Applications targets. -->
-    <import file="servers/build.xml"/>
+    <import file="build/server.xml"/>
 
     <!-- Main build target for the World Wind Java SDK. Compiles the World Wind source, creates the World Wind API
          documentation, and builds the World Wind JAR files. -->
-    <target name="build" depends="compile,
-                                  javadocs,
-                                  worldwind.jarfile,
-                                  worldwind.extensions.jarfile"
+    <target name="build" depends="javadocs,worldwind.core.jarfile,worldwind.extensions.jarfile"
             description="Main build target for the World Wind Java SDK. Compiles the World Wind source, creates the World Wind API documentation, and builds the World Wind JAR files."/>
 
-    <!-- Compiles all World Wind Java sources under the 'src' folder into Java class files under the 'classes'
-         folder. Note that this excludes the Java sources under the 'servers/src' and 'test' directories. We configure
-         the javac task parameters 'source' and 'target' in order to explicitly control the Java compiler version used
-         to build World Wind classes. Without these parameters, the javac task would use the most recent compiler
-         available on the current machine, and the Java compiler version used to build WorldWind classes would be
-         unpredictable. For this reason, the Apache ANT manual strongly recommends specifying the 'source' and 'target'
-         parameters. See the following link for more detail: http://ant.apache.org/manual/CoreTasks/javac.html
+    <!-- Compiles all World Wind core Java sources under the 'ww-core/src' folder into Java class files under the
+	 'classes' folder. Note that this excludes the Java sources under the 'ww-server' and 'ww-tests' directories.
+	 We configure the javac task parameters 'source' and 'target' in order to explicitly control the Java compiler
+	 version used to build World Wind classes. Without these parameters, the javac task would use the most recent
+	 compiler available on the current machine, and the Java compiler version used to build WorldWind classes would
+	 be unpredictable. For this reason, the Apache ANT manual strongly recommends specifying the 'source' and
+	 'target' parameters. See the following link for more detail: http://ant.apache.org/manual/CoreTasks/javac.html
 
          The Java compiler version used by the javac task is defined by the build parameter 'worldwind.jdk.version'.
          By default, this parameter is defined in the file 'build/build.properties'. -->
-    <target name="compile"
-            description="Compiles all World Wind Java sources under the 'src' folder into Java class files under the 'classes' folder.">
-        <mkdir dir="${worldwind.classes.dir}"/>
-        <javac srcdir="${worldwind.src.dir}"
-               destdir="${worldwind.classes.dir}"
+    <target name="compile.core"
+            description="Compiles all World Wind core Java sources under the 'ww-core/src' folder into Java class files under the 'classes' folder.">
+        <mkdir dir="${worldwind.core.dir}/${classes.dir}"/>
+        <javac srcdir="${worldwind.core.dir}/${src.dir}"
+               destdir="${worldwind.core.dir}/${classes.dir}"
                source="${worldwind.jdk.version}"
                target="${worldwind.jdk.version}"
                fork="true"
                includeantruntime="false"
+	       debug="true"
                encoding="ISO-8859-1"
                memoryMaximumSize="512m">
             <classpath>
-	        <pathelement location="lib-external/jackson/jackson-core-asl-1.9.6.jar"/>
-                <pathelement location="jogl.jar"/>
-                <pathelement location="gluegen-rt.jar"/>
-                <pathelement location="gdal.jar"/>
+	        <pathelement location="lib/jackson/jackson-core-asl-${jackson.version}.jar"/>
+                <pathelement location="lib/jogl/jogl-${jogl.version}.jar"/>
+                <pathelement location="lib/gluegen-rt/gluegen-rt-${gluegen-rt.version}.jar"/>
+                <pathelement location="lib/gdal/gdal-${gdal.version}.jar"/>
+                <pathelement location="${java.home}/lib/plugin.jar"/>
+            </classpath>
+        </javac>
+    </target>
+
+    <!-- Compiles all World Wind extensions Java sources under the 'ww-extensions/src' folder into Java class files
+	 under the 'classes' folder. -->
+    <target name="compile.extensions" depends="compile.core"
+            description="Compiles all World Wind extensions Java sources under the 'ww-extensions/src' folder into Java class files under the 'classes' folder.">
+        <mkdir dir="${worldwind.extensions.dir}/${classes.dir}"/>
+        <javac srcdir="${worldwind.extensions.dir}/${src.dir}"
+               destdir="${worldwind.extensions.dir}/${classes.dir}"
+               source="${worldwind.jdk.version}"
+               target="${worldwind.jdk.version}"
+               fork="true"
+               includeantruntime="false"
+	       debug="true"
+               encoding="ISO-8859-1"
+               memoryMaximumSize="512m">
+            <classpath>
+                <pathelement location="${worldwind.core.dir}/${classes.dir}"/>
+                <pathelement location="lib/jackson/jackson-core-asl-${jackson.version}.jar"/>
+                <pathelement location="lib/jogl/jogl-${jogl.version}.jar"/>
+                <pathelement location="lib/gluegen-rt/gluegen-rt-${gluegen-rt.version}.jar"/>
+                <pathelement location="lib/gdal/gdal-${gdal.version}.jar"/>
+                <pathelement location="${java.home}/lib/plugin.jar"/>
+            </classpath>
+        </javac>
+    </target>
+
+    <!-- Compiles all World Wind performance Java sources under the 'ww-performance/src' folder into Java class files
+	 under the 'classes' folder. -->
+    <target name="compile.performance" depends="compile.extensions"
+            description="Compiles all World Wind performance Java sources under the 'ww-performance/src' folder into Java class files under the 'classes' folder.">
+        <mkdir dir="${worldwind.performance.dir}/${classes.dir}"/>
+        <javac srcdir="${worldwind.performance.dir}/${src.dir}"
+               destdir="${worldwind.performance.dir}/${classes.dir}"
+               source="${worldwind.jdk.version}"
+               target="${worldwind.jdk.version}"
+               fork="true"
+               includeantruntime="false"
+	       debug="true"
+               encoding="ISO-8859-1"
+               memoryMaximumSize="512m">
+            <classpath>
+                <pathelement location="${worldwind.core.dir}/${classes.dir}"/>
+		<pathelement location="${worldwind.extensions.dir}/${classes.dir}"/>
+                <pathelement location="lib/jackson/jackson-core-asl-${jackson.version}.jar"/>
+                <pathelement location="lib/jogl/jogl-${jogl.version}.jar"/>
+                <pathelement location="lib/gluegen-rt/gluegen-rt-${gluegen-rt.version}.jar"/>
+                <pathelement location="lib/gdal/gdal-${gdal.version}.jar"/>
                 <pathelement location="${java.home}/lib/plugin.jar"/>
             </classpath>
         </javac>
@@ -81,7 +130,7 @@
                 <include name="gov/nasa/worldwindx/**"/>
                 <exclude name="gov/nasa/worldwind/formats/**"/>
             </packageset>
-            <packageset dir="${servers.src.dir}" defaultexcludes="yes">
+            <packageset dir="${server.src.dir}" defaultexcludes="yes">
                 <include name="gov/nasa/worldwind/servers/**"/>
             </packageset>
             <classpath>
@@ -95,23 +144,22 @@
         </javadoc>
     </target>
 
-    <!-- Builds the World Wind SDK core Jar file 'worldwind.jar'. Includes all World Wind core class files, property
+    <!-- Builds the World Wind SDK core Jar file 'ww-core.jar'. Includes all World Wind core class files, property
          files, configuration files, and image files. Excludes files added by Subversion, and files added by the
          operating system. The resultant Jar file is dependent on jogl.jar, gluegen-rt.jar, and gdal.jar, and has these
          Jar files added to its class-path. -->
-    <target name="worldwind.jarfile" depends="compile"
-            description="Builds the World Wind core JAR file 'worldwind.jar'.">
-        <jar jarfile="${basedir}/${worldwind.jarfile}">
+    <target name="worldwind.core.jarfile" depends="compile.core"
+            description="Builds the World Wind core JAR file 'ww-core.jar'.">
+        <jar jarfile="${worldwind.core.dir}/${worldwind.core.jarfile}">
             <manifest>
-                <attribute name="Class-Path" value="jogl.jar gluegen-rt.jar gdal.jar"/>
+                <attribute name="Class-Path" value="lib/jogl/jogl-1.1.1a.jar lib/gluegen-rt/gluegen-rt-1.0.jar lib/gdal/gdal-1.7.2.jar"/>
             </manifest>
             <!-- Include the World Wind core package gov.nasa.worldwind, as well as the 3rd party packages
                  com.zebraimaging and org.codehaus.jackson. The zebraimaging package includes an alternative input
                  handler for the Zebra Imaging display controller. The jackson package includes the Jackson JSON parsing
                  library which is used by gov.nasa.worldwind.formats.geojson. -->
-            <fileset dir="${worldwind.classes.dir}">
-                <include name="gov/nasa/worldwind/**/*.class"/>
-                <include name="com/zebraimaging/**/*.class"/>
+            <fileset dir="${worldwind.core.dir}/${classes.dir}">
+                <include name="**/*.class"/>
                 <type type="file"/>
             </fileset>
             <!-- Include the MessageStrings properties files, and all resource files under the config and images
@@ -119,8 +167,8 @@
                  file extensions for two reasons: (a) this avoids packaging unnecessary resources in the Jar file, and
                  (b) this ensures that anything added to config or images is included without requiring changes to this
                  build target. -->
-            <fileset dir="${worldwind.src.dir}">
-                <include name="gov/nasa/worldwind/util/**/*.properties"/>
+            <fileset dir="${worldwind.core.dir}/${resource.dir}">
+                <include name="**/*.properties"/>
                 <include name="config/**"/>
                 <include name="images/**"/>
                 <type type="file"/>
@@ -128,20 +176,20 @@
         </jar>
     </target>
 
-    <!-- Builds the World Wind SDK extensions Jar file 'worldwindx.jar'. Includes all World Wind extension class files,
+    <!-- Builds the World Wind SDK extensions Jar file 'ww-extensions.jar'. Includes all World Wind extension class files,
          configuration files, image files, and data resource files. Excludes files added by Subversion and files added
          by the operating system. The resultant Jar file is dependent on the the World Wind core Jar file, and has that
          Jar file added to its class-path. -->
-    <target name="worldwind.extensions.jarfile" depends="compile"
-            description="Builds the World Wind extensions JAR file 'worldwindx.jar'.">
-        <jar jarfile="${basedir}/${worldwind.extensions.jarfile}">
+    <target name="worldwind.extensions.jarfile" depends="compile.extensions"
+            description="Builds the World Wind extensions JAR file 'ww-extensions.jar'.">
+        <jar jarfile="${worldwind.extensions.dir}/${worldwind.extensions.jarfile}">
             <manifest>
-                <attribute name="Class-Path" value="${worldwind.jarfile}"/>
+                <attribute name="Class-Path" value="${worldwind.core.dir}/${worldwind.core.jarfile}"/>
                 <attribute name="Main-Class" value="${worldwind.extensions.jarfile.mainclass}"/>
             </manifest>
             <!-- Include class files for the World Wind extensions package gov.nasa.worldwindx. -->
-            <fileset dir="${worldwind.classes.dir}">
-                <include name="gov/nasa/worldwindx/**/*.class"/>
+            <fileset dir="${worldwind.extensions.dir}/${classes.dir}">
+                <include name="**/*.class"/>
                 <type type="file"/>
             </fileset>
             <!-- Include all the SAR application configuration files and images, the WorldWindow framework configuration
@@ -149,7 +197,7 @@
                  packages rather than defining patterns for resource file extensions for two reasons: (a) this avoids
                  packaging unnecessary resources in the Jar file, and (b) this ensures that anything added to config or
                  images is included without requiring changes to this build target. -->
-            <fileset dir="${worldwind.src.dir}">
+            <fileset dir="${worldwind.extensions.dir}/${resource.dir}">
                 <include name="gov/nasa/worldwindx/applications/sar/*.html"/>
                 <include name="gov/nasa/worldwindx/applications/sar/config/**"/>
                 <include name="gov/nasa/worldwindx/applications/sar/data/**"/>
@@ -163,25 +211,25 @@
         </jar>
     </target>
 
-    <!-- Builds the World Wind performance Jar file 'worldwind-performance.jar'. Includes all World Wind performance
+    <!-- Builds the World Wind performance Jar file 'ww-performance.jar'. Includes all World Wind performance
          class files and data resource files. The resultant Jar file is dependent on the World Wind core Jar file and
          the World Wind extensions Jar file, and has those Jar files added to its class-path. -->
-    <target name="worldwind.performance.jarfile" depends="compile"
-            description="Builds the World Wind performance JAR file 'worldwind-performance.jar'.">
-        <jar jarfile="${basedir}/${worldwind.performance.jarfile}">
+    <target name="worldwind.performance.jarfile" depends="compile.performance"
+            description="Builds the World Wind performance JAR file 'ww-performance.jar'.">
+        <jar jarfile="${worldwind.performance.dir}/${worldwind.performance.jarfile}">
             <manifest>
-                <attribute name="Class-Path" value="${worldwind.jarfile} ${worldwind.extensions.jarfile}"/>
+                <attribute name="Class-Path" value="${worldwind.core.dir}/${worldwind.core.jarfile} ${worldwind.extensions.dir}/${worldwind.extensions.jarfile}"/>
                 <attribute name="Main-Class" value="${worldwind.performance.jarfile.mainclass}"/>
             </manifest>
             <!-- Include class files for the World Wind performance package performance. -->
-            <fileset dir="${worldwind.classes.dir}">
-                <include name="performance/**/*.class"/>
+            <fileset dir="${worldwind.performance.dir}/${classes.dir}">
+                <include name="**/*.class"/>
                 <type type="file"/>
             </fileset>
             <!-- Include the the resource files required by the performance packages. We include only specific files to
                  avoid including the entire testData folder, which contains many files that are not required to run the
                  performance applications. -->
-            <fileset dir="${basedir}">
+            <fileset dir="${worldwind.performance.dir}/${resource.dir}">
                 <include name="testData/Final.jpg"/>
                 <type type="file"/>
             </fileset>
@@ -189,24 +237,32 @@
     </target>
 
     <!-- Individual clean targets corresponding to each build target above. -->
-    <target name="clean.classes">
-        <delete dir="${worldwind.classes.dir}"/>
+    <target name="clean.core.classes">
+        <delete dir="${worldwind.core.dir}/${classes.dir}"/>
+    </target>
+    <target name="clean.extensions.classes">
+        <delete dir="${worldwind.extensions.dir}/${classes.dir}"/>
+    </target>
+    <target name="clean.performance.classes">
+        <delete dir="${worldwind.performance.dir}/${classes.dir}"/>
     </target>
     <target name="clean.javadocs">
         <delete dir="${worldwind.doc.dir}"/>
     </target>
-    <target name="clean.worldwind.jarfile">
-        <delete file="${basedir}/${worldwind.jarfile}"/>
+    <target name="clean.worldwind.core.jarfile">
+        <delete file="${worldwind.core.dir}/${worldwind.core.jarfile}"/>
     </target>
     <target name="clean.worldwind.extensions.jarfile">
-        <delete file="${basedir}/${worldwind.extensions.jarfile}"/>
+        <delete file="${worldwind.extensions.dir}/${worldwind.extensions.jarfile}"/>
     </target>
     <target name="clean.worldwind.performance.jarfile">
-        <delete file="${basedir}/${worldwind.performance.jarfile}"/>
+        <delete file="$${worldwind.performance.dir}/${worldwind.performance.jarfile}"/>
     </target>
-    <target name="clean.build" depends="clean.classes,
+    <target name="clean.build" depends="clean.core.classes,
+                                        clean.extensions.classes,
+					clean.performance.classes,
                                         clean.javadocs,
-                                        clean.worldwind.jarfile,
+                                        clean.worldwind.core.jarfile,
                                         clean.worldwind.extensions.jarfile,
                                         clean.worldwind.performance.jarfile"/>
     <!-- Main clean target for the World Wind Java SDK. Removes all files and directories created by all World Wind
@@ -218,7 +274,7 @@
                                       clean.native.all,
                                       clean.resources.all,
                                       clean.build.util.all,
-                                      clean.servers.all"
+                                      clean.server.all"
             description="Main clean target for the World Wind Java SDK. Removes all files and directories created by all World Wind build targets."/>
 
 </project>

@@ -2,7 +2,7 @@
 <!--$Id$-->
 <project name="test">
 
-    <!-- Compiles all World Wind Java sources under the 'test' folder into Java class files under the 'testClasses'
+    <!-- Compiles all World Wind Java sources under the 'ww-tests/src' folder into Java class files under the 'test-classes'
          folder. We configure the javac task parameters 'source' and 'target' in order to explicitly control the Java
          compiler version used to build World Wind classes. Without these parameters, the javac task would use the most
          recent compiler available on the current machine, and the Java compiler version used to build WorldWind classes
@@ -11,67 +11,72 @@
 
          The Java compiler version used by the javac task is defined by the build parameter 'worldwind.jdk.version'.
          By default, this parameter is defined in the file 'build/build.properties'. -->
-    <target name="compile.tests" depends="compile">
-        <mkdir dir="${worldwind.test.classes.dir}"/>
-        <javac srcdir="${worldwind.test.src.dir}"
-               destdir="${worldwind.test.classes.dir}"
+    <target name="compile.tests" depends="compile.core, compile.extensions">
+        <mkdir dir="${worldwind.tests.dir}/${test.classes.dir}"/>
+        <javac srcdir="${worldwind.tests.dir}/${test.src.dir}"
+               destdir="${worldwind.tests.dir}/${test.classes.dir}"
                source="${worldwind.jdk.version}"
                target="${worldwind.jdk.version}"
                fork="true"
                includeantruntime="false"
+	       debug="true"
                memoryMaximumSize="512m">
             <classpath>
-                <pathelement location="${worldwind.classes.dir}"/>
-                <pathelement location="jogl.jar"/>
-                <pathelement location="gluegen-rt.jar"/>
-                <pathelement location="gdal.jar"/>
-                <pathelement location="build/lib/junit-4.5.jar"/>
+                <pathelement location="${worldwind.core.dir}/${classes.dir}"/>
+		<pathelement location="${worldwind.extensions.dir}/${classes.dir}"/>
+                <pathelement location="lib/jogl/jogl-${jogl.version}.jar"/>
+                <pathelement location="lib/gluegen-rt/gluegen-rt-${gluegen-rt.version}.jar"/>
+                <pathelement location="lib/gdal/gdal-${gdal.version}.jar"/>
+                <pathelement location="lib/junit/junit-${junit.version}.jar"/>
                 <pathelement location="${java.home}/lib/plugin.jar"/>
             </classpath>
         </javac>
     </target>
 
-    <!-- Runs all World Wind Java JUnit tests and places the test results in the 'testResults' folder. Each test result
+    <!-- Runs all World Wind Java JUnit tests and places the test results in the 'reports' folder. Each test result
          outputs a single XML file formatted by JUnit. This runs all tests regardless of whether an individual tests
          fails. -->
     <target name="run.tests" depends="clean.test.reports, compile.tests">
-        <mkdir dir="${worldwind.test.reports.dir}"/>
-        <junit haltonfailure="false"
+        <mkdir dir="${worldwind.tests.dir}/${test.reports.dir}"/>
+        <junit haltonfailure="true"
 	       printsummary="true"
                fork="true"
 	       forkmode="once"
-               maxmemory="512m">
+               maxmemory="512m"
+	       dir="${worldwind.tests.dir}">
+	    <jvmarg value="-Duser.dir=${worldwind.tests.dir}"/>
             <classpath>
-                <pathelement location="${worldwind.src.dir}"/>
-                <pathelement location="${worldwind.classes.dir}"/>
-                <pathelement location="${worldwind.test.classes.dir}"/>
-                <pathelement location="jogl.jar"/>
-                <pathelement location="gluegen-rt.jar"/>
-                <pathelement location="gdal.jar"/>
-                <pathelement location="build/lib/junit-4.5.jar"/>
+                <pathelement location="${worldwind.core.dir}/${classes.dir}"/>
+		<pathelement location="${worldwind.core.dir}/${resource.dir}"/>
+		<pathelement location="${worldwind.extensions.dir}/${classes.dir}"/>
+                <pathelement location="${worldwind.tests.dir}/${test.classes.dir}"/>
+                <pathelement location="lib/jogl/jogl-${jogl.version}.jar"/>
+                <pathelement location="lib/gluegen-rt/gluegen-rt-${gluegen-rt.version}.jar"/>
+                <pathelement location="lib/gdal/gdal-${gdal.version}.jar"/>
+                <pathelement location="lib/junit/junit-${junit.version}.jar"/>
                 <pathelement location="${java.home}/lib/plugin.jar"/>
             </classpath>
             <formatter type="xml"/>
-            <batchtest todir="${worldwind.test.reports.dir}">
-                <fileset dir="${worldwind.test.classes.dir}">
+            <batchtest todir="${worldwind.tests.dir}/${test.reports.dir}">
+                <fileset dir="${worldwind.tests.dir}/${test.classes.dir}">
                     <include name="**/*Test.class"/>
                 </fileset>
             </batchtest>
         </junit>
-        <junitreport todir="${worldwind.test.reports.dir}">
-            <fileset dir="${worldwind.test.reports.dir}">
+        <junitreport todir="${worldwind.tests.dir}/${test.reports.dir}">
+            <fileset dir="${worldwind.tests.dir}/${test.reports.dir}">
                 <include name="TEST-*.xml"/>
             </fileset>
-            <report format="frames" todir="${worldwind.test.reports.dir}"/>
+            <report format="frames" todir="${worldwind.tests.dir}/${test.reports.dir}"/>
         </junitreport>
     </target>
 
     <!-- Individual clean targets corresponding to each build target above. -->
     <target name="clean.test.classes">
-        <delete dir="${worldwind.test.classes.dir}"/>
+        <delete dir="${worldwind.tests.dir}/${test.classes.dir}"/>
     </target>
     <target name="clean.test.reports">
-        <delete dir="${worldwind.test.reports.dir}"/>
+        <delete dir="${worldwind.tests.dir}/${test.reports.dir}"/>
     </target>
     <!-- Main clean target for test build targets. Removes all files and directories created by all test build targets. -->
     <target name="clean.test.all" depends="clean.test.classes, clean.test.reports"/>

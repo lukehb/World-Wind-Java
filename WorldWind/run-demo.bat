@@ -1,5 +1,5 @@
 REM Windows Batch file for Running a WorldWind Demo
-REM $Id$
 
 @echo Running %1
-java -Xmx512m -Dsun.java2d.noddraw=true -classpath .\src;.\classes;.\worldwind.jar;.\worldwindx.jar;.\jogl.jar;.\gluegen-rt.jar;.\gdal.jar %*
+
+mvn exec:exec -Dexec.executable=java -pl ww-extensions -Dexec.args="-Djava.library.debug=y -javaagent:..\lib\mx-native-loader\mx-native-loader-1.2.1.jar='-l jogl,gluegen-rt,gdal -e jogl_awt' -Djava.library.path=tmplib -classpath %classpath %*"

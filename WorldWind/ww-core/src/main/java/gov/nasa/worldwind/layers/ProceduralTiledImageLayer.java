@@ -10,6 +10,7 @@ package gov.nasa.worldwind.layers;
 import gov.nasa.worldwind.WorldWind;
 import gov.nasa.worldwind.avlist.AVList;
 import gov.nasa.worldwind.util.LevelSet;
+import gov.nasa.worldwind.util.Logging;
 
 import java.awt.image.BufferedImage;
 import java.io.File;
@@ -51,6 +52,10 @@ public abstract class ProceduralTiledImageLayer extends BasicTiledImageLayer
         {
             ImageIO.write(image, "png", outFile);
         }
-        catch (IOException e) {}
+        catch (IOException e)
+        {
+            String msg = Logging.getMessage("layers.TextureLayer.ExceptionSavingRetrievedTextureFile", outFile.getPath());
+            Logging.logger().log(java.util.logging.Level.SEVERE, msg, e);
+        }
     }
 }

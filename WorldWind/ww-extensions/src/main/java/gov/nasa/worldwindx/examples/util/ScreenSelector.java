@@ -8,6 +8,8 @@ package gov.nasa.worldwindx.examples.util;
 import gov.nasa.worldwind.*;
 import gov.nasa.worldwind.event.*;
 import gov.nasa.worldwind.layers.*;
+import gov.nasa.worldwind.pick.PickedObject;
+import gov.nasa.worldwind.pick.PickedObjectList;
 import gov.nasa.worldwind.render.*;
 import gov.nasa.worldwind.util.*;
 import gov.nasa.worldwindx.applications.worldwindow.util.Util;
@@ -296,9 +298,16 @@ public class ScreenSelector extends WWObjectImpl implements MouseListener, Mouse
 
     protected WorldWindow wwd;
     protected Layer layer;
+    
     protected SelectionRectangle selectionRect;
     protected List<Object> selectedObjects = new ArrayList<Object>();
+    
     protected List<MessageListener> messageListeners = new ArrayList<MessageListener>();
+    protected List<SelectListener> selectListeners = new ArrayList<SelectListener>();
+    
+    protected boolean enabled;
+    protected boolean autoEnable;
+    protected boolean autoDisable;
     protected boolean armed;
 
     public ScreenSelector(WorldWindow worldWindow)
@@ -313,8 +322,22 @@ public class ScreenSelector extends WWObjectImpl implements MouseListener, Mouse
         this.wwd = worldWindow;
         this.layer = this.createLayer();
         this.layer.setPickEnabled(false); // The screen selector is not pickable.
+        
         this.selectionRect = this.createSelectionRectangle();
         ((RenderableLayer) this.layer).addRenderable(this.selectionRect);
+        this.selectedObjects = new ArrayList<Object>();
+        
+        this.messageListeners = new ArrayList<MessageListener>();
+        this.selectListeners = new ArrayList<SelectListener>();
+        
+        this.enabled = false;
+        this.autoEnable = false;
+        this.autoDisable = false;
+        this.armed = false;
+        
+        // Listen for mouse input on the World Window.
+        this.getWwd().getInputHandler().addMouseListener(this);
+        this.getWwd().getInputHandler().addMouseMotionListener(this);
     }
 
     protected Layer createLayer()
@@ -356,6 +379,26 @@ public class ScreenSelector extends WWObjectImpl implements MouseListener, Mouse
     {
         this.selectionRect.setBorderColor(color);
     }
+    
+    public void setAutoEnable(boolean autoEnable)
+    {
+        this.autoEnable = autoEnable;
+    }
+    
+    public boolean getAutoEnable()
+    {
+        return this.autoEnable;
+    }
+    
+    public void setAutoDisable(boolean autoDisable)
+    {
+        this.autoDisable = autoDisable;
+    }
+    
+    public boolean getAutoDisable()
+    {
+        return this.autoDisable;
+    }
 
     public void enable()
     {
@@ -373,9 +416,7 @@ public class ScreenSelector extends WWObjectImpl implements MouseListener, Mouse
         if (!this.getLayer().isEnabled())
             this.getLayer().setEnabled(true);
 
-        // Listen for mouse input on the World Window.
-        this.getWwd().getInputHandler().addMouseListener(this);
-        this.getWwd().getInputHandler().addMouseMotionListener(this);
+        this.enabled = true;
     }
 
     public void disable()
@@ -389,10 +430,8 @@ public class ScreenSelector extends WWObjectImpl implements MouseListener, Mouse
 
         // Remove the layer that displays this ScreenSelector's selection rectangle.
         this.getWwd().getModel().getLayers().remove(this.getLayer());
-
-        // Stop listening for mouse input on the world window.
-        this.getWwd().getInputHandler().removeMouseListener(this);
-        this.getWwd().getInputHandler().removeMouseMotionListener(this);
+        
+        this.enabled = false;
     }
 
     public List<?> getSelectedObjects()
@@ -423,6 +462,30 @@ public class ScreenSelector extends WWObjectImpl implements MouseListener, Mouse
 
         this.messageListeners.remove(listener);
     }
+    
+    public void addSelectListener(SelectListener listener)
+    {
+        if (listener == null)
+        {
+            String msg = Logging.getMessage("nullValue.ListenerIsNull");
+            Logging.logger().severe(msg);
+            throw new IllegalArgumentException(msg);
+        }
+        
+        this.selectListeners.add(listener);
+    }
+    
+    public void removeSelectListener(SelectListener listener)
+    {
+        if (listener == null)
+        {
+            String msg = Logging.getMessage("nullValue.ListenerIsNull");
+            Logging.logger().severe(msg);
+            throw new IllegalArgumentException(msg);
+        }
+        
+        this.selectListeners.remove(listener);
+    }
 
     protected void sendMessage(Message message)
     {
@@ -440,6 +503,23 @@ public class ScreenSelector extends WWObjectImpl implements MouseListener, Mouse
             }
         }
     }
+    
+    protected void sendSelectEvent(SelectEvent event)
+    {
+        for (SelectListener listener : this.selectListeners)
+        {
+            try
+            {
+                listener.selected(event);
+            }
+            catch (Exception e)
+            {
+                String msg = Logging.getMessage("generic.ExceptionInvokingMessageListener");
+                Logging.logger().severe(msg);
+                // Don't throw an exception, just log a severe message and continue to the next listener.
+            }
+        }
+    }
 
     public void mouseClicked(MouseEvent mouseEvent)
     {
@@ -448,28 +528,47 @@ public class ScreenSelector extends WWObjectImpl implements MouseListener, Mouse
 
     public void mousePressed(MouseEvent mouseEvent)
     {
-        if (mouseEvent == null) // Ignore null events.
-            return;
+        if (this.enabled)
+        {
+            if (mouseEvent == null) // Ignore null events.
+                return;
 
-        if (MouseEvent.BUTTON1_DOWN_MASK != mouseEvent.getModifiersEx()) // Respond to button 1 down w/o modifiers.
-            return;
-
-        this.armed = true;
-        this.selectionStarted(mouseEvent);
-        mouseEvent.consume(); // Consume the mouse event to prevent the view from responding to it.
+            this.armed = true;
+            this.selectionStarted(mouseEvent);
+            mouseEvent.consume(); // Consume the mouse event to prevent the view from responding to it.
+        }
+        else if (this.autoEnable)
+        {
+            if (mouseEvent.isControlDown() || mouseEvent.isShiftDown())
+            {
+                enable();
+                this.armed = true;
+                this.selectionStarted(mouseEvent);
+                mouseEvent.consume(); // Consume the mouse event to prevent the view from responding to it.
+            }
+        }
     }
 
     public void mouseReleased(MouseEvent mouseEvent)
     {
-        if (mouseEvent == null) // Ignore null events.
-            return;
+        if (this.enabled)
+        {
+            if (mouseEvent == null) // Ignore null events.
+                return;
 
-        if (!this.armed) // Respond to mouse released events when armed.
-            return;
+            if (!this.armed) // Respond to mouse released events when armed.
+                return;
 
-        this.armed = false;
-        this.selectionEnded(mouseEvent);
-        mouseEvent.consume(); // Consume the mouse event to prevent the view from responding to it.
+            this.armed = false;
+            this.selectionEnded(mouseEvent);
+            mouseEvent.consume(); // Consume the mouse event to prevent the view from responding to it.
+            
+            // If auto-enable, then we auto-disable after selection.
+            if (this.autoDisable)
+            {
+                disable();
+            }
+        }
     }
 
     public void mouseEntered(MouseEvent mouseEvent)
@@ -484,14 +583,17 @@ public class ScreenSelector extends WWObjectImpl implements MouseListener, Mouse
 
     public void mouseDragged(MouseEvent mouseEvent)
     {
-        if (mouseEvent == null) // Ignore null events.
-            return;
+        if (this.enabled)
+        {
+            if (mouseEvent == null) // Ignore null events.
+                return;
 
-        if (!this.armed) // Respond to mouse dragged events when armed.
-            return;
+            if (!this.armed) // Respond to mouse dragged events when armed.
+                return;
 
-        this.selectionChanged(mouseEvent);
-        mouseEvent.consume(); // Consume the mouse event to prevent the view from responding to it.
+            this.selectionChanged(mouseEvent);
+            mouseEvent.consume(); // Consume the mouse event to prevent the view from responding to it.
+        }
     }
 
     public void mouseMoved(MouseEvent mouseEvent)
@@ -522,6 +624,21 @@ public class ScreenSelector extends WWObjectImpl implements MouseListener, Mouse
         // Send a message indicating that the user has completed their selection. We don't clear the list of selected
         // objects in order to preserve the list of selected objects for the caller.
         this.sendMessage(new Message(SELECTION_ENDED, this));
+        
+        PickedObjectList list = new PickedObjectList();
+        for (Object selected : this.getSelectedObjects())
+        {
+            PickedObject pickedObject = new PickedObject(0, selected);
+            pickedObject.setOnTop();
+            list.add(pickedObject);
+        }
+        
+        String eventAction = SelectEvent.LEFT_CLICK;
+        if (mouseEvent.getButton() == MouseEvent.BUTTON2) {
+            eventAction = SelectEvent.RIGHT_CLICK;
+        }
+        
+        this.sendSelectEvent(new SelectEvent(this.getWwd(), eventAction, mouseEvent, list));
     }
 
     protected void selectionChanged(MouseEvent mouseEvent)

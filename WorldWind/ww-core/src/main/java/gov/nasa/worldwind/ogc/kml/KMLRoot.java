@@ -57,6 +57,10 @@ public class KMLRoot extends KMLAbstractObject implements KMLRenderable
     protected boolean featureFetched = false;
     protected KMLAbstractFeature feature;
 
+    /** Flag to indicate that the network link control element has been fetched from the hash map. */
+    protected boolean linkControlFetched = false;
+    protected KMLNetworkLinkControl networkLinkControl;
+
     /**
      * Creates a KML root for an untyped source. The source must be either a {@link File}, a {@link URL}, a {@link
      * InputStream}, or a {@link String} identifying either a file path or a URL. For all types other than
@@ -818,6 +822,10 @@ public class KMLRoot extends KMLAbstractObject implements KMLRenderable
                 refRoot = this.parseCachedKMLFile(url, linkBase, contentType, false);
             }
 
+            // If the file could not be parsed as KML, then just return the URL.
+            if (refRoot == null)
+                return url;
+
             // Add the parsed file to the session cache so it doesn't have to be parsed again.
             WorldWind.getSessionCache().put(linkBase, refRoot);
 
@@ -922,6 +930,40 @@ public class KMLRoot extends KMLAbstractObject implements KMLRenderable
     }
 
     /**
+     * Returns the expiration time of a file retrieved by {@link #resolveReference(String) resolveReference} or {@link
+     * #resolveNetworkLink(String, boolean, long) resolveNetworkLink}.
+     *
+     * @param link the address of the file (the same address as was previously passed to resolveReference). If null,
+     *             zero is returned.
+     *
+     * @return The expiration time of the file, in milliseconds since the Epoch (January 1, 1970, 00:00:00 GMT). Zero
+     *         indicates that there is no expiration time. Returns zero if te resource identified by {@code link} has
+     *         not been retrieved.
+     */
+    public long getExpiration(String link)
+    {
+        try
+        {
+            if (link == null)
+                return 0;
+
+            // Interpret the path relative to the current document.
+            String path = this.getSupportFilePath(link);
+            if (path == null)
+                path = link;
+
+            return WorldWind.getDataFileStore().getExpirationTime(path);
+        }
+        catch (IOException e)
+        {
+            String message = Logging.getMessage("generic.UnableToResolveReference", link);
+            Logging.logger().warning(message);
+        }
+
+        return 0;
+    }
+
+    /**
      * Determines if a MIME type can be parsed as KML or KMZ. Parsable types are the KML and KMZ MIME types, as well as
      * "text/plain" and "text/xml".
      *
@@ -963,7 +1005,7 @@ public class KMLRoot extends KMLAbstractObject implements KMLRenderable
         try
         {
             KMLRoot refRoot = new KMLRoot(kmlDoc, namespaceAware);
-            refRoot.parse(); // also closes the URL's stream
+            refRoot = refRoot.parse(); // also closes the URL's stream
             return refRoot;
         }
         catch (XMLStreamException e)
@@ -1002,7 +1044,7 @@ public class KMLRoot extends KMLAbstractObject implements KMLRenderable
                     return this;
                 }
                 // Allow the document to start without a <kml> element. There are many such files around.
-                else if (event.isStartElement())
+                else if (event.isStartElement() && ctx.getParser(event) != null)
                 {
                     this.doParseEventContent(ctx, event, args);
                     return this;
@@ -1055,7 +1097,13 @@ public class KMLRoot extends KMLAbstractObject implements KMLRenderable
      */
     public KMLNetworkLinkControl getNetworkLinkControl()
     {
-        return (KMLNetworkLinkControl) this.getField("NetworkLinkControl");
+        if (!linkControlFetched)
+        {
+            this.networkLinkControl = (KMLNetworkLinkControl) this.getField("NetworkLinkControl");
+            this.linkControlFetched = true;
+        }
+
+        return this.networkLinkControl;
     }
 
     /**

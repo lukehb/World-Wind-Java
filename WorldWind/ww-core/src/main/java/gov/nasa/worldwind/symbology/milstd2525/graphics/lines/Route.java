@@ -14,7 +14,7 @@ import gov.nasa.worldwind.render.*;
 import gov.nasa.worldwind.symbology.*;
 import gov.nasa.worldwind.symbology.milstd2525.*;
 import gov.nasa.worldwind.symbology.milstd2525.graphics.TacGrpSidc;
-import gov.nasa.worldwind.util.Logging;
+import gov.nasa.worldwind.util.*;
 
 import java.awt.*;
 import java.util.*;
@@ -55,6 +55,7 @@ public class Route extends AbstractMilStd2525TacticalGraphic implements Tactical
             TacGrpSidc.C2GM_AVN_LNE_ACDR,
             TacGrpSidc.C2GM_AVN_LNE_MRR,
             TacGrpSidc.C2GM_AVN_LNE_SAAFR,
+            TacGrpSidc.C2GM_AVN_LNE_UAR,
             TacGrpSidc.C2GM_AVN_LNE_LLTR);
     }
 
@@ -208,7 +209,7 @@ public class Route extends AbstractMilStd2525TacticalGraphic implements Tactical
         {
             for (TacticalGraphic child : this.children)
             {
-                child.setAttributes(attributes);
+                child.setHighlightAttributes(attributes);
             }
         }
     }
@@ -444,7 +445,16 @@ public class Route extends AbstractMilStd2525TacticalGraphic implements Tactical
             // Add a label if this is not the last control point
             if (iterator.hasNext())
             {
-                this.addLabel(this.getGraphicLabel() + " " + this.getText());
+                StringBuilder sb = new StringBuilder();
+                sb.append(this.getGraphicLabel());
+
+                String text = this.getText();
+                if (!WWUtil.isEmpty(text))
+                {
+                    sb.append(" ");
+                    sb.append(text);
+                }
+                this.addLabel(sb.toString());
             }
         }
     }

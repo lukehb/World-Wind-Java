@@ -1067,10 +1067,10 @@ public class Path extends AbstractShape
             return true;
 
         //noinspection SimplifiableIfStatement
-        if (this.getAltitudeMode() == WorldWind.ABSOLUTE
-            && this.getCurrentPathData().getGlobeStateKey() != null
-            && this.getCurrentPathData().getGlobeStateKey().equals(dc.getGlobe().getGlobeStateKey(dc)))
-            return false;
+//        if (this.getAltitudeMode() == WorldWind.ABSOLUTE
+//            && this.getCurrentPathData().getGlobeStateKey() != null
+//            && this.getCurrentPathData().getGlobeStateKey().equals(dc.getGlobe().getGlobeStateKey(dc)))
+//            return false;
 
         return super.mustRegenerateGeometry(dc);
     }

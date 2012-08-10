@@ -16,11 +16,11 @@ import java.awt.geom.*;
 import java.util.*;
 
 /**
- * <code>Sector</code> represents a rectangular reqion of latitude and longitude. The region is defined by four angles:
+ * <code>Sector</code> represents a rectangular region of latitude and longitude. The region is defined by four angles:
  * its minimum and maximum latitude, its minimum and maximum longitude. The angles are assumed to be normalized to +/-
  * 90 degrees latitude and +/- 180 degrees longitude. The minimums and maximums are relative to these ranges, e.g., -80
  * is less than 20. Behavior of the class is undefined for angles outside these ranges. Normalization is not performed
- * on the angles by this class, nor is it verifed by the class' methods. See {@link Angle} for a description of
+ * on the angles by this class, nor is it verified by the class' methods. See {@link Angle} for a description of
  * specifying angles. <p/> <code>Sector</code> instances are immutable. </p>
  *
  * @author Tom Gaskins
@@ -386,16 +386,71 @@ public class Sector implements Cacheable, Comparable<Sector>, Iterable<LatLon>
         }
 
         double halfDeltaLatRadians = radius / globe.getRadiusAt(center);
-        double halfDeltaLonRadians = Math.PI * 2;
-        if (center.getLatitude().cos() > 0)
-            halfDeltaLonRadians = halfDeltaLatRadians / center.getLatitude().cos();
+
+        double minLat = center.getLatitude().radians - halfDeltaLatRadians;
+        double maxLat = center.getLatitude().radians + halfDeltaLatRadians;
+
+        double minLon;
+        double maxLon;
+
+        // If the circle does not cross a pole, then compute the max and min longitude.
+        if (minLat >= Angle.NEG90.radians && maxLat <= Angle.POS90.radians)
+        {
+            // We want to find the maximum and minimum longitude values on the circle. We will start with equation 5-6
+            // from "Map Projections - A Working Manual", page 31, and solve for the value of Az that will maximize
+            // lon - lon0.
+            //
+            // Eq. 5-6:
+            // lon = lon0 + arctan( h(lat0, c, az) )
+            // h(lat0, c, az) = sin(c) sin(az) / (cos(lat0) cos(c) - sin(lat1) sin(c) cos(Az))
+            //
+            // Where (lat0, lon0) are the starting coordinates, c is the angular distance along the great circle from
+            // the starting coordinate, Az is the azimuth, and lon is the end position longitude. All values are in
+            // radians.
+            //
+            // lon - lon0 is maximized when h(lat0, c, Az) is maximized because arctan(x) -> 1 as x -> infinity.
+            //
+            // Taking the partial derivative of h with respect to Az we get:
+            // h'(Az) = (sin(c) cos(c) cos(lat0) cos(Az) - sin^2(c) sin(lat0)) / (cos(lat0) cos(c) - sin(lat0) sin(c) cos(Az))^2
+            //
+            // Setting h' = 0 to find maxima:
+            // 0 = sin(c) cos(c) cos(lat0) cos(Az) - sin^2(c) sin(lat0)
+            //
+            // And solving for Az:
+            // Az = arccos( tan(lat0) tan(c) )
+            //
+            // +/- Az are bearings from North that will give positions of max and min longitude.
+
+            // If halfDeltaLatRadians == 90 degrees, then tan is undefined. This can happen if the circle radius is one
+            // quarter of the globe diameter, and the circle is centered on the equator. tan(center lat) is always
+            // defined because the center lat is in the range -90 to 90 exclusive. If it were equal to 90, then the
+            // circle would cover a pole.
+            double az;
+            if (Math.abs(Angle.POS90.radians - halfDeltaLatRadians)
+                > 0.001) // Consider within 1/1000th of a radian to be equal
+                az = Math.acos(Math.tan(halfDeltaLatRadians) * Math.tan(center.latitude.radians));
+            else
+                az = Angle.POS90.radians;
+
+            LatLon east = LatLon.greatCircleEndPosition(center, az, halfDeltaLatRadians);
+            LatLon west = LatLon.greatCircleEndPosition(center, -az, halfDeltaLatRadians);
+
+            minLon = Math.min(east.longitude.radians, west.longitude.radians);
+            maxLon = Math.max(east.longitude.radians, west.longitude.radians);
+        }
+        else
+        {
+            // If the circle crosses the pole then it spans the full circle of longitude
+            minLon = Angle.NEG180.radians;
+            maxLon = Angle.POS180.radians;
+        }
 
         LatLon ll = new LatLon(
-            Angle.fromRadiansLatitude(center.getLatitude().radians - halfDeltaLatRadians),
-            Angle.normalizedLongitude(Angle.fromRadians(center.getLongitude().radians - halfDeltaLonRadians)));
+            Angle.fromRadiansLatitude(minLat),
+            Angle.normalizedLongitude(Angle.fromRadians(minLon)));
         LatLon ur = new LatLon(
-            Angle.fromRadiansLatitude(center.getLatitude().radians + halfDeltaLatRadians),
-            Angle.normalizedLongitude(Angle.fromRadians(center.getLongitude().radians + halfDeltaLonRadians)));
+            Angle.fromRadiansLatitude(maxLat),
+            Angle.normalizedLongitude(Angle.fromRadians(maxLon)));
 
         Iterable<? extends LatLon> locations = java.util.Arrays.asList(ll, ur);
 
@@ -832,7 +887,24 @@ public class Sector implements Cacheable, Comparable<Sector>, Iterable<LatLon>
                 maxHeight));
         }
 
-        if (sector.getDeltaLonDegrees() > 180)
+        // If the sector spans 360 degrees of longitude then is a band around the entire globe. (If one edge is a pole
+        // then the sector looks like a circle around the pole.) Add points at the min and max latitudes and longitudes
+        // 0, 180, 90, and -90 to capture full extent of the band.
+        if (sector.getDeltaLonDegrees() >= 360)
+        {
+            Angle minLat = sector.getMinLatitude();
+            points.add(globe.computePointFromPosition(minLat, Angle.ZERO, maxHeight));
+            points.add(globe.computePointFromPosition(minLat, Angle.POS90, maxHeight));
+            points.add(globe.computePointFromPosition(minLat, Angle.NEG90, maxHeight));
+            points.add(globe.computePointFromPosition(minLat, Angle.POS180, maxHeight));
+
+            Angle maxLat = sector.getMaxLatitude();
+            points.add(globe.computePointFromPosition(maxLat, Angle.ZERO, maxHeight));
+            points.add(globe.computePointFromPosition(maxLat, Angle.POS90, maxHeight));
+            points.add(globe.computePointFromPosition(maxLat, Angle.NEG90, maxHeight));
+            points.add(globe.computePointFromPosition(maxLat, Angle.POS180, maxHeight));
+        }
+        else if (sector.getDeltaLonDegrees() > 180)
         {
             // Need to compute more points to ensure the box encompasses the full sector.
             Angle cLon = sector.getCentroid().getLongitude();
@@ -1404,7 +1476,7 @@ public class Sector implements Cacheable, Comparable<Sector>, Iterable<LatLon>
     @Override
     public String toString()
     {
-        java.lang.StringBuffer sb = new java.lang.StringBuffer();
+        StringBuilder sb = new StringBuilder();
         sb.append("(");
         sb.append(this.minLatitude.toString());
         sb.append(", ");

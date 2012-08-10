@@ -56,6 +56,12 @@ public class KMLNetworkLink extends KMLAbstractContainer implements PropertyChan
     protected boolean invalidTarget;
 
     /**
+     * Cache the root of this network link. Accessing the root by climbing up a deep network link tree can be a
+     * performance bottleneck.
+     */
+    protected KMLRoot root;
+
+    /**
      * Construct an instance.
      *
      * @param namespaceURI the qualifying namespace URI. May be null to indicate no namespace qualification.
@@ -89,6 +95,16 @@ public class KMLNetworkLink extends KMLAbstractContainer implements PropertyChan
         {
             networkResource.onMessage(msg);
         }
+    }
+
+    /** {@inheritDoc} Overridden to cache the root instead of climbing the parse tree each time. */
+    @Override
+    public KMLRoot getRoot()
+    {
+        if (root == null)
+            this.root = super.getRoot();
+
+        return this.root;
     }
 
     public Boolean getRefreshVisibility()
@@ -147,6 +163,23 @@ public class KMLNetworkLink extends KMLAbstractContainer implements PropertyChan
     public KMLRoot getNetworkResource()
     {
         return networkResource.get();
+    }
+
+    /**
+     * {@inheritDoc} Overridden to apply region culling according to the same rules as in KMLAbstractFeature. This
+     * prevents retrieving network links in inactive regions.
+     */
+    @Override
+    protected boolean isFeatureActive(KMLTraversalContext tc, DrawContext dc)
+    {
+        if (this.getVisibility() != null && !this.getVisibility())
+            return false;
+
+        KMLRegion region = this.getRegion();
+        if (region == null)
+            region = tc.peekRegion();
+
+        return region == null || region.isActive(tc, dc);
     }
 
     protected boolean hasNetworkLinkControl()
@@ -366,7 +399,13 @@ public class KMLNetworkLink extends KMLAbstractContainer implements PropertyChan
         Object o = this.getRoot().resolveNetworkLink(address, this.isLinkCacheable(), updateTime);
         if (o instanceof KMLRoot)
         {
-            this.setNetworkResource((KMLRoot) o);
+            KMLRoot newRoot = (KMLRoot) o;
+            this.setNetworkResource(newRoot);
+
+            // Check for an expiration time set through HTTP header or NetworkLinkControl
+            long expiration = this.computeExpiryRefreshTime(newRoot, address);
+            this.getLinkOrUrl().setExpirationTime(expiration);
+
             this.getRoot().firePropertyChange(AVKey.RETRIEVAL_STATE_SUCCESSFUL, null, KMLNetworkLink.this);
         }
         // Anything other than a KMLRoot is not a valid link target
@@ -376,6 +415,30 @@ public class KMLNetworkLink extends KMLAbstractContainer implements PropertyChan
             Logging.logger().warning(message);
             this.invalidTarget = true; // Stop trying to retrieve this resource
         }
+    }
+
+    /**
+     * Indicates the expiration time of a linked resource. The expiration time is specified by (in order of priority): a
+     * NetworkLinkControl/expires element in the target document, a HTTP Cache-Control header, or an HTTP Expires
+     * header.
+     *
+     * @param root    Root of target resource.
+     * @param address Address of linked resource.
+     *
+     * @return The expiration time of the resource, in milliseconds since the Epoch. Zero indicates that there is no
+     *         expiration time.
+     */
+    protected long computeExpiryRefreshTime(KMLRoot root, String address)
+    {
+        KMLNetworkLinkControl linkControl = root.getNetworkLinkControl();
+        if (linkControl != null && linkControl.getExpires() != null)
+        {
+            Long time = WWUtil.parseTimeString(linkControl.getExpires());
+            return time != null ? time : 0;
+        }
+
+        // Check for expiration in HTTP headers
+        return this.getRoot().getExpiration(address);
     }
 
     /**

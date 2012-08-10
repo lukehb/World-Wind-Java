@@ -138,6 +138,30 @@ public class KMLLink extends KMLAbstractObject
     }
 
     /**
+     * Specifies the time at which the linked resource expires. If the link's update mode is onExpire, the link will
+     * mark itself updated at this time.
+     *
+     * @param time Time, in milliseconds since the Epoch, at which the link expires. Zero indicates no expiration.
+     */
+    public void setExpirationTime(long time)
+    {
+        // If the refresh mode is onExpire, schedule a task to update the link at the expiration time. Otherwise
+        // we don't care about the expiration.
+        if (KMLConstants.ON_EXPIRE.equals(this.getRefreshMode()))
+        {
+            // If there is already a task running, cancel it
+            if (this.refreshTask != null)
+                this.refreshTask.cancel(false);
+
+            if (time != 0)
+            {
+                long refreshDelay = time - System.currentTimeMillis();
+                this.refreshTask = this.scheduleDelayedTask(new RefreshTask(), refreshDelay, TimeUnit.MILLISECONDS);
+            }
+        }
+    }
+
+    /**
      * Schedule a task to refresh the link if the refresh mode requires it. In the case of an {@code onInterval} and
      * {@code onExpire} refresh modes, this method schedules a task to update the link after the refresh interval
      * elapses, but only if such a task has not already been scheduled (only one refresh task is active at a time).
@@ -169,14 +193,11 @@ public class KMLLink extends KMLAbstractObject
     {
         Long refreshTime = null;
 
+        // Only handle onInterval here. onExpire is handled by KMLNetworkLink when the network resource is retrieved.
         if (KMLConstants.ON_INTERVAL.equals(this.getRefreshMode()))
         {
             Double ri = this.getRefreshInterval();
             refreshTime = ri != null ? this.updateTime.get() + (long) (ri * 1000d) : null;
-        }
-        else if (KMLConstants.ON_EXPIRE.equals(this.getRefreshMode()))
-        {
-            refreshTime = this.computeExpiryRefreshTime();
         }
 
         if (refreshTime == null)
@@ -191,17 +212,6 @@ public class KMLLink extends KMLAbstractObject
         }
 
         return refreshTime;
-    }
-
-    protected Long computeExpiryRefreshTime()
-    {
-        KMLNetworkLinkControl linkControl = this.getRoot().getNetworkLinkControl();
-        if (linkControl != null && linkControl.getExpires() != null)
-            return WWUtil.parseTimeString(linkControl.getExpires());
-
-        // TODO: Compute expiry time from HTTP headers
-
-        return null;
     }
 
     /**
@@ -405,6 +415,7 @@ public class KMLLink extends KMLAbstractObject
             if (!WWUtil.isEmpty(s))
             {
                 Sector viewBounds = this.computeVisibleBounds(dc);
+                //noinspection ConstantConditions
                 s = s.replaceAll("\\[bboxWest\\]", Double.toString(viewBounds.getMinLongitude().degrees));
                 s = s.replaceAll("\\[bboxSouth\\]", Double.toString(viewBounds.getMinLatitude().degrees));
                 s = s.replaceAll("\\[bboxEast\\]", Double.toString(viewBounds.getMaxLongitude().degrees));
@@ -462,6 +473,7 @@ public class KMLLink extends KMLAbstractObject
             String clientName = Configuration.getStringValue(AVKey.NAME, Version.getVersionName());
             String clientVersion = Configuration.getStringValue(AVKey.VERSION, Version.getVersionNumber());
 
+            //noinspection ConstantConditions
             s = s.replaceAll("\\[clientVersion\\]", clientVersion);
             s = s.replaceAll("\\[kmlVersion\\]", KMLConstants.KML_VERSION);
             s = s.replaceAll("\\[clientName\\]", clientName);

@@ -22,7 +22,7 @@ import java.util.Map;
 public interface XMLEventParserContext extends AVList
 {
     /**
-     * Identifes the name of the parser handling unrecognized elements. Can be used to explicitly specify the context's
+     * Identifies the name of the parser handling unrecognized elements. Can be used to explicitly specify the context's
      * parser-table entry for unrecognized elements.
      */
     final static String UNRECOGNIZED_ELEMENT_PARSER = "gov.nasa.worldwind.util.xml.UnknownElementParser";
@@ -39,7 +39,7 @@ public interface XMLEventParserContext extends AVList
      *
      * @param event indicates the element name for which a parser is created.
      *
-     * @return the new parser, or null if no parser has been registred for the specified event's element name.
+     * @return the new parser, or null if no parser has been registered for the specified event's element name.
      */
     XMLEventParser getParser(XMLEvent event);
 
@@ -48,7 +48,7 @@ public interface XMLEventParserContext extends AVList
      *
      * @param eventName indicates the element name for which a parser is created.
      *
-     * @return the new parser, or null if no parser has been registred for the specified element name.
+     * @return the new parser, or null if no parser has been registered for the specified element name.
      */
     XMLEventParser getParser(QName eventName);
 
@@ -173,7 +173,7 @@ public interface XMLEventParserContext extends AVList
      * @param qa first element name
      * @param qb second element name
      *
-     * @return true if both names have the same namespace (or no namesace) and local name, or if either name has no
+     * @return true if both names have the same namespace (or no namespace) and local name, or if either name has no
      *         namespace but the namespace of the other is the context's default namespace.
      */
     boolean isSameName(QName qa, QName qb);
@@ -235,7 +235,11 @@ public interface XMLEventParserContext extends AVList
      *                      gov.nasa.worldwind.util.xml.AbstractXMLEventParser#getField(javax.xml.namespace.QName)}
      *                      method with the <code>fieldName</code> specified here as the name argument.
      * @param parser        the parser whose references to resolve.
+     *
+     * @deprecated Reference resolution is handled by parsers specific to a certain document type. For example, {@link
+     *             gov.nasa.worldwind.ogc.kml.KMLRoot} handles resolution of references in KML files.
      */
+    @Deprecated
     void resolveInternalReferences(String referenceName, String fieldName, AbstractXMLEventParser parser);
 
     /**

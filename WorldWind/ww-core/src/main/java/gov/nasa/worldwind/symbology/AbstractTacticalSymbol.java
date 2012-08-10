@@ -555,6 +555,9 @@ public abstract class AbstractTacticalSymbol extends WWObjectImpl implements Tac
      */
     protected Rectangle staticLayoutRect;
 
+    /** Indicates that one or more glyphs have not been resolved. */
+    protected boolean unresolvedGlyph;
+
     protected List<IconAtlasElement> currentGlyphs = new ArrayList<IconAtlasElement>();
     protected List<Label> currentLabels = new ArrayList<Label>();
     protected List<Line> currentLines = new ArrayList<Line>();
@@ -1101,6 +1104,7 @@ public abstract class AbstractTacticalSymbol extends WWObjectImpl implements Tac
     {
         Font previousFont = this.activeAttrs.getTextModifierFont();
         Double previousScale = this.activeAttrs.getScale();
+        Double previousOpacity = this.activeAttrs.getOpacity();
 
         if (this.isHighlighted())
         {
@@ -1128,13 +1132,28 @@ public abstract class AbstractTacticalSymbol extends WWObjectImpl implements Tac
         // If the font has changed since the last frame, then the layout needs to be recomputed since text may be a
         // different size.
         Font newFont = this.activeAttrs.getTextModifierFont();
-        if (newFont != null && !newFont.equals(previousFont))
+        if (newFont != null && !newFont.equals(previousFont)
+            || (newFont == null && previousFont != null))
+        {
             this.reset();
+        }
+
+        // Opacity does not directly affect layout, but each label stores the opacity in its material. If the opacity
+        // has changed, then recreate the labels.
+        Double newOpacity = this.activeAttrs.getOpacity();
+        if ((newOpacity != null && !newOpacity.equals(previousOpacity))
+            || (newOpacity == null && previousOpacity != null))
+        {
+            this.reset();
+        }
 
         // If the scale has changed then the layout needs to be recomputed.
         Double newScale = this.activeAttrs.getScale();
-        if (newScale != null && !newScale.equals(previousScale))
+        if (newScale != null && !newScale.equals(previousScale)
+            || (newScale == null && previousScale != null))
+        {
             this.reset();
+        }
     }
 
     protected TacticalSymbolAttributes getActiveAttributes()
@@ -1166,6 +1185,9 @@ public abstract class AbstractTacticalSymbol extends WWObjectImpl implements Tac
         {
             this.screenRect = null;
             this.layoutRect = null;
+
+            // Set the unresolved flag false. addGlyph will set it to true if there are still unresolved resources.
+            this.unresolvedGlyph = false;
 
             if (this.mustDrawIcon(dc))
                 this.layoutIcon(dc, iconSource);
@@ -1204,6 +1226,10 @@ public abstract class AbstractTacticalSymbol extends WWObjectImpl implements Tac
      */
     protected boolean mustLayout(IconSource iconSource, AVList modifiers)
     {
+        // If one or more glyphs need to be resolved, then layout is not complete.
+        if (this.unresolvedGlyph)
+            return true;
+
         // If there is no cached layout, then we need to layout.
         if (this.staticScreenRect == null || this.staticLayoutRect == null)
             return true;
@@ -1562,6 +1588,10 @@ public abstract class AbstractTacticalSymbol extends WWObjectImpl implements Tac
             Rectangle rect = this.layoutRect(offset, hotspot, elem.getSize(), layoutMode);
             elem.setPoint(rect.getLocation());
             this.currentGlyphs.add(elem);
+        }
+        else
+        {
+            this.unresolvedGlyph = true;
         }
     }
 

@@ -6,13 +6,18 @@
 
 package gov.nasa.worldwind.ogc.collada;
 
-import gov.nasa.worldwind.*;
+import gov.nasa.worldwind.Configuration;
+import gov.nasa.worldwind.WorldWindow;
 import gov.nasa.worldwind.avlist.AVKey;
-import gov.nasa.worldwind.geom.*;
+import gov.nasa.worldwind.geom.Angle;
+import gov.nasa.worldwind.geom.Position;
 
-import javax.swing.*;
-import java.awt.event.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.io.File;
+import javax.swing.Timer;
+
+import org.junit.Ignore;
 
 /**
  * Test loading a COLLADA model and moving the model along a path. World Wind does not support animations defined in
@@ -21,6 +26,7 @@ import java.io.File;
  * @author pabercrombie
  * @version $Id$
  */
+@Ignore
 public class ColladaMovingModel extends ColladaViewer
 {
     public static class AppFrame extends ColladaViewer.AppFrame

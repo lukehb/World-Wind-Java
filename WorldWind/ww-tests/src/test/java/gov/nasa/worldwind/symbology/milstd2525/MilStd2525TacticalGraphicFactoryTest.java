@@ -6,6 +6,12 @@
 
 package gov.nasa.worldwind.symbology.milstd2525;
 
+import junit.framework.TestCase;
+
+import gov.nasa.worldwind.symbology.milstd2525.graphics.EmsSidc;
+import gov.nasa.worldwind.symbology.milstd2525.graphics.MetocSidc;
+import gov.nasa.worldwind.symbology.milstd2525.graphics.TacGrpSidc;
+
 import org.junit.Test;
 
 import static org.junit.Assert.assertFalse;

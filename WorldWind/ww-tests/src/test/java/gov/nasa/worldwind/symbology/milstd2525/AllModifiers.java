@@ -10,12 +10,14 @@ import gov.nasa.worldwind.Configuration;
 import gov.nasa.worldwind.avlist.AVKey;
 import gov.nasa.worldwind.geom.Position;
 import gov.nasa.worldwind.layers.RenderableLayer;
-import gov.nasa.worldwind.symbology.*;
+import gov.nasa.worldwind.symbology.SymbologyConstants;
+import gov.nasa.worldwind.symbology.TacticalSymbol;
 import gov.nasa.worldwind.util.WWUtil;
 import gov.nasa.worldwindx.examples.ApplicationTemplate;
 
 import java.awt.Dimension;
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * Test program that renders MIL-STD-2525C symbols with all combinations of graphic modifiers.

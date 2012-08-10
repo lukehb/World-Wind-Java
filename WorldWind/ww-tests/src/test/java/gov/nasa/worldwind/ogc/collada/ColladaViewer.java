@@ -6,7 +6,8 @@
 
 package gov.nasa.worldwind.ogc.collada;
 
-import gov.nasa.worldwind.*;
+import gov.nasa.worldwind.Configuration;
+import gov.nasa.worldwind.WorldWind;
 import gov.nasa.worldwind.avlist.AVKey;
 import gov.nasa.worldwind.geom.Position;
 import gov.nasa.worldwind.layers.RenderableLayer;
@@ -14,9 +15,9 @@ import gov.nasa.worldwind.ogc.collada.impl.ColladaController;
 import gov.nasa.worldwind.util.WWUtil;
 import gov.nasa.worldwindx.examples.ApplicationTemplate;
 
-import javax.swing.*;
-import java.awt.*;
+import java.awt.Dimension;
 import java.io.File;
+import javax.swing.SwingUtilities;
 
 /**
  * Test loading a COLLADA file directly.

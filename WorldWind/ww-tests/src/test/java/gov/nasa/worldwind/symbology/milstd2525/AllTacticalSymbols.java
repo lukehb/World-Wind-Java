@@ -29,10 +29,13 @@ import javax.swing.Box;
 import javax.swing.JCheckBox;
 import javax.swing.JComponent;
 
+import org.junit.Ignore;
+
 /**
  * @author dcollins
  * @version $Id$
  */
+@Ignore
 public class AllTacticalSymbols extends ApplicationTemplate
 {
     public static class AppFrame extends ApplicationTemplate.AppFrame

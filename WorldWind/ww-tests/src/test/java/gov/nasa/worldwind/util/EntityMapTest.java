@@ -7,6 +7,7 @@
 package gov.nasa.worldwind.util;
 
 import junit.framework.TestCase;
+
 import org.junit.Test;
 
 /**
@@ -48,10 +49,5 @@ public class EntityMapTest
         String actual = EntityMap.replaceAll(expected);
 
         TestCase.assertEquals(expected, actual);
-    }
-
-    public static void main(String[] args)
-    {
-        new junit.textui.TestRunner().doRun(new junit.framework.TestSuite(EntityMapTest.class));
     }
 }

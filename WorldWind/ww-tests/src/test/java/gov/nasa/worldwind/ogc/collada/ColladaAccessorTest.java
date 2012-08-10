@@ -7,17 +7,20 @@
 package gov.nasa.worldwind.ogc.collada;
 
 import gov.nasa.worldwind.util.WWIO;
-import junit.framework.TestCase;
+
+import java.io.IOException;
 
 import javax.xml.stream.XMLStreamException;
-import java.io.IOException;
+
+import org.junit.Test;
 
 /**
  * @author pabercrombie
  * @version $Id$
  */
-public class ColladaAccessorTest extends TestCase
+public class ColladaAccessorTest
 {
+    @Test
     public void testFloatAccessor() throws IllegalAccessException, IOException, XMLStreamException
     {
         final String doc =
@@ -41,6 +44,7 @@ public class ColladaAccessorTest extends TestCase
         this.parseAndCompare(doc, expected);
     }
 
+    @Test
     public void testOffset() throws IllegalAccessException, IOException, XMLStreamException
     {
         final String doc =
@@ -64,6 +68,7 @@ public class ColladaAccessorTest extends TestCase
         this.parseAndCompare(doc, expected);
     }
 
+    @Test
     public void testUnnamedParam() throws IllegalAccessException, IOException, XMLStreamException
     {
         final String doc =
@@ -87,6 +92,7 @@ public class ColladaAccessorTest extends TestCase
         this.parseAndCompare(doc, expected);
     }
 
+    @Test
     public void testStride() throws IllegalAccessException, IOException, XMLStreamException
     {
         final String doc =
@@ -108,6 +114,7 @@ public class ColladaAccessorTest extends TestCase
         this.parseAndCompare(doc, expected);
     }
 
+    @Test
     public void testTooFewElements() throws IllegalAccessException, IOException, XMLStreamException
     {
         final String doc =

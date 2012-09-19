@@ -652,7 +652,7 @@ public class PointPlacemark extends WWObjectImpl
         {
             this.doDrawOrderedRenderable(dc, this.pickSupport);
 
-            if (this.isEnableBatchRendering() && !this.isEnableDecluttering())
+            if (this.isEnableBatchRendering())
                 this.drawBatched(dc);
         }
         finally
@@ -913,6 +913,7 @@ public class PointPlacemark extends WWObjectImpl
             TextRenderer textRenderer = OGLTextRenderer.getOrCreateTextRenderer(dc.getTextRendererCache(), font);
             bounds = textRenderer.getBounds(this.labelText);
             this.boundsFont = font;
+            this.labelBounds = bounds;
         }
 
         Double labelScale = this.getActiveAttributes().getLabelScale();
@@ -928,7 +929,7 @@ public class PointPlacemark extends WWObjectImpl
             bounds = new Rectangle2D.Double(x, y, bounds.getWidth(), bounds.getHeight());
         }
 
-        return this.labelBounds = bounds;
+        return bounds;
     }
 
     /**
@@ -1270,10 +1271,9 @@ public class PointPlacemark extends WWObjectImpl
             if (texture != null)
                 return texture;
 
-            URL localUrl = WorldWind.getDataFileStore().requestFile(attrs.getImageAddress());
-            if (localUrl != null)
+            texture = this.initializeTexture(attrs.getImageAddress());
+            if (texture != null)
             {
-                texture = new BasicWWTexture(localUrl, true);
                 this.textures.put(attrs.getImageAddress(), texture);
                 return texture;
             }
@@ -1300,6 +1300,25 @@ public class PointPlacemark extends WWObjectImpl
         }
 
         return texture;
+    }
+
+    /**
+     * Load a texture. If the texture source is not available locally, this method requests the texture source and
+     * returns null.
+     *
+     * @param address Path or URL to the image to load into a texture.
+     *
+     * @return The new texture, or null if the texture could not be created because the resource is not yet available
+     *         locally.
+     */
+    protected WWTexture initializeTexture(String address)
+    {
+        URL localUrl = WorldWind.getDataFileStore().requestFile(address);
+        if (localUrl != null)
+        {
+            return new BasicWWTexture(localUrl, true);
+        }
+        return null;
     }
 
     /**

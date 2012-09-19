@@ -137,6 +137,7 @@
                 <pathelement location="jogl.jar"/>
                 <pathelement location="gluegen-rt.jar"/>
                 <pathelement location="gdal.jar"/>
+                <pathelement location="osmparser.jar"/>
                 <pathelement location="${java.home}/lib/plugin.jar"/>
             </classpath>
             <link href="http://download.oracle.com/javase/6/docs/api/"/>

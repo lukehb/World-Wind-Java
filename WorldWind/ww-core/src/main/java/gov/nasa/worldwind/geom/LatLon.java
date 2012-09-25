@@ -6,7 +6,6 @@
 package gov.nasa.worldwind.geom;
 
 import gov.nasa.worldwind.avlist.AVKey;
-import gov.nasa.worldwind.globes.Globe;
 import gov.nasa.worldwind.util.*;
 
 import java.util.*;
@@ -25,6 +24,20 @@ import java.util.regex.Pattern;
 public class LatLon
 {
     public static final LatLon ZERO = new LatLon(Angle.ZERO, Angle.ZERO);
+    
+    private static final String SEPARATORS = "(\\s*|,|,\\s*)";
+    
+    public static final Pattern DECIMAL_PATTERN = Pattern.compile(
+        "([-|\\+]?\\d+?(\\.\\d+?)??\\s*[N|n|S|s]??)" +
+        SEPARATORS +
+        "([-|\\+]?\\d+?(\\.\\d+?)??\\s*[E|e|W|w]??)");
+    
+    public static final Pattern DMS_PATTERN = Pattern.compile(
+        "([-|\\+]?\\d{1,3}[d|D|\u00B0|\\s](\\s*\\d{1,2}['|\u2019|\\s])?(\\s*\\d{1,2}(\\.\\d+?)??[\"|\u201d])?\\s*[N|n|S|s]?)" +
+        SEPARATORS +
+        "([-|\\+]?\\d{1,3}[d|D|\u00B0|\\s](\\s*\\d{1,2}['|\u2019|\\s])?(\\s*\\d{1,2}(\\.\\d+?)??[\"|\u201d])?\\s*[E|e|W|w]?)");
+    
+    public static final Pattern PATTERN = Pattern.compile(DECIMAL_PATTERN.pattern() + "|" + DMS_PATTERN.pattern());
 
     public final Angle latitude;
     public final Angle longitude;
@@ -994,10 +1007,9 @@ public class LatLon
      *
      * @return a <code>LatLon</code> instance with the parsed angles.
      *
-     * @throws IllegalArgumentException if <code>latLonString</code> is null.
-     * @throws NumberFormatException    if the string does not form a latitude, longitude pair.
+     * @throws IllegalArgumentException if <code>latLonString</code> is null or does not form a latitude, longitude pair.
      */
-    public static LatLon parseLatLon(String coordString, Globe globe)
+    public static LatLon parseLatLon(String coordString)
     {
         if (coordString == null)
         {
@@ -1009,18 +1021,10 @@ public class LatLon
         Angle lat = null;
         Angle lon = null;
         coordString = coordString.trim();
-        String regex;
-        String separators = "(\\s*|,|,\\s*)";
-        Pattern pattern;
-        Matcher matcher;
 
         // Try to extract a pair of signed decimal values separated by a space, ',' or ', '
         // Allow E, W, S, N sufixes
-        regex = "([-|\\+]?\\d+?(\\.\\d+?)??\\s*[N|n|S|s]??)";
-        regex += separators;
-        regex += "([-|\\+]?\\d+?(\\.\\d+?)??\\s*[E|e|W|w]??)";
-        pattern =  Pattern.compile(regex);
-        matcher = pattern.matcher(coordString);
+        Matcher matcher = DECIMAL_PATTERN.matcher(coordString);
         if (matcher.matches())
         {
             String sLat = matcher.group(1).trim();  // Latitude
@@ -1053,15 +1057,11 @@ public class LatLon
         // eg: 123° 34' 42"S 45° 12' 30"W
         if (lat == null || lon == null)
         {
-            regex = "([-|\\+]?\\d{1,3}[d|D|\u00B0|\\s](\\s*\\d{1,2}['|\u2019|\\s])?(\\s*\\d{1,2}[\"|\u201d])?\\s*[N|n|S|s]?)";
-            regex += separators;
-            regex += "([-|\\+]?\\d{1,3}[d|D|\u00B0|\\s](\\s*\\d{1,2}['|\u2019|\\s])?(\\s*\\d{1,2}[\"|\u201d])?\\s*[E|e|W|w]?)";
-            pattern =  Pattern.compile(regex);
-            matcher = pattern.matcher(coordString);
+            matcher = DMS_PATTERN.matcher(coordString);
             if (matcher.matches())
             {
                 lat = Angle.fromDMS(matcher.group(1));
-                lon = Angle.fromDMS(matcher.group(5));
+                lon = Angle.fromDMS(matcher.group(6));
             }
         }
 

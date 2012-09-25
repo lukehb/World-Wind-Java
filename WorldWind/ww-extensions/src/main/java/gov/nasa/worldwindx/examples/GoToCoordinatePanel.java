@@ -80,7 +80,7 @@ public class GoToCoordinatePanel extends JPanel
                 }
                 catch (Exception e)
                 {
-                    latLon = LatLon.parseLatLon(coordInput.getText(), wwd.getModel().getGlobe());
+                    latLon = LatLon.parseLatLon(coordInput.getText());
                 }
                 updateResult(latLon);
             }
@@ -110,7 +110,7 @@ public class GoToCoordinatePanel extends JPanel
                 }
                 catch (Exception e)
                 {
-                    latLon = LatLon.parseLatLon(coordInput.getText(), wwd.getModel().getGlobe());
+                    latLon = LatLon.parseLatLon(coordInput.getText());
                 }
                 updateResult(latLon);
                 if (latLon != null)

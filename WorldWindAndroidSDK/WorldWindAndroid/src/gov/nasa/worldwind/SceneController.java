@@ -5,7 +5,7 @@
  */
 package gov.nasa.worldwind;
 
-import android.graphics.*;
+import android.graphics.Point;
 import android.opengl.GLES20;
 import gov.nasa.worldwind.avlist.AVKey;
 import gov.nasa.worldwind.cache.GpuResourceCache;
@@ -27,6 +27,7 @@ public class SceneController extends WWObjectImpl
     protected View view;
     protected double verticalExaggeration;
     protected DrawContext dc;
+    protected Color clearColor = new Color();
     protected GpuResourceCache gpuResourceCache;
     protected boolean deepPick;
     protected Point pickPoint;
@@ -282,8 +283,8 @@ public class SceneController extends WWObjectImpl
         dc.setView(this.view);
         dc.setVerticalExaggeration(this.verticalExaggeration);
         dc.setGpuResourceCache(this.gpuResourceCache);
-        dc.setPickPoint(this.pickPoint);
         dc.setFrameTimeStamp(timeStamp);
+        dc.setPickPoint(this.pickPoint);
         dc.setPerFrameStatistics(this.perFrameStatistics);
     }
 
@@ -293,7 +294,7 @@ public class SceneController extends WWObjectImpl
         GLES20.glEnable(GLES20.GL_BLEND);
         GLES20.glEnable(GLES20.GL_CULL_FACE);
         GLES20.glEnable(GLES20.GL_DEPTH_TEST);
-        GLES20.glBlendFunc(GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA); // Blend in pre-multiplied alpha mode.
+        GLES20.glBlendFunc(GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA); // Blend in premultiplied alpha mode.
         GLES20.glDepthFunc(GLES20.GL_LEQUAL);
         // We do not specify glCullFace, because the default cull face state GL_BACK is appropriate for our needs.
     }
@@ -312,8 +313,12 @@ public class SceneController extends WWObjectImpl
 
     protected void clearFrame(DrawContext dc)
     {
-        int c = dc.getClearColor();
-        GLES20.glClearColor(Color.red(c) / 255f, Color.green(c) / 255f, Color.blue(c) / 255f, Color.alpha(c) / 255f);
+        // Separate the DrawContext's background color components into the SceneController's clearColor.
+        this.clearColor.set(dc.getClearColor());
+        // Set the DrawContext's clear color, then clear the framebuffer's color buffer and depth buffer. This fills
+        // the color buffer with the background color, and fills the depth buffer with 1 (the default).
+        GLES20.glClearColor((float) this.clearColor.r, (float) this.clearColor.g, (float) this.clearColor.b,
+            (float) this.clearColor.a);
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT | GLES20.GL_DEPTH_BUFFER_BIT);
     }
 
@@ -340,7 +345,7 @@ public class SceneController extends WWObjectImpl
         }
         catch (Exception e)
         {
-            Logging.error(Logging.getMessage("SceneController.ExceptionCreatingSurfaceGeometry"), e);
+            Logging.error(Logging.getMessage("generic.ExceptionCreatingSurfaceGeometry"), e);
         }
 
         dc.setSurfaceGeometry(surfaceGeometry);
@@ -356,6 +361,7 @@ public class SceneController extends WWObjectImpl
     protected void draw(DrawContext dc)
     {
         this.drawLayers(dc);
+        this.drawOrderedRenderables(dc);
     }
 
     protected void drawLayers(DrawContext dc)
@@ -375,7 +381,7 @@ public class SceneController extends WWObjectImpl
             }
             catch (Exception e)
             {
-                String msg = Logging.getMessage("SceneController.ExceptionRenderingLayer",
+                String msg = Logging.getMessage("generic.ExceptionRenderingLayer",
                     (layer != null ? layer.getName() : Logging.getMessage("term.Unknown")));
                 Logging.error(msg, e);
                 // Don't abort; continue on to the next layer.
@@ -385,11 +391,34 @@ public class SceneController extends WWObjectImpl
         dc.setCurrentLayer(null);
     }
 
+    protected void drawOrderedRenderables(DrawContext dc)
+    {
+        dc.setOrderedRenderingMode(true);
+
+        while (dc.peekOrderedRenderables() != null)
+        {
+            OrderedRenderable or = dc.pollOrderedRenderables();
+
+            try
+            {
+                or.render(dc);
+            }
+            catch (Exception e)
+            {
+                String msg = Logging.getMessage("generic.ExceptionRenderingOrderedRenderable", or);
+                Logging.error(msg, e);
+                // Don't abort; continue on to the next ordered renderable.
+            }
+        }
+
+        dc.setOrderedRenderingMode(false);
+    }
+
     protected void pick(DrawContext dc)
     {
-        this.beginPicking(dc);
         try
         {
+            this.beginPicking(dc);
             this.doPick(dc);
         }
         finally
@@ -455,6 +484,7 @@ public class SceneController extends WWObjectImpl
             return;
 
         this.pickLayers(dc);
+        this.pickOrderedRenderables(dc);
     }
 
     protected void pickLayers(DrawContext dc)
@@ -474,7 +504,7 @@ public class SceneController extends WWObjectImpl
             }
             catch (Exception e)
             {
-                String msg = Logging.getMessage("SceneController.ExceptionPickingLayer",
+                String msg = Logging.getMessage("generic.ExceptionPickingLayer",
                     (layer != null ? layer.getName() : Logging.getMessage("term.Unknown")));
                 Logging.error(msg, e);
                 // Don't abort; continue on to the next layer.
@@ -482,6 +512,29 @@ public class SceneController extends WWObjectImpl
         }
 
         dc.setCurrentLayer(null);
+    }
+
+    protected void pickOrderedRenderables(DrawContext dc)
+    {
+        dc.setOrderedRenderingMode(true);
+
+        while (dc.peekOrderedRenderables() != null)
+        {
+            OrderedRenderable or = dc.pollOrderedRenderables();
+
+            try
+            {
+                or.pick(dc, dc.getPickPoint());
+            }
+            catch (Exception e)
+            {
+                String msg = Logging.getMessage("generic.ExceptionPickingOrderedRenderable", or);
+                Logging.error(msg, e);
+                // Don't abort; continue on to the next ordered renderable.
+            }
+        }
+
+        dc.setOrderedRenderingMode(false);
     }
 
     protected void resolveTopPick(DrawContext dc)
@@ -512,9 +565,9 @@ public class SceneController extends WWObjectImpl
 
     protected void doDeepPick(DrawContext dc)
     {
-        this.beginDeepPicking(dc);
         try
         {
+            this.beginDeepPicking(dc);
             this.doPickNonTerrain(dc);
         }
         finally

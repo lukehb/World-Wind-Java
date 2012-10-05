@@ -11,13 +11,23 @@ package gov.nasa.worldwind.avlist;
  */
 public interface AVKey
 {
+    /** Altitude mode constant indicating that altitude values are interpreted as being relative to mean sea level. */
+    final String ABSOLUTE = "gov.nasa.worldwind.avkey.Absolute";
     final String AVERAGE_TILE_SIZE = "gov.nasa.worldwind.avkey.AverageTileSize";
     final String AVAILABLE_IMAGE_FORMATS = "gov.nasa.worldwind.avkey.AvailableImageFormats";
 
     final String BIG_ENDIAN = "gov.nasa.worldwind.avkey.BigEndian";
     final String BYTE_ORDER = "gov.nasa.worldwind.avkey.ByteOrder";
 
+    /** Altitude mode constant indicating that altitude values are ignored, and are replaced with the terrain height. */
+    final String CLAMP_TO_GROUND = "gov.nasa.worldwind.avkey.ClampToGround";
+    /**
+     * Altitude mode constant indicating that a shape has a constant height. For example, a building may have a constant
+     * height of 10m which does not vary depending on the ground level beneath each of the building's corners.
+     */
+    final String CONSTANT = "gov.nasa.worldwind.avkey.Constant";
     final String CONSTRUCTION_PARAMETERS = "gov.nasa.worldwind.avkey.ConstructionParameters";
+    final String CONTEXT = "gov.nasa.worldwind.avkey.Context";
 
     final String DATA_CACHE_NAME = "gov.nasa.worldwind.avkey.DataCacheName";
     final String DATA_FILE_STORE_CLASS_NAME = "gov.nasa.worldwind.avkey.DataFileStoreClassName";
@@ -31,6 +41,7 @@ public interface AVKey
      */
     final String DATA_TYPE = "gov.nasa.worldwind.avkey.DataType";
     final String DELETE_CACHE_ON_EXIT = "gov.nasa.worldwind.avkey.DeleteCacheOnExit";
+    final String DESCRIPTION = "gov.nasa.worldwind.avkey.Description";
     final String DETAIL_HINT = "gov.nasa.worldwind.avkey.DetailHint";
     final String DISPLAY_NAME = "gov.nasa.worldwind.avkey.DisplayName";
 
@@ -48,6 +59,7 @@ public interface AVKey
     final String FILE_STORE_LOCATION = "gov.nasa.worldwind.avkey.FileStoreLocation";
     final String FLOAT32 = "gov.nasa.worldwind.avkey.Float32";
     final String FORMAT_SUFFIX = "gov.nasa.worldwind.avkey.FormatSuffixKey";
+    final String FRACTION = "gov.nasa.worldwind.avkey.Fraction";
 
     final String GET_CAPABILITIES_URL = "gov.nasa.worldwind.avkey.GetCapabilitiesURL";
     final String GET_MAP_URL = "gov.nasa.worldwind.avkey.GetMapURL";
@@ -55,6 +67,13 @@ public interface AVKey
     final String GLOBE_CLASS_NAME = "gov.nasa.worldwind.avkey.GlobeClassName";
     final String GPU_RESOURCE_CACHE_SIZE = "gov.nasa.worldwind.avkey.GpuResourceCacheSize";
     final String GPU_TEXTURE_TILE_CACHE_SIZE = "gov.nasa.worldwind.avkey.GpuTextureTileCacheSize";
+    /**
+     * Path type constant indicating the great circle method for interpolating between two geographic locations. When
+     * used to specify the path type for a shape, this indicates that each of the shape's defining points are connected
+     * by a great circle path. The resultant curve in world coordinates always represents the shortest path between the
+     * two endpoints.
+     */
+    final String GREAT_CIRCLE = "gov.nasa.worldwind.avkey.GreatCircle";
 
     final String HEIGHT = "gov.nasa.worldwind.avkey.Height";
 
@@ -64,6 +83,7 @@ public interface AVKey
     final String INITIAL_LONGITUDE = "gov.nasa.worldwind.avkey.InitialLongitude";
     final String INITIAL_ALTITUDE = "gov.nasa.worldwind.avkey.InitialAltitude";
     final String INPUT_HANDLER_CLASS_NAME = "gov.nasa.worldwind.avkey.InputHandlerClassName";
+    final String INSET_PIXELS = "gov.nasa.worldwind.avkey.InsetPixels";
     final String INSTALLED = "gov.nasa.worldwind.avkey.Installed";
     final String INT8 = "gov.nasa.worldwind.avkey.Int8";
     final String INT16 = "gov.nasa.worldwind.avkey.Int16";
@@ -77,6 +97,13 @@ public interface AVKey
     final String LEVEL_NAME = "gov.nasa.worldwind.avkey.LevelName";
     final String LEVEL_NUMBER = "gov.nasa.worldwind.avkey.LevelNumber";
     final String LEVEL_ZERO_TILE_DELTA = "gov.nasa.worldwind.LevelZeroTileDelta";
+    /**
+     * Path type constant the linear method for interpolating between two geographic locations. When used to specify the
+     * path type for a shape, this indicates that each of the shape's defining points are connected by a straight line
+     * in geographic space. The resultant curve in world coordinates is almost never a straight path between the two
+     * endpoints.
+     */
+    final String LINEAR = "gov.nasa.worldwind.avkey.Linear";
     final String LITTLE_ENDIAN = "gov.nasa.worldwind.avkey.LittleEndian";
     final String LOGCAT_TAG = "gov.nasa.worldwind.avkey.LogcatTag";
 
@@ -119,9 +146,12 @@ public interface AVKey
     final String OPACITY = "gov.nasa.worldwind.avkey.Opacity";
 
     final String PICKED_OBJECT_PARENT_LAYER = "gov.nasa.worldwind.avkey.PickedObject.ParentLayer";
+    final String PIXELS = "gov.nasa.worldwind.avkey.Pixels";
     final String POSITION = "gov.nasa.worldwind.avkey.Position";
     final String PROGRESS = "gov.nasa.worldwind.avkey.Progress";
 
+    /** Altitude mode constant indicating that altitude values are interpreted as being relative to ground level. */
+    final String RELATIVE_TO_GROUND = "gov.nasa.worldwind.avkey.RelativeToGround";
     final String REPAINT = "gov.nasa.worldwind.avkey.Repaint";
     final String RETRIEVAL_POOL_SIZE = "gov.nasa.worldwind.avkey.RetrievalPoolSize";
     final String RETRIEVAL_QUEUE_SIZE = "gov.nasa.worldwind.avkey.RetrievalQueueSize";
@@ -131,6 +161,13 @@ public interface AVKey
     final String RETRIEVER_STATE = "gov.nasa.worldwind.avkey.RetrieverState";
     final String RETRIEVAL_STATE_ERROR = "gov.nasa.worldwind.avkey.RetrievalStateError";
     final String RETRIEVAL_STATE_SUCCESSFUL = "gov.nasa.worldwind.avkey.RetrievalStateSuccessful";
+    /**
+     * Path type constant indicating the rhumb method for interpolating between two geographic locations. When used to
+     * specify the path type for a shape, this indicates that each of the shape's defining points are connected by a
+     * path with constant azimuth, the angle relative to North. The resultant curve in world coordinates is almost never
+     * a straight path between the two endpoints, but does maintain a constant azimuth.
+     */
+    final String RHUMB_LINE = "gov.nasa.worldwind.avkey.RhumbLine";
 
     final String SCENE_CONTROLLER_CLASS_NAME = "gov.nasa.worldwind.avkey.SceneControllerClassName";
     final String SECTOR = "gov.nasa.worldwind.avkey.Sector";
@@ -140,6 +177,7 @@ public interface AVKey
     final String SERVICE = "gov.nasa.worldwind.avkey.ServiceURLKey";
     final String SERVICE_NAME = "gov.nasa.worldwind.avkey.ServiceName";
     final String SESSION_CACHE_CLASS_NAME = "gov.nasa.worldwind.avkey.SessionCacheClassName";
+    final String SHORT_DESCRIPTION = "gov.nasa.worldwind.avkey.Server.ShortDescription";
     final String STYLE_NAMES = "gov.nasa.worldwind.avkey.StyleNames";
 
     final String TESSELLATOR_FACTORY = "gov.nasa.worldwind.avkey.TessellatorFactory";

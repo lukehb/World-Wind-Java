@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-    Copyright (C) 2012 United States Government as represented by the Administrator of the
-    National Aeronautics and Space Administration.
+    Copyright (C) 2001, 2012 United States Government as represented by
+    the Administrator of the National Aeronautics and Space Administration.
     All Rights Reserved.
 
     $Id$
@@ -27,7 +27,8 @@
         Note: The world_wind_examples icon is taken from www.androidicons.com. This icon is licensed under the Creative
         Commons Attribution 3.0 Unported License.
     -->
-    <application android:icon="@drawable/world_wind_examples">
+    <application android:label="@string/WorldWindExamples.displayName"
+                 android:icon="@drawable/world_wind_examples">
 
         <!--
             Define the bootstrap activity that launches when the World Wind based activity launches. Configure the
@@ -74,6 +75,24 @@
                 <category android:name="android.intent.category.SAMPLE_CODE"/>
             </intent-filter>
             <meta-data android:name="description" android:value="@string/SimplestPossibleActivity.description"/>
+        </activity>
+        <activity android:name=".PathActivity"
+                  android:label="@string/PathActivity.displayName"
+                  android:icon="@drawable/path">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.SAMPLE_CODE"/>
+            </intent-filter>
+            <meta-data android:name="description" android:value="@string/PathActivity.description"/>
+        </activity>
+        <activity android:name=".KMLActivity"
+                  android:label="@string/KMLActivity.displayName"
+                  android:icon="@drawable/kml">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.SAMPLE_CODE"/>
+            </intent-filter>
+            <meta-data android:name="description" android:value="@string/KMLActivity.description"/>
         </activity>
         <activity android:name=".PerformanceTestSuite"
                   android:label="@string/PerformanceTestSuite.displayName"

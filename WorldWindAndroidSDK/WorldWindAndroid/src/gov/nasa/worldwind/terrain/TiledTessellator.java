@@ -1,18 +1,16 @@
-/*
- * Copyright (C) 2012 United States Government as represented by the Administrator of the
- * National Aeronautics and Space Administration.
- * All Rights Reserved.
- */
+/* Copyright (C) 2001, 2012 United States Government as represented by
+the Administrator of the National Aeronautics and Space Administration.
+All Rights Reserved.
+*/
 package gov.nasa.worldwind.terrain;
 
-import android.graphics.*;
+import android.graphics.Point;
 import android.opengl.GLES20;
 import android.util.Pair;
 import gov.nasa.worldwind.*;
 import gov.nasa.worldwind.avlist.*;
 import gov.nasa.worldwind.cache.*;
 import gov.nasa.worldwind.geom.*;
-import gov.nasa.worldwind.geom.Matrix;
 import gov.nasa.worldwind.globes.Globe;
 import gov.nasa.worldwind.pick.PickedObject;
 import gov.nasa.worldwind.render.*;
@@ -55,6 +53,33 @@ public class TiledTessellator extends WWObjectImpl implements Tessellator, Tile.
         public void setExtent(Extent extent)
         {
             this.extent = extent;
+        }
+
+        /** {@inheritDoc} */
+        public boolean getSurfacePoint(Angle latitude, Angle longitude, Vec4 result)
+        {
+            if (latitude == null)
+            {
+                String msg = Logging.getMessage("nullValue.LatitudeIsNull");
+                Logging.error(msg);
+                throw new IllegalArgumentException(msg);
+            }
+
+            if (longitude == null)
+            {
+                String msg = Logging.getMessage("nullValue.LongitudeIsNull");
+                Logging.error(msg);
+                throw new IllegalArgumentException(msg);
+            }
+
+            if (result == null)
+            {
+                String msg = Logging.getMessage("nullValue.ResultIsNull");
+                Logging.error(msg);
+                throw new IllegalArgumentException(msg);
+            }
+
+            return this.tessellator.getSurfacePoint(this, latitude, longitude, result);
         }
 
         public TerrainGeometry getGeometry(MemoryCache cache)
@@ -187,6 +212,33 @@ public class TiledTessellator extends WWObjectImpl implements Tessellator, Tile.
         }
 
         /** {@inheritDoc} */
+        public boolean getSurfacePoint(Angle latitude, Angle longitude, Vec4 result)
+        {
+            if (latitude == null)
+            {
+                String msg = Logging.getMessage("nullValue.LatitudeIsNull");
+                Logging.error(msg);
+                throw new IllegalArgumentException(msg);
+            }
+
+            if (longitude == null)
+            {
+                String msg = Logging.getMessage("nullValue.LongitudeIsNull");
+                Logging.error(msg);
+                throw new IllegalArgumentException(msg);
+            }
+
+            if (result == null)
+            {
+                String msg = Logging.getMessage("nullValue.ResultIsNull");
+                Logging.error(msg);
+                throw new IllegalArgumentException(msg);
+            }
+
+            return this.tessellator.getSurfacePoint(latitude, longitude, result);
+        }
+
+        /** {@inheritDoc} */
         public void beginRendering(DrawContext dc)
         {
             if (dc == null)
@@ -313,13 +365,14 @@ public class TiledTessellator extends WWObjectImpl implements Tessellator, Tile.
     protected double[] tileRowElevations;
     protected Vec4[] tilePoints;
     protected float[] tileCoords;
+    protected float[] pointBuffer = new float[12];
     // Properties used for picking.
     protected final Object pickProgramKey = new Object();
     protected boolean pickProgramCreationFailed;
+    protected Color pickColor = new Color();
     protected Line pickRay = new Line();
     protected Vec4 pickedTriPoint = new Vec4();
     protected Position pickedTriPos = new Position();
-    protected float[] pickedTriCoords = new float[9];
 
     public TiledTessellator(AVList params)
     {
@@ -388,6 +441,34 @@ public class TiledTessellator extends WWObjectImpl implements Tessellator, Tile.
             Sector tileSector = ((Tile) event.getNewValue()).getSector();
             this.markSectorExpired(tileSector);
         }
+    }
+
+    protected boolean getSurfacePoint(Angle latitude, Angle longitude, Vec4 result)
+    {
+        for (SectorGeometry tile : this.currentTiles)
+        {
+            if (tile.getSurfacePoint(latitude, longitude, result)) // Each tile tests the location against its sector.
+                return true;
+        }
+
+        return false;
+    }
+
+    protected boolean getSurfacePoint(TerrainTile tile, Angle latitude, Angle longitude, Vec4 result)
+    {
+        Sector tileSector = tile.getSector();
+
+        if (!tileSector.contains(latitude, longitude))
+            return false; // The location is not on the specified tile.
+
+        MemoryCache cache = this.getTerrainGeometryCache();
+        TerrainGeometry geom = tile.getGeometry(cache);
+
+        if (geom == null)
+            return false; // The tile geometry has not been computed yet, or has been evicted from the cache.
+
+        this.computeSurfacePoint(tile, geom, latitude, longitude, result);
+        return true;
     }
 
     public SectorGeometryList tessellate(DrawContext dc)
@@ -505,7 +586,7 @@ public class TiledTessellator extends WWObjectImpl implements Tessellator, Tile.
         }
     }
 
-    @SuppressWarnings( {"UnusedParameters"})
+    @SuppressWarnings({"UnusedParameters"})
     protected void addTile(DrawContext dc, TerrainTile tile)
     {
         if (this.mustRegenerateGeometry(dc, tile))
@@ -598,7 +679,7 @@ public class TiledTessellator extends WWObjectImpl implements Tessellator, Tile.
         }
     }
 
-    @SuppressWarnings( {"UnusedParameters"})
+    @SuppressWarnings({"UnusedParameters"})
     protected boolean isExpired(DrawContext dc, TerrainTile tile)
     {
         if (this.currentExpiredSectors.isEmpty())
@@ -734,9 +815,9 @@ public class TiledTessellator extends WWObjectImpl implements Tessellator, Tile.
         // the tile density has changed. We clear the buffer if it is non-null and has enough capacity to ensure that
         // the previous limit does not interfere with what the new limit should be after filling the buffer. We add two
         // rows and columns of vertices to provide an outer row/column for the tile skirt.
-        int numCoords = 3 * (numLat + 2) * (numLon + 2);
-        if (geom.points == null || geom.points.capacity() < numCoords)
-            geom.points = ByteBuffer.allocateDirect(4 * numCoords).order(ByteOrder.nativeOrder()).asFloatBuffer();
+        int numPoints = (numLat + 2) * (numLon + 2);
+        if (geom.points == null || geom.points.capacity() < 3 * numPoints)
+            geom.points = BufferUtil.newFloatBuffer(3 * numPoints);
         geom.points.clear();
 
         double minLat = tile.getSector().minLatitude.degrees;
@@ -873,8 +954,8 @@ public class TiledTessellator extends WWObjectImpl implements Tessellator, Tile.
         // columns of vertices to provide an outer row/column for the tile skirt.
         int numLat = tileWidth + 3;
         int numLon = tileHeight + 3;
-        int numCoords = 2 * numLat * numLon;
-        FloatBuffer texCoords = ByteBuffer.allocateDirect(4 * numCoords).order(ByteOrder.nativeOrder()).asFloatBuffer();
+        int numPoints = numLat * numLon;
+        FloatBuffer texCoords = BufferUtil.newFloatBuffer(2 * numPoints);
 
         double minS = 0;
         double maxS = 1;
@@ -925,7 +1006,7 @@ public class TiledTessellator extends WWObjectImpl implements Tessellator, Tile.
         // tileWidth and tileHeight that can be indexed by a short is 256x256 (excluding the extra rows and columns to
         // convert between cell count and vertex count, and the extra rows and columns for the tile skirt).
         int numIndices = 2 * (numLat - 1) * numLon + 2 * (numLat - 2);
-        ShortBuffer indices = ByteBuffer.allocateDirect(2 * numIndices).order(ByteOrder.nativeOrder()).asShortBuffer();
+        ShortBuffer indices = BufferUtil.newShortBuffer(numIndices);
 
         for (int j = 0; j < numLat - 1; j++)
         {
@@ -966,7 +1047,7 @@ public class TiledTessellator extends WWObjectImpl implements Tessellator, Tile.
         int numLon = tileWidth + 1;
 
         int numIndices = 2 * numLat * (numLon - 1) + 2 * (numLat - 1) * numLon;
-        ShortBuffer indices = ByteBuffer.allocateDirect(2 * numIndices).order(ByteOrder.nativeOrder()).asShortBuffer();
+        ShortBuffer indices = BufferUtil.newShortBuffer(numIndices);
 
         // Add two columns of vertices to the row stride to account for the two additional vertices that provide an
         // outer row/column for the tile skirt.
@@ -1013,7 +1094,7 @@ public class TiledTessellator extends WWObjectImpl implements Tessellator, Tile.
 
         // The outline indices ignore the extra rows and columns for the tile skirt.
         int numIndices = 2 * (numLat - 1) + 2 * numLon - 1;
-        ShortBuffer indices = ByteBuffer.allocateDirect(2 * numIndices).order(ByteOrder.nativeOrder()).asShortBuffer();
+        ShortBuffer indices = BufferUtil.newShortBuffer(numIndices);
 
         // Add two columns of vertices to the row stride to account for the two additional vertices that provide an
         // outer row/column for the tile skirt.
@@ -1171,7 +1252,7 @@ public class TiledTessellator extends WWObjectImpl implements Tessellator, Tile.
         program.loadUniformMatrix("mvpMatrix", this.mvpMatrix);
     }
 
-    @SuppressWarnings( {"UnusedParameters"})
+    @SuppressWarnings({"UnusedParameters"})
     protected void endRendering(DrawContext dc, TerrainTile tile)
     {
         // Intentionally left blank. All GL state is restored in endRendering(DrawContext).
@@ -1351,6 +1432,34 @@ public class TiledTessellator extends WWObjectImpl implements Tessellator, Tile.
         }
     }
 
+    protected GpuProgram getGpuPickProgram(GpuResourceCache cache)
+    {
+        if (this.pickProgramCreationFailed)
+            return null;
+
+        GpuProgram program = cache.getProgram(this.pickProgramKey);
+
+        if (program == null)
+        {
+            try
+            {
+                GpuProgram.GpuProgramSource source = GpuProgram.readProgramSource(PICK_VERTEX_SHADER_PATH,
+                    PICK_FRAGMENT_SHADER_PATH);
+                program = new GpuProgram(source);
+                cache.put(this.pickProgramKey, program);
+            }
+            catch (Exception e)
+            {
+                String msg = Logging.getMessage("GL.ExceptionLoadingProgram", PICK_VERTEX_SHADER_PATH,
+                    PICK_FRAGMENT_SHADER_PATH);
+                Logging.error(msg);
+                this.pickProgramCreationFailed = true;
+            }
+        }
+
+        return program;
+    }
+
     protected SectorGeometry getPickedGeometry(DrawContext dc, SectorGeometryList sgList, Point pickPoint)
     {
         GpuProgram program = dc.getCurrentProgram();
@@ -1387,11 +1496,14 @@ public class TiledTessellator extends WWObjectImpl implements Tessellator, Tile.
                 sg.beginRendering(dc);
                 try
                 {
+                    // Convert the pick color from a packed 32-bit RGB color int to a RGB color with separate components
+                    // in the range [0.0, 1.0].
+                    this.pickColor.set(color, false);
                     // Specify the generic vertex attribute value for "vertexColor" to be used for all vertices. Since
-                    // the "vertexColor" attrib array is not enabled, this constant value is used instead. This
-                    // 3-component RGB color is expanded to a 4-component RGBA color, where the alpha component is 1.0.
-                    GLES20.glVertexAttrib3f(location, Color.red(color) / 255f, Color.green(color) / 255f,
-                        Color.blue(color) / 255f);
+                    // the "vertexColor" attrib array is not enabled, this constant value is used instead. OpenGL
+                    // expands this 3-component RGB color to a 4-component RGBA color, where the alpha component is 1.0.
+                    GLES20.glVertexAttrib3f(location, (float) this.pickColor.r, (float) this.pickColor.g,
+                        (float) this.pickColor.b);
                     sg.render(dc);
                 }
                 finally
@@ -1494,9 +1606,9 @@ public class TiledTessellator extends WWObjectImpl implements Tessellator, Tile.
         // the buffer if it is non-null and has enough capacity to ensure that the previous limit does not interfere
         // with  what the new limit should be after filling the buffer.
         if (pickGeom.points == null || pickGeom.points.capacity() < 3 * numPoints)
-            pickGeom.points = ByteBuffer.allocateDirect(12 * numPoints).order(ByteOrder.nativeOrder()).asFloatBuffer();
+            pickGeom.points = BufferUtil.newFloatBuffer(3 * numPoints);
         if (pickGeom.colors == null || pickGeom.colors.capacity() < 3 * numPoints)
-            pickGeom.colors = ByteBuffer.allocateDirect(3 * numPoints);
+            pickGeom.colors = BufferUtil.newByteBuffer(3 * numPoints);
         pickGeom.points.clear();
         pickGeom.colors.clear();
 
@@ -1535,9 +1647,9 @@ public class TiledTessellator extends WWObjectImpl implements Tessellator, Tile.
 
                 if (i != 0 || j != 0) // The first triangle's color is allocated before this loop.
                     color = dc.getUniquePickColor();
-                colors[0] = colors[3] = colors[6] = (byte) Color.red(color); // Red value for all three vertices.
-                colors[1] = colors[4] = colors[7] = (byte) Color.green(color); // Green value for all three vertices.
-                colors[2] = colors[5] = colors[8] = (byte) Color.blue(color); // Blue value for all three vertices.
+                colors[0] = colors[3] = colors[6] = (byte) Color.getColorIntRed(color);
+                colors[1] = colors[4] = colors[7] = (byte) Color.getColorIntGreen(color);
+                colors[2] = colors[5] = colors[8] = (byte) Color.getColorIntBlue(color);
                 pickGeom.colors.put(colors); // Colors for all three vertices of the fist triangle.
 
                 // Second triangle. The second triangle is composed of the upper-right, lower-left, and lower-right
@@ -1549,9 +1661,9 @@ public class TiledTessellator extends WWObjectImpl implements Tessellator, Tile.
                 pickGeom.points.put(corners, 3, 3); // Lower-right vertex.
 
                 color = dc.getUniquePickColor();
-                colors[0] = colors[3] = colors[6] = (byte) Color.red(color); // Red value for all three vertices.
-                colors[1] = colors[4] = colors[7] = (byte) Color.green(color); // Green value for all three vertices.
-                colors[2] = colors[5] = colors[8] = (byte) Color.blue(color); // Blue value for all three vertices.
+                colors[0] = colors[3] = colors[6] = (byte) Color.getColorIntRed(color);
+                colors[1] = colors[4] = colors[7] = (byte) Color.getColorIntGreen(color);
+                colors[2] = colors[5] = colors[8] = (byte) Color.getColorIntBlue(color);
                 pickGeom.colors.put(colors); // Colors for all three vertices of the fist triangle.
             }
         }
@@ -1635,7 +1747,7 @@ public class TiledTessellator extends WWObjectImpl implements Tessellator, Tile.
         // triangle. This should never happen, but we check anyway. We compute the triangle index by subtracting the
         // first color code from the picked color code. Since the color codes are sequential, this results in an index
         // into the list of triangles we rendered.
-        if (!this.computePickedPoint(this.pickRay, geom, colorCode - geom.minColorCode, this.pickedTriPoint))
+        if (!this.computePickPoint(this.pickRay, geom, colorCode - geom.minColorCode, this.pickedTriPoint))
             return null;
 
         // Compute the position that corresponds to the model coordinate point.
@@ -1652,10 +1764,10 @@ public class TiledTessellator extends WWObjectImpl implements Tessellator, Tile.
         return new PickedObject(pickPoint, colorCode, pp, pp, true);
     }
 
-    protected boolean computePickedPoint(Line line, TerrainPickGeometry geom, int index, Vec4 result)
+    protected boolean computePickPoint(Line line, TerrainPickGeometry geom, int index, Vec4 result)
     {
         // Allocate a buffer to hold the XYZ coordinates of the three vertices defining the triangle.
-        float[] points = this.pickedTriCoords;
+        float[] points = this.pointBuffer; // Holds up to 12 coordinates.
         Vec4 center = geom.referenceCenter;
 
         // Get the coordinates for the three vertices defining this triangle. We multiply the index by 9 to convert
@@ -1666,15 +1778,75 @@ public class TiledTessellator extends WWObjectImpl implements Tessellator, Tile.
         geom.points.get(points, 0, 9);
         geom.points.rewind();
 
-        return this.intersect(line,
+        return this.computeTriangleIntersection(line,
             points[0] + center.x, points[1] + center.y, points[2] + center.z,
             points[3] + center.x, points[4] + center.y, points[5] + center.z,
             points[6] + center.x, points[7] + center.y, points[8] + center.z,
             result);
     }
 
+    protected void computeSurfacePoint(TerrainTile tile, TerrainGeometry geom, Angle latitude, Angle longitude,
+        Vec4 result)
+    {
+        Sector tileSector = tile.getSector();
+        int tileWidth = tile.getWidth();
+        int tileHeight = tile.getHeight();
+
+        double lat = latitude.degrees;
+        double lon = longitude.degrees;
+        double minLat = tileSector.minLatitude.degrees;
+        double maxLat = tileSector.maxLatitude.degrees;
+        double minLon = tileSector.minLongitude.degrees;
+        double maxLon = tileSector.maxLongitude.degrees;
+
+        // Compute the location's horizontal (s) and vertical (t) parameterized coordinates within the tile's 2D grid of
+        // points as a floating-point value in the range [0, tileWidth] and [0, tileHeight]. These coordinates indicate
+        // which cell contains the location, as well as the location's placement within the cell. Note that this method
+        // assumes that the caller has tested whether the location is contained within the tile's sector. We do this to
+        // avoid redundant tests.
+        double s = (lon - minLon) / (maxLon - minLon) * tileWidth;
+        double t = (lat - minLat) / (maxLat - minLat) * tileHeight;
+
+        // Get the coordinates for the four vertices defining the cell this point is in. Tile vertices start in the
+        // lower left corner and proceed in row major fashion across the tile. The tile contains three more vertices
+        // per row or column than the tile width or height: one to convert between cell count and vertex count, and two
+        // for the skirt surrounding the tile. We convert from parameterized coordinates to the vertex position by
+        // adding an offset of 1 to the s and t indices for the extra skirt vertices, multiplying the t index by the row
+        // stride, and adding the s index. We then convert from vertex position to coordinate position by multiplying
+        // the vertex position by 3. Vertices in the points array are organized in the following order: lower-left,
+        // lower-right, upper-left, upper-right. The cell's diagonal starts at the lower-left vertex and ends at the
+        // upper-right vertex.
+        int si = (s < tileWidth ? (int) s : tileWidth - 1) + 1;
+        int ti = (t < tileHeight ? (int) t : tileHeight - 1) + 1;
+        int rowStride = tileWidth + 3;
+        float[] points = this.pointBuffer; // Holds up to 12 coordinates.
+        geom.points.position(3 * (si + ti * rowStride)); // lower-left and lower-right vertices.
+        geom.points.get(points, 0, 6);
+        geom.points.position(3 * (si + (ti + 1) * rowStride)); // upper-left and upper-right vertices.
+        geom.points.get(points, 6, 6);
+        geom.points.rewind();
+
+        // Compute the location's corresponding point on the cell in tile local coordinates, given the fractional
+        // portion of the parameterized s and t coordinates. These values indicates the location's relative placement
+        // within the cell. The cell's vertices are defined in the following order: lower-left, lower-right, upper-left,
+        // upper-right. The cell's diagonal starts at the lower-left vertex and ends at the upper-right vertex.
+        double sf = (s < tileWidth ? s - (int) s : 1);
+        double tf = (t < tileHeight ? t - (int) t : 1);
+        this.computePointInCell(sf, tf,
+            points[0], points[1], points[2],
+            points[3], points[4], points[5],
+            points[6], points[7], points[8],
+            points[9], points[10], points[11],
+            result);
+
+        // Add the tile geometry's reference center to the result in order to transform it from tile local coordinates
+        // to model coordinates.
+        result.add3AndSet(geom.referenceCenter);
+    }
+
     /**
-     * Determines the intersection of a specified line with a triangle specified by individual coordinates.
+     * Computes the model coordinate intersection of a specified line with a triangle specified by individual
+     * coordinates.
      *
      * @param line   the line to test.
      * @param vax    the X coordinate of the first vertex of the triangle.
@@ -1690,11 +1862,9 @@ public class TiledTessellator extends WWObjectImpl implements Tessellator, Tile.
      *               triangle.
      *
      * @return <code>true</code> if the line intersects this triangle, and <code>false</code> otherwise.
-     *
-     * @throws IllegalArgumentException if the line or the result is <code>null</code>.
      */
-    protected boolean intersect(Line line, double vax, double vay, double vaz, double vbx, double vby, double vbz,
-        double vcx, double vcy, double vcz, Vec4 result)
+    protected boolean computeTriangleIntersection(Line line, double vax, double vay, double vaz,
+        double vbx, double vby, double vbz, double vcx, double vcy, double vcz, Vec4 result)
     {
         final double EPSILON = (double) 0.00001f;
 
@@ -1731,31 +1901,45 @@ public class TiledTessellator extends WWObjectImpl implements Tessellator, Tile.
         return true;
     }
 
-    protected GpuProgram getGpuPickProgram(GpuResourceCache cache)
+    /**
+     * Computes the point in tile local coordinates of a location within a tile's cell specified by individual
+     * coordinates.
+     *
+     * @param s      a parameterized horizontal coordinate within the tile's 2D grid of points as a floating-point value
+     *               in the range [0, tileWidth].
+     * @param t      a parameterized vertical coordinate within the tile's 2D grid of points as a floating-point value
+     *               in the range [0, tileHeight].
+     * @param llx    the X coordinate of the cell's lower left corner.
+     * @param lly    the Y coordinate of the cell's lower left corner.
+     * @param llz    the Z coordinate of the cell's lower left corner.
+     * @param lrx    the X coordinate of the cell's lower right corner.
+     * @param lry    the Y coordinate of the cell's lower right corner.
+     * @param lrz    the Z coordinate of the cell's lower right corner.
+     * @param ulx    the X coordinate of the cell's upper left corner.
+     * @param uly    the Y coordinate of the cell's upper left corner.
+     * @param ulz    the Z coordinate of the cell's upper left corner.
+     * @param urx    the X coordinate of the cell's upper right corner.
+     * @param ury    the Y coordinate of the cell's upper right corner.
+     * @param urz    the Z coordinate of the cell's upper right corner.
+     * @param result contains the tile local coordinates of the point in the cell after this method returns.
+     */
+    protected void computePointInCell(double s, double t, double llx, double lly, double llz,
+        double lrx, double lry, double lrz, double ulx, double uly, double ulz, double urx, double ury, double urz,
+        Vec4 result)
     {
-        if (this.pickProgramCreationFailed)
-            return null;
-
-        GpuProgram program = cache.getProgram(this.pickProgramKey);
-
-        if (program == null)
+        if (s < t) // The point is in the lower-right triangle.
         {
-            try
-            {
-                GpuProgram.GpuProgramSource source = GpuProgram.readProgramSource(PICK_VERTEX_SHADER_PATH,
-                    PICK_FRAGMENT_SHADER_PATH);
-                program = new GpuProgram(source);
-                cache.put(this.pickProgramKey, program);
-            }
-            catch (Exception e)
-            {
-                String msg = Logging.getMessage("GL.ExceptionLoadingProgram", PICK_VERTEX_SHADER_PATH,
-                    PICK_FRAGMENT_SHADER_PATH);
-                Logging.error(msg);
-                this.pickProgramCreationFailed = true;
-            }
+            double oneMinusS = 1 - s;
+            result.x = lrx + oneMinusS * (llx - lrx) + t * (urx - lrx);
+            result.y = lry + oneMinusS * (lly - lry) + t * (ury - lry);
+            result.z = lrz + oneMinusS * (llz - lrz) + t * (urz - lrz);
         }
-
-        return program;
+        else // The point is in the upper-left triangle, or on the diagonal between the two triangles.
+        {
+            double oneMinusT = 1 - t;
+            result.x = ulx + s * (urx - ulx) + oneMinusT * (llx - ulx);
+            result.y = uly + s * (ury - uly) + oneMinusT * (lly - uly);
+            result.z = ulz + s * (urz - ulz) + oneMinusT * (llz - ulz);
+        }
     }
 }

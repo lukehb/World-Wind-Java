@@ -1,8 +1,7 @@
-/*
- * Copyright (C) 2012 United States Government as represented by the Administrator of the
- * National Aeronautics and Space Administration.
- * All Rights Reserved.
- */
+/* Copyright (C) 2001, 2012 United States Government as represented by
+the Administrator of the National Aeronautics and Space Administration.
+All Rights Reserved.
+*/
 package gov.nasa.worldwindx.examples;
 
 import android.app.Activity;
@@ -24,11 +23,6 @@ import java.io.File;
  */
 public class BasicWorldWindActivity extends Activity
 {
-    static
-    {
-        System.setProperty("gov.nasa.worldwind.app.config.document", "config/wwandroiddemo.xml");
-    }
-
     protected WorldWindowGLSurfaceView wwd;
     protected DashboardView dashboard;
 

@@ -1,8 +1,7 @@
-/*
- * Copyright (C) 2012 United States Government as represented by the Administrator of the
- * National Aeronautics and Space Administration.
- * All Rights Reserved.
- */
+/* Copyright (C) 2001, 2012 United States Government as represented by
+the Administrator of the National Aeronautics and Space Administration.
+All Rights Reserved.
+*/
 package gov.nasa.worldwind;
 
 import android.graphics.Point;
@@ -33,6 +32,7 @@ public class BasicView extends WWObjectImpl implements View
     protected Matrix projection = Matrix.fromIdentity();
     protected Matrix modelviewProjection = Matrix.fromIdentity();
     protected Rect viewport = new Rect();
+    protected Vec4 eyePoint = new Vec4();
 
     protected Frustum frustum = new Frustum();
     protected Frustum frustumInModelCoords = new Frustum();
@@ -121,7 +121,7 @@ public class BasicView extends WWObjectImpl implements View
     /** {@inheritDoc} */
     public Vec4 getEyePoint()
     {
-        return new Vec4().transformBy4(this.modelviewInv);
+        return this.eyePoint;
     }
 
     /** {@inheritDoc} */
@@ -218,6 +218,23 @@ public class BasicView extends WWObjectImpl implements View
             return false;
 
         return globe.getIntersectionPosition(line, result);
+    }
+
+    /** {@inheritDoc} */
+    public double computePixelSizeAtDistance(double distance)
+    {
+        if (distance < 0)
+        {
+            String msg = Logging.getMessage("generic.DistanceIsInvalid", distance);
+            Logging.error(msg);
+            throw new IllegalArgumentException(msg);
+        }
+
+        // Replace a zero viewport width with 1. This effectively ignores the viewport width.
+        double viewportWidth = this.viewport.width > 0 ? this.viewport.width : 1;
+        double pixelSizeScale = 2 * this.fieldOfView.tanHalfAngle() / viewportWidth;
+
+        return distance * pixelSizeScale;
     }
 
     /** {@inheritDoc} */
@@ -757,8 +774,7 @@ public class BasicView extends WWObjectImpl implements View
     {
         if (globe != null)
         {
-            Vec4 eyePoint = new Vec4().transformBy4(this.modelviewInv);
-            return globe.computePositionFromPoint(eyePoint);
+            return globe.computePositionFromPoint(this.getEyePoint());
         }
 
         return new Position(); // (0,0,0)
@@ -878,5 +894,6 @@ public class BasicView extends WWObjectImpl implements View
         this.modelview = matrix;
         this.modelviewInv.invertTransformMatrix(matrix);
         this.modelviewTranspose.transpose(matrix);
+        this.eyePoint = new Vec4().transformBy4AndSet(this.modelviewInv);
     }
 }

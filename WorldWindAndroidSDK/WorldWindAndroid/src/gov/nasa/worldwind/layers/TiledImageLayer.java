@@ -13,7 +13,7 @@ import gov.nasa.worldwind.geom.*;
 import gov.nasa.worldwind.render.*;
 import gov.nasa.worldwind.retrieve.*;
 import gov.nasa.worldwind.util.*;
-import org.w3c.dom.*;
+import org.w3c.dom.Element;
 
 import javax.xml.xpath.XPath;
 import java.io.*;
@@ -30,7 +30,7 @@ import java.util.concurrent.PriorityBlockingQueue;
 public class TiledImageLayer extends AbstractLayer implements Tile.TileFactory, BulkRetrievable
 {
     protected LevelSet levels;
-    protected double detailHintOrigin = 2.8; // the default detail hint origin
+    protected double detailHintOrigin = 2.6; // the default detail hint origin
     protected double detailHint;
     protected List<Tile> topLevelTiles = new ArrayList<Tile>();
     protected String tileCountName;
@@ -277,8 +277,6 @@ public class TiledImageLayer extends AbstractLayer implements Tile.TileFactory, 
         {
             // TODO: apply opacity and transparent texture support
 
-            dc.addPerFrameStatistic(PerformanceStatistic.IMAGE_TILE_COUNT, this.tileCountName,
-                this.currentTiles.size());
             dc.getSurfaceTileRenderer().renderTiles(dc, this.currentTiles);
 
             // Check texture expiration. Memory-cached textures are checked for expiration only when an explicit,
@@ -341,8 +339,10 @@ public class TiledImageLayer extends AbstractLayer implements Tile.TileFactory, 
         if (this.topLevelTiles.isEmpty())
             this.createTopLevelTiles();
 
-        for (Tile tile : this.topLevelTiles)
+        for (int i = 0; i < this.topLevelTiles.size(); i++)
         {
+            Tile tile = this.topLevelTiles.get(i);
+
             this.updateTileExtent(dc, (GpuTextureTile) tile);
             this.currentAncestorTile = null;
 
@@ -410,6 +410,7 @@ public class TiledImageLayer extends AbstractLayer implements Tile.TileFactory, 
                     this.addTileOrDescendants(dc, (GpuTextureTile) child);
                 }
             }
+            tile.clearChildList();
         }
         finally
         {

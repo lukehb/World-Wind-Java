@@ -38,10 +38,17 @@ public class Tile implements Cacheable
     /** An optional cache name. Overrides the Level's cache name when non-null. */
     protected String cacheName;
     protected TileKey tileKey;
+    protected TileKey[] childKeys;
     protected Vec4[] referencePoints;
     protected double priority = Double.MAX_VALUE; // Default is minimum priority
     // The following is late bound because it's only selectively needed and costly to create
     protected String path;
+
+    // This is a temporary location to hold this tile's children when they're requested in the subdivide() method. It
+    // prevents having to allocate an array for them with each call to subdivide(). Callers of subdivide must
+    // subsequently call this tile's clearChildList() method to set all children entries to null and thus allow the
+    // children to be garbage collected.
+    protected Tile[] children = new Tile[4];
 
     /**
      * Constructs a tile for a given sector, level, row and column of the tile's containing tile set.
@@ -184,7 +191,7 @@ public class Tile implements Cacheable
         if (this.path != null)
             size += this.getPath().length();
 
-        size += 32; // to account for the references and the TileKey size
+        size += 48; // to account for the references, the TileKey size and the children array
 
         return size;
     }
@@ -426,8 +433,21 @@ public class Tile implements Cacheable
     }
 
     /**
+     * Replaces entries in this tile's child list with nulls. This is necessary to prevent persistence of references
+     * to children when they're not needed. Call this method after using the array of children returned by
+     * {@link #subdivide(Level, gov.nasa.worldwind.cache.MemoryCache, gov.nasa.worldwind.util.Tile.TileFactory)}
+     */
+    public void clearChildList()
+    {
+        this.children[0] = this.children[1] = this.children[2] = this.children[3] = null;
+    }
+
+    /**
      * Splits this tile into four tiles; one for each sub quadrant of this tile. This attempts to retrieve each sub tile
      * from the tile cache.
+     *
+     * Note: Be sure to call {@link #clearChildList()} when done  using the children returned by this method, otherwise
+     * reference to them will persist and eventually use a lot of memory unnecessarily.
      *
      * @param nextLevel the level for the sub tiles.
      *
@@ -458,7 +478,7 @@ public class Tile implements Cacheable
             throw new IllegalArgumentException(msg);
         }
 
-        Tile[] result = new Tile[4];
+        Tile[] result = this.children;
 
         double p0 = this.sector.minLatitude.degrees;
         double p2 = this.sector.maxLatitude.degrees;
@@ -468,19 +488,19 @@ public class Tile implements Cacheable
         double t2 = this.sector.maxLongitude.degrees;
         double t1 = 0.5 * (t0 + t2);
 
+        if (this.childKeys == null)
+            this.childKeys = this.createChildKeys(nextLevel);
+
         int subRow = 2 * this.row;
         int subCol = 2 * this.column;
-        TileKey newTileKey = new TileKey(nextLevel.getLevelNumber(), subRow, subCol, nextLevel.getCacheName());
-        Tile subTile = (Tile) cache.get(newTileKey);
+        Tile subTile = (Tile) cache.get(this.childKeys[0]);
         if (subTile != null)
             result[0] = subTile;
         else
             result[0] = factory.createTile(Sector.fromDegrees(p0, p1, t0, t1), nextLevel, subRow, subCol);
 
-        subRow = 2 * this.row;
         subCol = 2 * this.column + 1;
-        newTileKey = new TileKey(nextLevel.getLevelNumber(), subRow, subCol, nextLevel.getCacheName());
-        subTile = (Tile) cache.get(newTileKey);
+        subTile = (Tile) cache.get(this.childKeys[1]);
         if (subTile != null)
             result[1] = subTile;
         else
@@ -488,23 +508,41 @@ public class Tile implements Cacheable
 
         subRow = 2 * this.row + 1;
         subCol = 2 * this.column;
-        newTileKey = new TileKey(nextLevel.getLevelNumber(), subRow, subCol, nextLevel.getCacheName());
-        subTile = (Tile) cache.get(newTileKey);
+        subTile = (Tile) cache.get(this.childKeys[2]);
         if (subTile != null)
             result[2] = subTile;
         else
             result[2] = factory.createTile(Sector.fromDegrees(p1, p2, t0, t1), nextLevel, subRow, subCol);
 
-        subRow = 2 * this.row + 1;
         subCol = 2 * this.column + 1;
-        newTileKey = new TileKey(nextLevel.getLevelNumber(), subRow, subCol, nextLevel.getCacheName());
-        subTile = (Tile) cache.get(newTileKey);
+        subTile = (Tile) cache.get(this.childKeys[3]);
         if (subTile != null)
             result[3] = subTile;
         else
             result[3] = factory.createTile(Sector.fromDegrees(p1, p2, t1, t2), nextLevel, subRow, subCol);
 
         return result;
+    }
+
+    protected TileKey[] createChildKeys(Level nextLevel)
+    {
+        TileKey[] keys = new TileKey[4];
+
+        int subRow = 2 * this.row;
+        int subCol = 2 * this.column;
+        keys[0] = new TileKey(nextLevel.getLevelNumber(), subRow, subCol, nextLevel.getCacheName());
+
+        subCol = 2 * this.column + 1;
+        keys[1] = new TileKey(nextLevel.getLevelNumber(), subRow, subCol, nextLevel.getCacheName());
+
+        subRow = 2 * this.row + 1;
+        subCol = 2 * this.column;
+        keys[2] = new TileKey(nextLevel.getLevelNumber(), subRow, subCol, nextLevel.getCacheName());
+
+        subCol = 2 * this.column + 1;
+        keys[3] = new TileKey(nextLevel.getLevelNumber(), subRow, subCol, nextLevel.getCacheName());
+
+        return keys;
     }
 
     public static void createTilesForLevel(Level level, Sector sector, TileFactory factory, List<Tile> result)

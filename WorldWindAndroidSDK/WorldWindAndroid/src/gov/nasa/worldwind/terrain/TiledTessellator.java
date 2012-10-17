@@ -343,7 +343,7 @@ public class TiledTessellator extends WWObjectImpl implements Tessellator, Tile.
         }
     }
 
-    protected static final double DEFAULT_DETAIL_HINT_ORIGIN = 1.4;
+    protected static final double DEFAULT_DETAIL_HINT_ORIGIN = 1.3;
     protected static Map<Object, TerrainSharedGeometry> sharedGeometry = new HashMap<Object, TerrainSharedGeometry>();
     protected static Map<Object, TerrainPickGeometry> pickGeometry = new HashMap<Object, TerrainPickGeometry>();
     protected static final String PICK_VERTEX_SHADER_PATH = "shaders/TiledTessellatorPick.vert";
@@ -531,8 +531,10 @@ public class TiledTessellator extends WWObjectImpl implements Tessellator, Tile.
         if (this.topLevelTiles.isEmpty())
             this.createTopLevelTiles();
 
-        for (Tile tile : this.topLevelTiles)
+        for (int i = 0; i < this.topLevelTiles.size(); i++)
         {
+            Tile tile = this.topLevelTiles.get(i);
+
             this.updateTileExtent(dc, (TerrainTile) tile);
 
             if (this.intersectsFrustum(dc, (TerrainTile) tile))
@@ -584,6 +586,7 @@ public class TiledTessellator extends WWObjectImpl implements Tessellator, Tile.
                 this.addTileOrDescendants(dc, (TerrainTile) child);
             }
         }
+        tile.clearChildList();
     }
 
     @SuppressWarnings({"UnusedParameters"})

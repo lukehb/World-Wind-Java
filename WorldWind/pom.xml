@@ -4,7 +4,7 @@
     <groupId>gov.nasa.worldwind</groupId>
     <artifactId>worldwind</artifactId>
     <packaging>pom</packaging>
-    <version>1.4.1</version>
+    <version>1.4.2</version>
     <name>worldwind</name>
     <url>http://worldwind.arc.nasa.gov/java/index.html</url>
     

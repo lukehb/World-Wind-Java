@@ -4,13 +4,13 @@
     <groupId>gov.nasa.worldwind</groupId>
     <artifactId>ww-performance</artifactId>
     <packaging>jar</packaging>
-    <version>1.4.1</version>
+    <version>1.4.2</version>
     <name>ww-performance</name>
     
     <parent>
         <groupId>gov.nasa.worldwind</groupId>
         <artifactId>worldwind</artifactId>
-        <version>1.4.1</version>
+        <version>1.4.2</version>
     </parent>
     
     <dependencies>

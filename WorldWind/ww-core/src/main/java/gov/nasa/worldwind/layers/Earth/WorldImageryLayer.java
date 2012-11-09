@@ -37,8 +37,8 @@ public class WorldImageryLayer extends BasicTiledImageLayer {
         params.setValue(AVKey.SERVICE, "http://server.arcgisonline.com/ArcGIS/rest/services/ESRI_Imagery_World_2D/MapServer/export");
         params.setValue(AVKey.DATASET_NAME, "wi");
         params.setValue(AVKey.FORMAT_SUFFIX, ".jpg");
-        params.setValue(AVKey.NUM_LEVELS, 16);
-        params.setValue(AVKey.NUM_EMPTY_LEVELS, 5);
+        params.setValue(AVKey.NUM_LEVELS, 15);
+        params.setValue(AVKey.NUM_EMPTY_LEVELS, 9);
         params.setValue(AVKey.LEVEL_ZERO_TILE_DELTA, new LatLon(Angle.fromDegrees(36d), Angle.fromDegrees(36d)));
         params.setValue(AVKey.SECTOR, Sector.FULL_SPHERE);
         params.setValue(AVKey.TILE_URL_BUILDER, new URLBuilder());

@@ -10,7 +10,7 @@
 
 @class WWTessellator;
 @class WWDrawContext;
-@class WWTerrainGeometry;
+@class WWMatrix;
 @class WWLevel;
 @class WWVec4;
 
@@ -23,20 +23,35 @@
 /// @name Attributes
 
 /// The tessellator this tile is used by.
+///
 /// The tessellator property is weak because the tessellator can point to the tile,
 /// thereby creating a cycle. A strong reference to the tessellator is always held by the Globe.
-@property(readonly, nonatomic, weak) WWTessellator* tessellator;
+@property (nonatomic, readonly, weak) WWTessellator* tessellator;
 
-/// The terrain geometry for this tile.
-@property(nonatomic) WWTerrainGeometry* terrainGeometry;
+/// The transform matrix that maps tile local coordinate to model coordinates.
+@property (nonatomic) WWMatrix* transformationMatrix;
 
-/// The number of cells in which to subdivide terrain tiles in the longitudinal direction. This property governs the
-// density of triangles in the tile.
-@property(readonly, nonatomic) int numLonCells;
+/// The number of model coordinate points this tile contains.
+@property (nonatomic) int numPoints;
 
-/// The number of cells in which to subdivide terrain tiles in the latitudinal direction. This property governs the
-// density of triangles in the tile.
-@property(readonly, nonatomic) int numLatCells;
+/// Pointer to the terrain tile's model coordinate points.
+///
+/// The memory referenced by this pointer contains 3 * numPoints 32-bit floating point values. This memory is owned by
+/// the terrain tile and is released when the tile is deallocated.
+@property (nonatomic) float* points;
+
+/// Indicates the date and time at which this tile's terrain geometry was computed.
+///
+/// This is used to invalidate the terrain geometry when the globe's elevations change.
+@property (nonatomic) NSTimeInterval geometryTimestamp;
+
+/// Indicates the date and time at which this tile's terrain geometry vbo was loaded.
+///
+/// This is used to invalidate the terrain vbo when the globe's elevations change.
+@property (nonatomic) NSTimeInterval geometryVboTimestamp;
+
+/// The GPU resource cache ID for this tile's Cartesian coordinates VBO.
+@property (nonatomic) NSString* geometryVboCacheKey;
 
 /// @name Initializing Terrain Tiles
 
@@ -59,36 +74,6 @@
                               row:(int)row
                            column:(int)column
                       tessellator:(WWTessellator*)tessellator;
-
-/// @name Rendering Operations (Not typically called by applications.)
-
-/**
-* Prepare this tile for rendering.
-*
-* @param dc The current draw context
-*/
-- (void) beginRendering:(WWDrawContext*)dc;
-
-/**
-* Restore state modified during rendering.
-*
-* @param dc The current draw context.
-*/
-- (void) endRendering:(WWDrawContext*)dc;
-
-/**
-* Draw the tile.
-*
-* @param dc The current draw context.
-*/
-- (void) render:(WWDrawContext*)dc;
-
-/**
-* Draw a wireframe representation of the tile that displays the tile's tessellation triangles.
-*
-* @param dc The current draw context.
-*/
-- (void) renderWireframe:(WWDrawContext*)dc;
 
 /// @name Operations on Terrain Tiles
 

@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="ISO-8859-1"?>
-<!--$Id$-->
+<!--
+  ~ Copyright (C) 2012 United States Government as represented by the Administrator of the
+  ~ National Aeronautics and Space Administration.
+  ~ All Rights Reserved.
+  -->
+
+<!-- $Id$ -->
 <project name="test">
 
     <!-- Compiles all World Wind Java sources under the 'ww-tests/src' folder into Java class files under the 'test-classes'
@@ -17,6 +23,7 @@
                destdir="${worldwind.tests.dir}/${test.classes.dir}"
                source="${worldwind.jdk.version}"
                target="${worldwind.jdk.version}"
+               encoding="UTF-8"
                fork="true"
                includeantruntime="false"
 	       debug="true"
@@ -30,6 +37,8 @@
                 <pathelement location="lib/junit/junit-${junit.version}.jar"/>
                 <pathelement location="${java.home}/lib/plugin.jar"/>
             </classpath>
+            <compilerarg value="-Xlint:unchecked"/>
+            <compilerarg value="-Xlint:-options"/>
         </javac>
     </target>
 

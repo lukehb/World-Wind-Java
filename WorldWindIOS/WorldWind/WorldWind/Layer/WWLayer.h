@@ -7,14 +7,16 @@
 
 #import <Foundation/Foundation.h>
 #import "WorldWind/Render/WWRenderable.h"
+#import "WorldWind/Util/WWDisposable.h"
 
 @class WWDrawContext;
+@class WWScreenImage;
 
 /**
 * Provides the base instance for a layer. This class is meant to be subclassed and provides no independent
 * functionality of its own.
 */
-@interface WWLayer : NSObject <WWRenderable>
+@interface WWLayer : NSObject <WWRenderable, WWDisposable>
 
 /// @name Attributes
 
@@ -24,9 +26,12 @@
 /// Indicates whether the layer should be displayed.
 @property(nonatomic) BOOL enabled;
 
+/// Indicates whether the layer currently participates in picking.
+@property(nonatomic) BOOL pickEnabled;
+
 /// Indicates the layer's opacity. 1 indicates full opacity. 0 indicates full transparency. Not all layers support
 // opacity.
-@property(nonatomic) double opacity;
+@property(nonatomic) float opacity;
 
 /// The minimum eye altitude at which the layer is displayed. The layer is not displayed when the eye altitude is
 // less than the specified value.
@@ -40,7 +45,11 @@
 @property(nonatomic) BOOL networkRetrievalEnabled;
 
 /// Indicates the name of the image file for this layer. The image is shown in the layer list.
-@property (nonatomic) NSString* imageFile;
+@property(nonatomic) NSString* imageFile;
+
+/// Provides a dictionary for the application to associate arbitrary data with the layer. World Wind makes no
+/// explicit use of this property or its contents, which are entirely application dependent.
+@property(nonatomic, readonly) NSMutableDictionary* userTags;
 
 /// @name Initializing Layers
 

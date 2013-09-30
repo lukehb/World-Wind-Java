@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 United States Government as represented by the Administrator of the
+ * Copyright (C) 2012 United States Government as represented by the Administrator of the
  * National Aeronautics and Space Administration.
  * All Rights Reserved.
  */
@@ -11,7 +11,7 @@ import gov.nasa.worldwind.event.*;
 import gov.nasa.worldwind.pick.*;
 import gov.nasa.worldwind.util.Logging;
 
-import javax.media.opengl.GLJPanel;
+import javax.media.opengl.awt.GLJPanel;
 import javax.swing.event.*;
 import java.awt.*;
 import java.awt.event.*;
@@ -371,11 +371,20 @@ public class AWTInputHandler extends WWObjectImpl
             return;
         }
 
+        // Determine if the mouse point has changed since the last mouse move event. This can happen if user switches to
+        // another window, moves the mouse, and then switches back to the World Wind window.
+        boolean mousePointChanged = !mouseEvent.getPoint().equals(this.mousePoint);
+
         this.mousePoint = mouseEvent.getPoint();
         this.cancelHover();
         this.cancelDrag();
 
-        if (this.isForceRedrawOnMousePressed())
+        // If the mouse point has changed then we need to set a new pick point, and redraw the scene because the current
+        // picked object list may not reflect the current mouse position.
+        if (mousePointChanged && this.wwd.getSceneController() != null)
+            this.wwd.getSceneController().setPickPoint(this.mousePoint);
+
+        if (this.isForceRedrawOnMousePressed() || mousePointChanged)
             this.wwd.redrawNow();
 
         this.objectsAtButtonPress = this.wwd.getObjectsAtCurrentPosition();

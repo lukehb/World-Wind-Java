@@ -23,10 +23,13 @@
 /// The PVRTC image's height.
 @property (nonatomic, readonly) int imageHeight;
 
-/// The image's size in bytes.
-@property (nonatomic, readonly) int imageSize;
+/// The PVRTC image's data, including its header.
+@property (nonatomic, readonly) NSData* imageBits;
 
-/// @name Initializing PRRTC Textures
+/// The number of mipmap levels in the image.
+@property (nonatomic, readonly) int numLevels;
+
+/// @name Initializing PVRTC Textures
 
 /**
 * Initializes this instance to the PVRTC image in a specified file.
@@ -40,18 +43,7 @@
 */
 - (WWPVRTCImage*) initWithContentsOfFile:(NSString*)filePath;
 
-/// @name Passing PVRTC Textures to OpenGL
-
-/**
-* Specifies the image to OpenGL.
-*
-* An OpenGL context must be current when this method is called.
-*
-* This method passes the image as mipmap levels to OpenGL and sets the necessary OpenGL texture parameters.
-*
-* @return The OpenGL texture ID for the loaded texture, or -1 if the texture could not be loaded.
-*/
-- (int) loadGL;
+/// @name Compressing PVRTC Textures
 
 /**
 * Compress the image in a specified file and save it as a PVRTC image.
@@ -65,6 +57,6 @@
 *
 * @exception NSInvalidArgumentException If the specified file path is nil or empty or the file does not exist.
 */
-+ (BOOL) compressFile:(NSString*)filePath;
++ (void) compressFile:(NSString*)filePath;
 
 @end

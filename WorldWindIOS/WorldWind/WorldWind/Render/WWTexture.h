@@ -21,6 +21,23 @@
 *
 * Applications typically do not interact directly with WWTexture instances. They are created and used internally as
 * needed.
+*
+* ### Non-Power-of-Two Dimensions ###
+*
+* As of Apple iOS version 6.x, iOS OpenGL drivers do not support mipmapping for textures with non-power-of-two
+* dimensions. This limitation is documented in the OpenGL extension APPLE_texture_2D_limited_npot at
+* http://www.khronos.org/registry/gles/extensions/APPLE/APPLE_texture_2D_limited_npot.txt.
+*
+* When WWTexture encounters an image with non-power-of-two dimensions, it allocates an OpenGL texture with power-of-two
+* dimensions large enough to fit the original image. The only exceptions to this behavior are images in the PVRTC, 8888
+* or 5551 formats, which are loaded unmodified into an OpenGL texture with the dimensions and internal format
+* corresponding to the original image data.
+*
+* WWTexture aligns the image data in the top-left corner of the larger texture. Empty texels appear to the right of and
+* beneath the image data as necessary, and are initialized to 0. The OpenGL texture dimensions are indicated by the
+* imageWidth and imageHeight properties, whereas the original image dimensions are indicated by originalImageWidth and
+* originalImageHeight. The WWMatrix class provides the method [WWMatrix multiplyByTextureTransform:] which concatenates
+* a texture coordinate transform appropriate for mapping the portion of a texture's image data to the range [0,1].
 */
 @interface WWTexture : NSOperation <WWDisposable, WWCacheable>
 {
@@ -34,11 +51,32 @@
 /// The full file system path to the image used as a texture.
 @property(nonatomic) NSString* filePath;
 
-/// The texture's width.
+/// The texture's width, in texels.
+///
+/// The texture always has power-of-two dimensions, so this value may be greater than the corresponding
+/// originalImageWidth if the image specifying the texture's data has non-power-of-two dimensions.
 @property(readonly, nonatomic) int imageWidth;
 
-/// The texture's height.
+/// The texture's height, in texels.
+///
+/// The texture always has power-of-two dimensions, so this value may be greater than the corresponding
+/// originalImageHeight if the image specifying the texture's data has non-power-of-two dimensions.
 @property(readonly, nonatomic) int imageHeight;
+
+/// The width of the image specifying the texture's data, in pixels.
+///
+/// The texture always has power-of-two dimensions, so this value may be less than the corresponding textureWidth if the
+/// image specifying the texture's data has non-power-of-two dimensions.
+@property(readonly, nonatomic) int originalImageWidth;
+
+/// The height of the image specifying the texture's data, in pixels.
+///
+/// The texture always has power-of-two dimensions, so this value may be less than the corresponding textureHeight if
+/// the image specifying the texture's data has non-power-of-two dimensions.
+@property(readonly, nonatomic) int originalImageHeight;
+
+/// The number of mipmap levels for compressed textures. (Will be 0 for uncompressed textures.)
+@property (nonatomic, readonly) int numLevels;
 
 /// The OpenGL textureID for the texture. Available only after the bind method is called at least once.
 @property(readonly, nonatomic) GLuint textureID;
@@ -55,6 +93,10 @@
 
 /// The texture cache to add this texture to when its image file is read.
 @property(nonatomic, readonly) WWGpuResourceCache* textureCache;
+
+/// The date and time of the texture's image file in the file cache when the image was last loaded into a texture.
+// Indicates when the image was last downloaded.
+@property (nonatomic, readonly) NSDate* fileModificationDate;
 
 /// @name Initializing Textures
 
@@ -134,6 +176,30 @@
 */
 - (void) loadGLCompressed;
 
-+ (void) convertTextureToRaw:(NSString*)imagePath;
+/// @name Converting Textures
+
+/**
+* Convert this texture to RGBA 8 bits per pixel.
+*
+* This method writes the converted image to the same location and name as the incoming image but with the filename
+* suffix replaced by "8888".
+*
+* @param imagePath The full path and filename of the image to convert.
+*
+* @exception NSInvalidArgumentException If the specified path is nil or zero length.
+*/
++ (void) convertTextureTo8888:(NSString*)imagePath;
+
+/**
+* Convert this texture to RGBA 5 bits per pixel for RGB and 1 bit for alpha.
+*
+* This method writes the converted image to the same location and name as the incoming image but with the filename
+* suffix replaced by "5551".
+*
+* @param imagePath The full path and filename of the image to convert.
+*
+* @exception NSInvalidArgumentException If the specified path is nil or zero length.
+*/
++ (void) convertTextureTo5551:(NSString*)imagePath;
 
 @end

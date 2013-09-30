@@ -5,11 +5,15 @@
  @version $Id$
  */
 
+#import <WorldWind/WWTiledImageLayer.h>
+#import <WorldWind/WWRenderableLayer.h>
 #import "LayerListController.h"
 #import "WorldWind/WorldWindView.h"
 #import "WorldWind/Render/WWSceneController.h"
 #import "WorldWind/Layer/WWLayerList.h"
-#import "WorldWind/Layer/WWLayer.h"
+#import "WorldWind/WorldWindConstants.h"
+#import "ImageLayerDetailController.h"
+#import "RenderableLayerDetailController.h"
 
 @implementation LayerListController
 
@@ -18,6 +22,15 @@
     self = [super initWithStyle:UITableViewStylePlain];
 
     _wwv = wwv;
+
+    [[self navigationItem] setRightBarButtonItem:[self editButtonItem]];
+    [[self navigationItem] setTitle:@"Layers"];
+
+    // Set up to handle layer list changes.
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(handleNotification:)
+                                                 name:WW_LAYER_LIST_CHANGED
+                                               object:nil];
 
     return self;
 }
@@ -39,7 +52,7 @@
     WWLayer* layer = [[[_wwv sceneController] layers] layerAtIndex:(NSUInteger) [indexPath row]];
     [layer setEnabled:[layer enabled] ? NO : YES];
     [[self tableView] reloadData];
-    [_wwv drawView];
+    [self requestRedraw];
 }
 
 - (UITableViewCell*) tableView:(UITableView*)tableView cellForRowAtIndexPath:(NSIndexPath*)indexPath
@@ -50,22 +63,77 @@
     if (cell == nil)
     {
         cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:cellIdentifier];
+        [[cell imageView] setImage:[UIImage imageNamed:@"431-yes.png"]];
+        [cell setAccessoryType:UITableViewCellAccessoryDetailDisclosureButton];
+        [cell setShowsReorderControl:YES];
     }
 
     WWLayer* layer = [[[_wwv sceneController] layers] layerAtIndex:(NSUInteger) [indexPath row]];
     [[cell textLabel] setText:[layer displayName]];
-    [[cell imageView] setImage:[UIImage imageNamed:[layer imageFile]]];
-    [cell setAccessoryType:[layer enabled] ? UITableViewCellAccessoryCheckmark : UITableViewCellAccessoryNone];
+    [[cell imageView] setHidden:![layer enabled]];
 
     return cell;
 }
 
-- (void) viewWillAppear:(BOOL)animated
+- (BOOL) tableView:(UITableView*)tableView canMoveRowAtIndexPath:(NSIndexPath*)indexPath
 {
-    UIViewController* parent = [self parentViewController];
-    if ([parent isKindOfClass:[UINavigationController class]])
+    return YES;
+}
+
+- (void) tableView:(UITableView*)tableView
+moveRowAtIndexPath:(NSIndexPath*)sourceIndexPath
+       toIndexPath:(NSIndexPath*)destinationIndexPath
+{
+    [[[_wwv sceneController] layers] moveLayerAtRow:[sourceIndexPath row] toRow:[destinationIndexPath row]];
+    [self requestRedraw];
+}
+
+- (void) tableView:(UITableView*)tableView
+commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
+ forRowAtIndexPath:(NSIndexPath*)indexPath
+{
+    if (editingStyle == UITableViewCellEditingStyleDelete)
     {
-        [((UINavigationController*) parent) setNavigationBarHidden:NO animated:YES];
+        [[[_wwv sceneController] layers] removeLayerAtRow:[indexPath row]];
+        [self requestRedraw];
+    }
+}
+
+- (void) tableView:(UITableView*)tableView accessoryButtonTappedForRowWithIndexPath:(NSIndexPath*)indexPath
+{
+    // Create and show a detail controller for the tapped layer.
+
+    WWLayer* layer = [[[_wwv sceneController] layers] layerAtIndex:(NSUInteger)[indexPath row]];
+
+    if ([layer isKindOfClass:[WWTiledImageLayer class]])
+    {
+        ImageLayerDetailController* detailController =
+                [[ImageLayerDetailController alloc] initWithLayer:(WWTiledImageLayer*)layer];
+        [detailController setTitle:[layer displayName]];
+
+        [((UINavigationController*) [self parentViewController]) pushViewController:detailController animated:YES];
+    }
+    else if ([layer isKindOfClass:[WWRenderableLayer class]])
+    {
+        RenderableLayerDetailController* detailController =
+                [[RenderableLayerDetailController alloc] initWithLayer:(WWRenderableLayer*)layer];
+        [detailController setTitle:[layer displayName]];
+
+        [((UINavigationController*) [self parentViewController]) pushViewController:detailController animated:YES];
+    }
+}
+
+- (void) requestRedraw
+{
+    NSNotification* redrawNotification = [NSNotification notificationWithName:WW_REQUEST_REDRAW object:self];
+    [[NSNotificationCenter defaultCenter] postNotification:redrawNotification];
+}
+
+- (void) handleNotification:(NSNotification*)notification
+{
+    if ([[notification name] isEqualToString:WW_LAYER_LIST_CHANGED])
+    {
+        [[self tableView] reloadData];
     }
 }
 

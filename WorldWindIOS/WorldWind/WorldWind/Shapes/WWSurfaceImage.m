@@ -12,6 +12,11 @@
 #import "WorldWind/Render/WWTexture.h"
 #import "WorldWind/WWLog.h"
 #import "WorldWind/Util/WWGpuResourceCache.h"
+#import "WorldWind/WorldWind.h"
+#import "WorldWind/Util/WWResourceLoader.h"
+#import "WorldWind/Pick/WWPickSupport.h"
+#import "WorldWind/Layer/WWLayer.h"
+#import "WorldWind/Pick/WWPickedObject.h"
 
 @implementation WWSurfaceImage
 
@@ -31,27 +36,34 @@
 
     _imagePath = imagePath;
     _sector = sector;
+    _opacity = 1;
+    _displayName = @"Surface Image";
+
+    pickSupport = [[WWPickSupport alloc] init];
 
     return self;
 }
 
 - (BOOL) bind:(WWDrawContext*)dc
 {
-    WWTexture* texture = [[dc gpuResourceCache] getTextureForKey:_imagePath];
+    if ([dc pickingMode])
+    {
+        unsigned int pickColor = [dc bindPickTexture];
+        [pickSupport addPickableObject:[[WWPickedObject alloc] initWithColorCode:pickColor
+                                                                      userObject:self
+                                                                       pickPoint:[dc pickPoint]
+                                                                        position:nil
+                                                                       isTerrain:NO]];
+        return YES;
+    }
+
+    WWTexture* texture = [[WorldWind resourceLoader] textureForImagePath:_imagePath cache:[dc gpuResourceCache]];
     if (texture != nil)
     {
         return [texture bind:dc];
     }
 
-    texture = [[WWTexture alloc] initWithImagePath:_imagePath cache:[dc gpuResourceCache] object:self];
-    BOOL yn = [texture bind:dc];
-
-    if (yn)
-    {
-        [[dc gpuResourceCache] putTexture:texture forKey:_imagePath];
-    }
-
-    return yn;
+    return NO;
 }
 
 - (void) applyInternalTransform:(WWDrawContext*)dc matrix:(WWMatrix*)matrix
@@ -61,7 +73,13 @@
 
 - (void) render:(WWDrawContext*)dc
 {
-    [[dc surfaceTileRenderer] renderTile:dc surfaceTile:self];
+    [[dc surfaceTileRenderer] renderTile:dc surfaceTile:self opacity:_opacity];
+
+    if ([dc pickingMode])
+    {
+        [pickSupport resolvePick:dc layer:[dc currentLayer]];
+        [dc unbindPickTexture];
+    }
 }
 
 @end

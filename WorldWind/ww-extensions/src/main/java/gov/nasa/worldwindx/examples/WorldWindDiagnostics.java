@@ -1,14 +1,14 @@
 /*
-Copyright (C) 2001, 2006 United States Government
-as represented by the Administrator of the
-National Aeronautics and Space Administration.
-All Rights Reserved.
-*/
+ * Copyright (C) 2012 United States Government as represented by the Administrator of the
+ * National Aeronautics and Space Administration.
+ * All Rights Reserved.
+ */
 package gov.nasa.worldwindx.examples;
 
 import gov.nasa.worldwind.Configuration;
 
 import javax.media.opengl.*;
+import javax.media.opengl.awt.GLCanvas;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
@@ -27,7 +27,7 @@ public class WorldWindDiagnostics
         GLFrame(JTextArea outputArea)
         {
             this.outputArea = outputArea;
-            GLCapabilities caps = new GLCapabilities();
+            GLCapabilities caps = new GLCapabilities(Configuration.getMaxCompatibleGLProfile());
             caps.setAlphaBits(8);
             caps.setRedBits(8);
             caps.setGreenBits(8);
@@ -54,13 +54,13 @@ public class WorldWindDiagnostics
             {
                 new Attr(GL.GL_STENCIL_BITS, "stencil bits"),
                 new Attr(GL.GL_DEPTH_BITS, "depth bits"),
-                new Attr(GL.GL_MAX_TEXTURE_UNITS, "max texture units"),
-                new Attr(GL.GL_MAX_TEXTURE_IMAGE_UNITS_ARB, "max texture image units"),
-                new Attr(GL.GL_MAX_TEXTURE_COORDS_ARB, "max texture coords"),
+                new Attr(GL2.GL_MAX_TEXTURE_UNITS, "max texture units"),
+                new Attr(GL2.GL_MAX_TEXTURE_IMAGE_UNITS_ARB, "max texture image units"),
+                new Attr(GL2.GL_MAX_TEXTURE_COORDS_ARB, "max texture coords"),
                 new Attr(GL.GL_MAX_TEXTURE_SIZE, "max texture size"),
-                new Attr(GL.GL_MAX_ELEMENTS_INDICES, "max elements indices"),
-                new Attr(GL.GL_MAX_ELEMENTS_VERTICES, "max elements vertices"),
-                new Attr(GL.GL_MAX_LIGHTS, "max lights")
+                new Attr(GL2.GL_MAX_ELEMENTS_INDICES, "max elements indices"),
+                new Attr(GL2.GL_MAX_ELEMENTS_VERTICES, "max elements vertices"),
+                new Attr(GL2.GL_MAX_LIGHTS, "max lights")
             };
 
         public void init(GLAutoDrawable glAutoDrawable)
@@ -80,11 +80,18 @@ public class WorldWindDiagnostics
                 sb.append(prop.getKey() + " = " + prop.getValue() + "\n");
             }
 
-            javax.media.opengl.GL gl = GLContext.getCurrent().getGL();
+            GL gl = glAutoDrawable.getGL();
 
             sb.append("\nOpenGL Values\n");
+
             String oglVersion = gl.glGetString(GL.GL_VERSION);
             sb.append("OpenGL version: " + oglVersion + "\n");
+
+            String oglVendor = gl.glGetString(GL.GL_VENDOR);
+            sb.append("OpenGL vendor: " + oglVendor + "\n");
+
+            String oglRenderer = gl.glGetString(GL.GL_RENDERER);
+            sb.append("OpenGL renderer: " + oglRenderer + "\n");
 
             String value = "";
             int[] intVals = new int[1];
@@ -118,15 +125,15 @@ public class WorldWindDiagnostics
                 {
                     sb.append("WARNING: Package.getPackage(" + pkgName + ") is null\n");
                 }
-            else
-            {
-                sb.append(p + "\n");
-                sb.append("Specification Title = " + p.getSpecificationTitle() + "\n");
-                sb.append("Specification Vendor = " + p.getSpecificationVendor() + "\n");
-                sb.append("Specification Version = " + p.getSpecificationVersion() + "\n");
-                sb.append("Implementation Vendor = " + p.getImplementationVendor() + "\n");
-                sb.append("Implementation Version = " + p.getImplementationVersion() + "\n");
-            }
+                else
+                {
+                    sb.append(p + "\n");
+                    sb.append("Specification Title = " + p.getSpecificationTitle() + "\n");
+                    sb.append("Specification Vendor = " + p.getSpecificationVendor() + "\n");
+                    sb.append("Specification Version = " + p.getSpecificationVersion() + "\n");
+                    sb.append("Implementation Vendor = " + p.getImplementationVendor() + "\n");
+                    sb.append("Implementation Version = " + p.getImplementationVersion() + "\n");
+                }
             }
             catch (ClassNotFoundException e)
             {
@@ -136,16 +143,16 @@ public class WorldWindDiagnostics
             this.outputArea.setText(sb.toString());
         }
 
+        public void dispose(GLAutoDrawable glAutoDrawable)
+        {
+        }
+
         public void display(GLAutoDrawable glAutoDrawable)
         {
             glAutoDrawable.getGL().glClear(GL.GL_COLOR_BUFFER_BIT | GL.GL_DEPTH_BUFFER_BIT);
         }
 
         public void reshape(GLAutoDrawable glAutoDrawable, int x, int y, int width, int height)
-        {
-        }
-
-        public void displayChanged(GLAutoDrawable glAutoDrawable, boolean b, boolean b1)
         {
         }
     }
@@ -262,7 +269,7 @@ public class WorldWindDiagnostics
     public static void main(String[] arg)
     {
         final MainFrame frame = new MainFrame();
-        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
         frame.setVisible(true);
     }
 }

@@ -8,6 +8,10 @@
 #import "WorldWind/WorldWindConstants.h"
 #import "WorldWind/WWLog.h"
 
+#define WW_VERSION (@"0.1")
+
+@class WWResourceLoader;
+
 /**
 * Provides access to World Wind singletons.
 */
@@ -19,6 +23,25 @@
 * @return The World Wind retrieval queue.
 */
 + (NSOperationQueue*) retrievalQueue;
+
+/**
+* Returns the singleton World Wind file loading queue.
+*
+* This queue is used to load files from disk on separate threads.
+*
+* @return The World Wind file loading queue.
+*/
++ (NSOperationQueue*) loadQueue;
+
+/**
+* Returns the singleton World Wind resource loader.
+*
+* This loader encapsulates the pattern of asynchronously loading resources from the file-system or network to a memory
+* cache.
+*
+* @return The World Wind resource loader.
+*/
++ (WWResourceLoader*) resourceLoader;
 
 /**
 * Show or hide the device's network busy signal.

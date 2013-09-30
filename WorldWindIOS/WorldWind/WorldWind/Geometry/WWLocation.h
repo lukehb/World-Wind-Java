@@ -23,11 +23,11 @@
 /**
 * This location's latitude in degrees.
 */
-@property (nonatomic) double latitude;
+@property(nonatomic) double latitude;
 /**
 * This location's longitude in degrees.
 */
-@property (nonatomic) double longitude;
+@property(nonatomic) double longitude;
 
 /// @name Initializing Locations
 
@@ -55,9 +55,9 @@
 *
 * @return The initialized location.
 *
-* @exception NSInvalidArgumentException If the specified time zone is nil.
+* @exception NSInvalidArgumentException If the time zone is nil.
 */
-- (WWLocation*) initWithDegreesLatitude:(double) latitude timeZoneForLongitude:(NSTimeZone*)timeZone;
+- (WWLocation*) initWithDegreesLatitude:(double)latitude timeZoneForLongitude:(NSTimeZone*)timeZone;
 
 /**
 * Initializes a location to the latitude and longitude of a specified location.
@@ -66,7 +66,7 @@
 *
 * @return The initialized location.
 *
-* @exception NSInvalidArgumentException If the specified location is nil.
+* @exception NSInvalidArgumentException If the location is nil.
 */
 - (WWLocation*) initWithLocation:(WWLocation*)location;
 
@@ -79,7 +79,7 @@
 *
 * @return The initialized location.
 *
-* @exception NSInvalidArgumentException If the specified location is nil.
+* @exception NSInvalidArgumentException If the location is nil.
 */
 - (WWLocation*) initWithCLLocation:(CLLocation*)location;
 
@@ -95,6 +95,13 @@
 */
 - (WWLocation*) initWithCLCoordinate:(CLLocationCoordinate2D)locationCoordinate;
 
+/**
+* Initializes a location with its latitude and longitude set to 0.
+*
+* @return The initialized location.
+*/
+- (WWLocation*) initWithZeroLocation;
+
 /// @name Setting the Contents of Locations
 
 /**
@@ -102,10 +109,8 @@
 *
 * @param latitude The location's latitude.
 * @param longitude The location's longitude.
-*
-* @return This location with the specified latitude and longitude.
 */
-- (WWLocation*) setDegreesLatitude:(double)latitude longitude:(double)longitude;
+- (void) setDegreesLatitude:(double)latitude longitude:(double)longitude;
 
 /**
 * Specifies a location's latitude and longitude.
@@ -119,22 +124,18 @@
 * @param latitude The location's latitude in degrees.
 * @param timeZone The time zone associated with the location's longitude.
 *
-* @return This location with the specified latitude and longitude.
-*
-* @exception NSInvalidArgumentException If the specified time zone is nil.
+* @exception NSInvalidArgumentException If the time zone is nil.
 */
-- (WWLocation*) setDegreesLatitude:(double)latitude timeZoneForLongitude:(NSTimeZone*)timeZone;
+- (void) setDegreesLatitude:(double)latitude timeZoneForLongitude:(NSTimeZone*)timeZone;
 
 /**
 * Sets a location to the latitude and longitude of a specified location.
 *
 * @param location The location containing the new latitude and longitude.
 *
-* @return This location with the specified latitude and longitude.
-*
-* @exception NSInvalidArgumentException If the specified location is nil.
+* @exception NSInvalidArgumentException If the location is nil.
 */
-- (WWLocation*) setLocation:(WWLocation*)location;
+- (void) setLocation:(WWLocation*)location;
 
 /**
 * Sets a location to the latitude and longitude of a specified CLLocation.
@@ -143,11 +144,9 @@
 *
 * @param location The location containing the new latitude and longitude.
 *
-* @return This location with the specified latitude and longitude.
-*
-* @exception NSInvalidArgumentException If the specified location is nil.
+* @exception NSInvalidArgumentException If the location is nil.
 */
-- (WWLocation*) setCLLocation:(CLLocation*)location;
+- (void) setCLLocation:(CLLocation*)location;
 
 /**
 * Sets a location to the latitude and longitude of a specified CLLocationCoordinate2D.
@@ -156,10 +155,8 @@
 * and longitude fields.
 *
 * @param locationCoordinate The location coordinate containing the latitude and longitude.
-*
-* @return This location with the specified latitude and longitude.
 */
-- (WWLocation*) setCLCoordinate:(CLLocationCoordinate2D)locationCoordinate;
+- (void) setCLCoordinate:(CLLocationCoordinate2D)locationCoordinate;
 
 /// @name Operations on Locations
 
@@ -168,22 +165,18 @@
 *
 * @param location The location whose latitude and longitude are to be added.
 *
-* @return This location with the specified location added to it.
-*
-* @exception NSInvalidArgumentException If the specified location is nil.
+* @exception NSInvalidArgumentException If the location is nil.
 */
-- (WWLocation*) addLocation:(WWLocation*)location;
+- (void) addLocation:(WWLocation*)location;
 
 /**
 * Subtracts a specified location's latitude and longitude from this location's latitude and longitude.
 *
 * @param location The location whose latitude and longitude are to be subtracted from this location.
 *
-* @return This location with the specified location subtracted from it.
-*
-* @exception NSInvalidArgumentException If the specified location is nil.
+* @exception NSInvalidArgumentException If the location is nil.
 */
-- (WWLocation*) subtractLocation:(WWLocation*)location;
+- (void) subtractLocation:(WWLocation*)location;
 
 /// @name Common Geographic Operations
 
@@ -298,6 +291,60 @@
 /**
 * TODO
 *
+* @param beginLocation TODO
+* @param endLocation TODO
+*
+* @return TODO
+*
+* @exception TODO
+*/
++ (double) linearAzimuth:(WWLocation*)beginLocation endLocation:(WWLocation*)endLocation;
+
+/**
+* TODO
+*
+* @param beginLocation TODO
+* @param endLocation TODO
+*
+* @return TODO
+*
+* @exception TODO
+*/
++ (double) linearDistance:(WWLocation*)beginLocation endLocation:(WWLocation*)endLocation;
+
+/**
+* Computes this location on the rhumb path specified by a beginning location, azimuth and distance.
+*
+* @param beginLocation The beginning location of the rhumb path.
+* @param azimuth The direction of the rhumb path in degrees clockwise from north.
+* @param distance The angular distance, between the begin location of the path and the desired location, in degrees.
+* @param result TODO
+*
+* @exception NSInvalidArgumentException If either the begin location or the result is nil.
+*/
++ (void) linearLocation:(WWLocation*)beginLocation
+                azimuth:(double)azimuth
+               distance:(double)distance
+         outputLocation:(WWLocation*)result;
+
+/**
+* TODO
+*
+* @param beginLocation TODO
+* @param endLocation TODO
+* @param amount TODO
+* @param result TODO
+*
+* @exception TODO
+*/
++ (void) linearInterpolate:(WWLocation*)beginLocation
+               endLocation:(WWLocation*)endLocation
+                    amount:(double)amount
+            outputLocation:(WWLocation*)result;
+
+/**
+* TODO
+*
 * @param location TODO
 * @param date TODO
 * @param globe TODO
@@ -307,7 +354,7 @@
 */
 + (void) forecastLocation:(CLLocation*)location
                   forDate:(NSDate*)date
-                 withGobe:(WWGlobe*)globe
+                  onGlobe:(WWGlobe*)globe
            outputLocation:(WWLocation*)result;
 
 @end

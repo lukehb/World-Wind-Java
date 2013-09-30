@@ -1,4 +1,4 @@
-This document provides links on getting started with the World Wind Java SDK, provides instructions on running the
+This document provides links on getting started with the World Wind Java SDK, provides instructions on running the a
 World Wind demo application, and outlines the key changes between each World Wind Java SDK release.
 
 Getting Started With the World Wind Java SDK
@@ -6,17 +6,15 @@ Getting Started With the World Wind Java SDK
 
 Key files and folders in the World Wind Java SDK:
 * build.xml: Apache ANT build file for the World Wind Java SDK.
-* src: Contains all Java source files for the World Wind Java SDK, except the World Wind WMS Server.
-* server: Contains the World Wind WMS Server Java source files, build file, and deployment files.
+* src: Contains all Java source files for the World Wind Java SDK.
 * lib-external/gdal: Contains the GDAL native binaries libraries that may optionally be distributed with World Wind.
 
-Links to important World Wind sites that will help you get started using the World Wind Java SDK in your
-application:
+Links to important World Wind sites that will help you get started using the World Wind Java SDK in your application:
 
 * [World Wind Developer's Guide](http://goworldwind.org/)
 * [World Wind Main Website](http://worldwind.arc.nasa.gov/java/)
 * [World Wind Forum](http://forum.worldwindcentral.com/forumdisplay.php?f=37)
-* [World Wind API Documentation](http://builds.worldwind.arc.nasa.gov/worldwind-releases/1.5/docs/api/index.html)
+* [World Wind API Documentation](http://builds.worldwind.arc.nasa.gov/worldwind-releases/2.0/docs/api/index.html)
 * [World Wind Bug Base](http://issues.worldwind.arc.nasa.gov/jira/browse/WWJ)
 
 Running a Basic Demo Application
@@ -27,7 +25,7 @@ To run the basic demo on Mac OS X or Linux:
 1. Open a terminal.
 2. `cd` to the World Wind release folder.
 3. `chmod +x run-demo.bash`
-4. `./run-demo.bash gov.nasa.worldwindx.examples.ApplicationTemplate`
+4. `/run-demo.bash gov.nasa.worldwindx.examples.ApplicationTemplate`
 
 To run the basic demo on Windows:
 
@@ -41,38 +39,60 @@ This will most likely be either NVIDIA, ATI or Intel. The drivers are typically 
 _Support_. If your computer is a laptop, then updated drivers are probably at the laptop manufacturer's web site rather
 than the graphics card manufacturer's.
 
-Using World Wind on Windows or Linux 64-bit
--------------------------------------------
-
-NOTE: Running World Wind on Linux currently (1/21/13) causes a JVM crash. We have not been able to run release 1.5.0
-on Linux, including Ubuntu, CentOS and Fedora versions using the current Oracle JVM (both Java 6 and Java 7). See
-http://issues.worldwind.arc.nasa.gov/jira/browse/WWJ-390 to track this issue.
-
-To run World Wind on Windows with a 64-bit Java Virtual Machine, you must extract the 64-bit native libraries:
-1. Open a terminal.
-2. `cd` to the World Wind release folder.
-3. `jar xf jogl-natives-windows-amd64.jar`
-4. `jar xf gluegen-rt-natives-windows-amd64.jar`
-
-This will replace the 32-bit JOGL libraries with 64-bit libraries.
-
-64-bit libraries for Linux are not included with the release, but can be downloaded from:
-
-* http://worldwind.arc.nasa.gov/java/jogl/webstart/jogl-natives-linux-amd64.jar
-* http://worldwind.arc.nasa.gov/java/jogl/webstart/gluegen-rt-natives-linux-amd64.jar
-
-Follow instructions above to extract the archives into the World Wind release folder.
-
 New Features and Improvements
 =============================
-* See http://goworldwind.org/releases/ for a description of the major release features.
+* See http://goworldwind.org/releases/ for a description of this release's major features.
+
+World Wind Java SDK 2.0.0
+-------------------------
+* Migrated World Wind's usage of the JOGL library to JOGL version 2.0.
+* Redesigned the World Wind Java Web Start site to work with JOGL 2.0 and Java 7 on all platforms..
+* Redesigned the World Wind Java applet examples to work with JOGL 2.0 and Java 7 on all platforms.
+* New applets leverage the same Java Web Start resources used by applications.
+* Redesigned the World Wind Java demos for simplicity, and consolidated all demo resources in a single place.
+* Added a new ANT target webstart.site that creates a self-contained and deployable World Wind Web Start site.
+* Removed the World Wind servers module, and its associated packages in the World Wind client:
+  gov.nasa.worldwind.database, gov.nasa.worldwind.ows, gov.nasa.worldwind.wfs, gov.nasa.worldwind.wss
+* Removed the need for the separate performance JAR file worldwind-performance.jar.
+  Moved the performance package into gov.nasa.worldwindx.performance.
+* Repaired a problem that caused the compass not to be displayed when another instance of the layer had been used in
+  another WorldWindow.
+* Changed the meaning of passing null to the WorldWindowGLCanvas and WorldWindowGLJPanel constructors that have a
+  share-with argument to indicate that a null value causes the gpu resource cache not to be cleared when the window
+  is destroyed. This keeps its contents available to other windows that may have been opened and shared after the
+  initial one.
+* Added a method to the Terrain interface that identifies the input positions' altitude reference and converts the
+  altitudes to relative-to-ground, which is what the intersection methods expect.
+* Fixed WWJ-302, that caused flashing of continuously updating KML ground overlays.
+* Fixed WWJ-371, where some portions of Collada shapes were not pickable.
+
+  Note on using the JOGL libraries without the default runtime extraction of native binaries.
+    This is accomplished by modifying World Wind's JOGL distribution to load native binaries directly from the library
+    path instead of dynamically using the native binary JAR files. Here are instructions on how to implement this:
+
+    1. Extract the GlueGen and JOGL native binary JAR files for the desired platform.
+       These JAR files follow the naming pattern `gluegen-rt-natives-PLATFORM.jar` and `jogl-all-natives-PLATFORM.jar`
+
+    2. Place the extracted native binaries either in the program's working directory or in a location specified as the
+       library path.
+       The following JOGL user's guide page outlines supported library path variables:
+       https://jogamp.org/jogl/doc/userguide/index.html#traditionallibraryloading
+
+    3. Remove the GlueGen and JOGL native binary JAR files from your application's workspace.
+       JOGL attempts to use the native binary JAR files before loading from the library path, so these files must not be
+       deployed with the application.
+
+    4. When running, specify the JVM argument `-Djogamp.gluegen.UseTempJarCache=false`
+
+World Wind Java SDK 1.5.1 - July 24, 2013
+-----------------------------------------
+* Repaired an issue where the DTED file reader incorrectly added a 1/2 pixel border to the DTED bounding box.
+* Repaired an issue where the WWJ data importer's BIL writer output BIL world files with an incorrect pixel size.
+* Modified the DTED file reader to interpret values outside the practical range of [-12000,+9000] as missing values.
+  See MIL-PRF-89020B sections 3.11.2 and 3.11.3 for more information on why this change is valid for DTED files.
 
 World Wind Java SDK 1.5.0 - January 21, 2013
 --------------------------------------------
-NOTE: Running World Wind on Linux currently (1/21/13) causes a JVM crash. We have not been able to run release 1.5.0
-on Linux, including Ubuntu, CentOS and Fedora using the current Oracle JVM (both Java 6 and Java 7). See
-http://issues.worldwind.arc.nasa.gov/jira/browse/WWJ-390 to track this issue.
-
 * Added global text decluttering. See the ClutterFilter and Declutterable interfaces.
 * Added support for refreshing KML icons.
 * Added support for applying Earth Gravitational Model offsets (EGM96) to EllipsoidalGlobe.
@@ -138,7 +158,7 @@ World Wind Java SDK 1.4.0 - July 20, 2012
 * Modified globe-dragging code to use the terrain object even if it's not the top object.
 * Use one buffer in ColladaMeshShapes for vertex coordinates, normal vectors, and texture coordinates.
 * COLLADA documentation.
-* Do not convert entities in EntityMap to lower case. The entities are case sensitive. Also fixed error in the entity map. `&lang;` and `&rang;` entities were listed twice.
+* Do not convert entities in EntityMap to lower case. The entities are case sensitive. Also fixed error in the entity map. &lang; and &rang; entities were listed twice.
 * Fixed infinite loop in EntityMap.replaceAll. The loop never terminated when an entity was matched in the input string that did not have a replacement. See  http://issues.worldwind.arc.nasa.gov/jira/browse/WWJ-292.
 * Marked XMLEventParserContext.resolveInternalReferences as deprecated. This method was an early attempt to handle KML reference resolution that was accidentally left in the code. This reference resolution is now handled by KMLRoot and KMLStyleMap.
 * Set position of COLLADA node shapes every frame so that the nodes will pickup changes in the ColladaRoot position. Added test program that moves a model along a path.
@@ -214,13 +234,11 @@ World Wind Java SDK 1.4.0 - July 20, 2012
 
 World Wind Java SDK 1.3.0 - April 27, 2012
 ------------------------------------------
-
 * 2525C Symbology
 * KML NetworkLinkControl and Update
 
 World Wind Java SDK 1.2.0 - July 19, 2011
 -----------------------------------------
-
 * KML file parsing and display.
 * Improved Shapefile parsing and display performance.
 * GeoJSON file parsing and display.

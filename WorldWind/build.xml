@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="ISO-8859-1"?>
-<!--$Id$-->
+<!--
+  ~ Copyright (C) 2012 United States Government as represented by the Administrator of the
+  ~ National Aeronautics and Space Administration.
+  ~ All Rights Reserved.
+  -->
+
+<!-- $Id$ -->
 <project name="worldwind" default="worldwind.core.jarfile" basedir=".">
     <description>
         Build script for the World Wind Java SDK. Compiles the World Wind source, creates World Wind API documentation,
@@ -13,16 +19,12 @@
     <import file="build/test.xml"/>
     <!-- Import the World Wind release targets. -->
     <import file="build/release.xml"/>
-    <!-- Import the World Wind demos website targets. -->
-    <import file="build/demosite.xml"/>
-    <!-- Import the World Wind native native library targets. -->
-    <import file="build/native.xml"/>
     <!-- Import the World Wind resource targets. -->
     <import file="build/resources.xml"/>
     <!-- Import the World Wind general utility targets. -->
     <import file="build/util.xml"/>
-    <!-- Import the World Wind Server Applications targets. -->
-    <import file="build/server.xml"/>
+    <!-- Import the World Wind Web Start site targets. -->
+    <import file="build/webstart.xml"/>
 
     <!-- Main build target for the World Wind Java SDK. Compiles the World Wind source, creates the World Wind API
          documentation, and builds the World Wind JAR files. -->
@@ -30,7 +32,7 @@
             description="Main build target for the World Wind Java SDK. Compiles the World Wind source, creates the World Wind API documentation, and builds the World Wind JAR files."/>
 
     <!-- Compiles all World Wind Java sources under the 'ww-core/src' folder into Java class files under the 'classes'
-         folder. Note that this excludes the Java sources under the 'ww-server' and 'ww-tests' directories.
+         folder. Note that this excludes the Java sources under the 'ww-tests' folder.
 
          The parameters 'source' and 'target' are configured in order to explicitly define the Java compiler version
          used to build World Wind classes. Without these parameters, the javac task would use the most recent compiler
@@ -54,6 +56,7 @@
                destdir="${worldwind.core.dir}/${classes.dir}"
                source="${worldwind.jdk.version}"
                target="${worldwind.jdk.version}"
+               encoding="UTF-8"
                fork="true"
                includeantruntime="false"
 	       debug="true"
@@ -122,15 +125,15 @@
         </javac>
     </target>
 
-    <!-- Builds the World Wind API documentation for all core, extension, and server packages into the 'doc' folder.
-         Includes all World Wind core classes under the packages 'gov.nasa.worldwind', World Wind extension classes
-         under the package 'gov.nasa.worldwindx', and World Wind server classes under the package
-         'gov.nasa.worldwind.servers'. Excludes World Wind format classes under the package
+    <!-- Builds the World Wind API documentation for all core and extension packages into the 'doc' folder. Includes all
+         World Wind core classes under the packages 'gov.nasa.worldwind' and World Wind extension classes under the
+         package 'gov.nasa.worldwindx'. Excludes World Wind format classes under the package
          'gov.nasa.worldwind.formats' -->
     <target name="javadocs" depends="clean.javadocs"
-            description="Builds the World Wind API documentation for all core, extension, and server packages into the 'doc' folder.">
+            description="Builds the World Wind API documentation for all core and extension packages into the 'doc' folder.">
         <javadoc destdir="${worldwind.doc.dir}"
                  overview="${worldwind.src.dir}/overview.html"
+                 encoding="UTF-8"
                  windowtitle="NASA World Wind" doctitle="NASA World Wind API" header="NASA World Wind"
                  splitindex="true" protected="true" nodeprecated="true" version="false" author="false" use="true"
                  maxmemory="512m"
@@ -140,23 +143,20 @@
                 <include name="gov/nasa/worldwindx/**"/>
                 <exclude name="gov/nasa/worldwind/formats/**"/>
             </packageset>
-            <packageset dir="${server.src.dir}" defaultexcludes="yes">
-                <include name="gov/nasa/worldwind/servers/**"/>
-            </packageset>
             <classpath>
-                <pathelement location="jogl.jar"/>
+                <pathelement location="jogl-all.jar"/>
                 <pathelement location="gluegen-rt.jar"/>
                 <pathelement location="gdal.jar"/>
                 <pathelement location="plugin.jar"/>
             </classpath>
             <link href="http://download.oracle.com/javase/6/docs/api/"/>
-            <link href="http://worldwind.arc.nasa.gov/java/jogl/docs/"/>
+            <link href="http://jogamp.org/deployment/v2.0-rc11/javadoc/jogl/javadoc/"/>
         </javadoc>
     </target>
 
     <!-- Builds the World Wind SDK core Jar file 'ww-core.jar'. Includes all World Wind core class files, property
          files, configuration files, and image files. Excludes files added by Subversion, and files added by the
-         operating system. The resultant Jar file is dependent on jogl.jar, gluegen-rt.jar, and gdal.jar, and has these
+         operating system. The resultant Jar file is dependent on jogl-all.jar, gluegen-rt.jar, gdal.jar, and has these
          Jar files added to its class-path. -->
     <target name="worldwind.core.jarfile" depends="compile.core"
             description="Builds the World Wind core JAR file 'ww-core.jar'.">
@@ -208,6 +208,7 @@
                  packaging unnecessary resources in the Jar file, and (b) this ensures that anything added to config or
                  images is included without requiring changes to this build target. -->
             <fileset dir="${worldwind.extensions.dir}/${resource.dir}">
+                <include name="gov/nasa/worldwindx/applications/eurogeoss/images/**"/>
                 <include name="gov/nasa/worldwindx/applications/sar/*.html"/>
                 <include name="gov/nasa/worldwindx/applications/sar/config/**"/>
                 <include name="gov/nasa/worldwindx/applications/sar/data/**"/>
@@ -280,11 +281,9 @@
     <target name="clean.all" depends="clean.build,
                                       clean.test.all,
                                       clean.worldwind.release,
-                                      clean.demosite.all,
-                                      clean.native.all,
                                       clean.resources.all,
                                       clean.build.util.all,
-                                      clean.server.all"
+                                      clean.webstart.site"
             description="Main clean target for the World Wind Java SDK. Removes all files and directories created by all World Wind build targets."/>
 
 </project>

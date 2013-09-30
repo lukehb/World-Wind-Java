@@ -7,15 +7,13 @@
 
 #import "WorldWind/Layer/WWShowTessellationLayer.h"
 #import "WorldWind/Render/WWDrawContext.h"
+#import "WorldWind/Render/WWGpuProgram.h"
+#import "WorldWind/Shaders/WWBasicProgram.h"
 #import "WorldWind/Terrain/WWTerrainTile.h"
 #import "WorldWind/Terrain/WWTerrainTileList.h"
+#import "WorldWind/Terrain/WWTessellator.h"
+#import "WorldWind/Util/WWColor.h"
 #import "WorldWind/WWLog.h"
-#import "WorldWind/Render/WWGpuProgram.h"
-
-// STRINGIFY is used in the shader files.
-#define STRINGIFY(A) #A
-#import "WorldWind/Shaders/Simple.vert"
-#import "WorldWind/Shaders/Simple.frag"
 
 @implementation WWShowTessellationLayer
 
@@ -34,32 +32,37 @@
     }
 
     WWTerrainTileList* surfaceTiles = [dc surfaceGeometry];
-    if (surfaceTiles == nil || [surfaceTiles count] == 0)
+    WWTessellator* tess = [surfaceTiles tessellator];
+    if (surfaceTiles == nil || tess == nil)
+    {
         return;
+    }
 
-    [self makeGpuProgram];
-    if (_gpuProgram == nil)
-        return;
+    WWColor* wireframeColor = [[WWColor alloc] initWithR:1 g:1 b:1 a:1];
+    WWColor* outlineColor = [[WWColor alloc] initWithR:1 g:0 b:0 a:1];
 
     [self beginRendering:dc];
-
     @try
     {
-        [surfaceTiles beginRendering:dc];
+        [tess beginRendering:dc];
+        WWBasicProgram* program = (WWBasicProgram*) [dc currentProgram];
 
         NSUInteger count = [surfaceTiles count];
         for (NSUInteger i = 0; i < count; i++)
         {
             WWTerrainTile* tile = [surfaceTiles objectAtIndex:i];
 
-            [tile beginRendering:dc];
-            [tile renderWireframe:dc];
-            [tile endRendering:dc];
+            [tess beginRendering:dc tile:tile];
+            [program loadColor:wireframeColor];
+            [tess renderWireframe:dc tile:tile];
+            [program loadColor:outlineColor];
+            [tess renderOutline:dc tile:tile];
+            [tess endRendering:dc tile:tile];
         }
     }
     @finally
     {
-        [surfaceTiles endRendering:dc];
+        [tess endRendering:dc];
         [self endRendering:dc];
     }
 
@@ -67,30 +70,14 @@
 
 - (void) beginRendering:(WWDrawContext*)dc
 {
-    [_gpuProgram bind];
-    [dc setCurrentProgram:_gpuProgram];
+    [dc bindProgramForKey:[WWBasicProgram programKey] class:[WWBasicProgram class]];
+    glDepthMask(GL_FALSE); // Disable depth buffer writes. The diagnostics should not occlude any other objects.
 }
 
 - (void) endRendering:(WWDrawContext*)dc
 {
-    [dc setCurrentProgram:nil];
-    glUseProgram(0);
-}
-
-- (void) makeGpuProgram
-{
-    if (_gpuProgram != nil)
-        return;
-
-    @try
-    {
-        _gpuProgram = [[WWGpuProgram alloc] initWithShaderSource:SimpleVertexShader
-                                                  fragmentShader:SimpleFragmentShader];
-    }
-    @catch (NSException* exception)
-    {
-        WWLogE(@"making GPU program", exception);
-    }
+    [dc bindProgram:nil];
+    glDepthMask(GL_TRUE); // Re-enable depth buffer writes.
 }
 
 @end

@@ -73,9 +73,9 @@
 *
 * @param vector The vector whose values to assign this instance's.
 *
-* @result This vector initialize to the values in the specified vector.
+* @result This vector initialized to the values in the specified vector.
 *
-* @exception NSInvalidArgumentException If the specified vector is nil.
+* @exception NSInvalidArgumentException If the vector is nil.
 */
 - (WWVec4*) initWithVector:(WWVec4*)vector;
 
@@ -86,7 +86,7 @@
 *
 * @result This vector initialized to the average of the specified vectors.
 *
-* @exception NSInvalidArgumentException if the specified list is nil or empty.
+* @exception NSInvalidArgumentException If the specified list is nil or empty.
 */
 - (WWVec4*) initWithAverageOfVectors:(NSArray*) vectors;
 
@@ -104,10 +104,8 @@
 *
 * @param x The vector's X coordinate.
 * @param y The vector's Y coordinate.
-*
-* @return This vector with X and Y coordinates set to the specified values.
 */
-- (WWVec4*) set:(double)x y:(double)y;
+- (void) set:(double)x y:(double)y;
 
 /**
 * Sets this vector's X, Y and Z coordinates to specified values.
@@ -115,10 +113,8 @@
 * @param x The vector's X coordinate.
 * @param y The vector's Y coordinate.
 * @param z The vector's Z coordinate.
-*
-* @return This vector with its X, Y and Z coordinates set to the specified values.
 */
-- (WWVec4*) set:(double)x y:(double)y z:(double)z;
+- (void) set:(double)x y:(double)y z:(double)z;
 
 /**
 * Sets this vector's coordinates to specified values.
@@ -127,62 +123,76 @@
 * @param y The vector's Y coordinate.
 * @param z The vector's Z coordinate.
 * @param w The vector's W coordinate.
-*
-* @return This vector with its coordinates set to the specified values.
 */
-- (WWVec4*) set:(double)x y:(double)y z:(double)z w:(double)w;
+- (void) set:(double)x y:(double)y z:(double)z w:(double)w;
 
-- (WWVec4*) set:(WWVec4*)vector;
+/**
+* Sets this vector's coordinates to the coordinates of the specified vector.
+*
+* @param vector The vector whose values are assigned to this instance's.
+*
+* @exception NSInvalidArgumentException If the vector is nil.
+*/
+- (void) set:(WWVec4*)vector;
+
+/**
+* Sets this vector to the zero vector, with X, Y and Z set to 0 and W set to 1.
+*/
+- (void) setToZeroVector;
 
 /// @name Operating on Vectors
 
 /**
 * Normalize this vector to a unit vector in X, Y and Z.
 *
-* @return This vector normalized to a unit vector in X, Y and Z. If the vector prior to invoking this method is the
-* zero vector, this vector is not changed.
+* If the vector prior to invoking this method is the zero vector, this vector is not changed.
 */
-- (WWVec4*) normalize3;
+- (void) normalize3;
 
 /**
 * Add the X, Y and Z coordinates of a specified vector to this vector.
 *
 * @param vector The vector to add to this vector.
 *
-* @return This vector with the specified vector added to it.
-*
-* @exception NSInvalidArgumentException if the specified vector is nil.
+* @exception NSInvalidArgumentException If the vector is nil.
 */
-- (WWVec4*) add3:(WWVec4*)vector;
+- (void) add3:(WWVec4*)vector;
 
 /**
 * Subtract the X, Y and Z coordinates of a specified vector from this vector.
 *
 * @param vector The vector to subtract from this vector.
 *
-* @return This vector with the specified vector subtracted from it.
-*
-* @exception NSInvalidArgumentException if the specified vector is nil.
+* @exception NSInvalidArgumentException If the vector is nil.
 */
-- (WWVec4*) subtract3:(WWVec4*)vector;
-
-/**
-* Multiplies all four components of this vector by a specified scalar.
-*
-* @param scalar The scalar to multiply.
-*
-* @return This matrix multiplied by the specified scalar.
-*/
-- (WWVec4*) multiplyByScalar:(double)scalar;
+- (void) subtract3:(WWVec4*)vector;
 
 /**
 * Multiplies the X, Y and Z components of this vector by a specified scalar.
 *
 * @param scalar The scalar to multiply.
-*
-* @return This matrix multiplied by the specified scalar.
 */
-- (WWVec4*) multiplyByScalar3:(double)scalar;
+- (void) multiplyByScalar3:(double)scalar;
+
+/**
+* Multiplies all four components of this vector by a specified scalar.
+*
+* @param scalar The scalar to multiply.
+*/
+- (void) multiplyByScalar:(double)scalar;
+
+/**
+* Multiplies all four components of this vector by a specified matrix.
+*
+* @param matrix The matrix to multiply.
+*
+* @exception NSInvalidArgumentException If the specified matrix is nil.
+*/
+- (void) multiplyByMatrix:(WWMatrix*)matrix;
+
+- (void) divideByScalar3:(double)scalar;
+
+- (void) divideByScalar:(double)scalar;
 
 /**
 * Computes the Cartesian distance between points represented by this vector and a specified vector.
@@ -191,7 +201,7 @@
 *
 * @return The Cartesian distance between the two points.
 *
-* @exception NSInvalidArgumentException if the specified vector is nil
+* @exception NSInvalidArgumentException If the vector is nil.
 */
 - (double) distanceTo3:(WWVec4*)vector;
 
@@ -204,20 +214,43 @@
 *
 * @return The square of the Cartesian distance between the two points.
 *
-* @exception NSInvalidArgumentException if the specified vector is nil
+* @exception NSInvalidArgumentException If the vector is nil.
 */
 - (double) distanceSquared3:(WWVec4*)vector;
 
 /**
-* Computes the X, Y, Z dot product of this matrix with a specified vector.
+* Computes the X, Y, Z dot product of this vector with a specified vector.
 *
 * @param vector The vector to dot with this vector.
 *
 * @return The dot product.
 *
-* @exception NSInvalidArgumentException if the specified vector is nil.
+* @exception NSInvalidArgumentException If the vector is nil.
 */
 - (double) dot3:(WWVec4*)vector;
+
+/**
+* Computes the X, Y, Z, W dot product of this vector with a specified vector.
+*
+* @param vector The vector to dot with this vector.
+*
+* @return The dot product.
+*
+* @exception NSInvalidArgumentException If the vector is nil.
+*/
+- (double) dot4:(WWVec4*)vector;
+
+/**
+* Computes the cross product of this vector and a specified vector, then stores the result in this vector.
+*
+* The cross product computed by this method is equivalent to va = va x vb, where 'va' is this vector and 'vb' is the
+* specified vector.
+*
+* @param vector The vector to cross with this vector.
+*
+* @exception NSInvalidArgumentException If the vector is nil.
+*/
+- (void) cross3:(WWVec4*)vector;
 
 /**
 * Computes a point on a specified line.
@@ -227,7 +260,7 @@
 * @param t The distance in meters along the line at which to select the point.
 * @param result A WWVec4 instance in which to return the result.
 *
-* @exception NSInvalidArgumentException If either the origin or direction are nil.
+* @exception NSInvalidArgumentException If any argument is nil.
 */
 + (void) pointOnLine:(WWVec4*)origin direction:(WWVec4*)direction t:(double)t result:(WWVec4*)result;
 

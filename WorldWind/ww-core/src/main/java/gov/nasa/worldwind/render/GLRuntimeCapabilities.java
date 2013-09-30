@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 United States Government as represented by the Administrator of the
+ * Copyright (C) 2012 United States Government as represented by the Administrator of the
  * National Aeronautics and Space Administration.
  * All Rights Reserved.
  */
@@ -37,6 +37,7 @@ public class GLRuntimeCapabilities
     protected static final String GL_EXT_TEXTURE_FILTER_ANISOTROPIC_STRING = "GL_EXT_texture_filter_anisotropic";
 
     protected double glVersion;
+    protected boolean isVMwareSVGA3D;
     protected boolean isAnisotropicTextureFilterAvailable;
     protected boolean isAnisotropicTextureFilterEnabled;
     protected boolean isFramebufferObjectAvailable;
@@ -98,6 +99,19 @@ public class GLRuntimeCapabilities
             }
         }
 
+        // Determine whether or not the OpenGL implementation is provided by the VMware SVGA 3D driver. This flag is
+        // used to work around bugs and unusual behavior in the VMware SVGA 3D driver. The VMware drivers tested on
+        // 7 August 2013 report the following strings for GL_VENDOR and GL_RENDERER:
+        // - GL_VENDOR: "VMware, Inc."
+        // - GL_RENDERER: "Gallium 0.4 on SVGA3D; build: RELEASE;"
+        String glVendor = gl.glGetString(GL.GL_VENDOR);
+        String glRenderer = gl.glGetString(GL.GL_RENDERER);
+        if (glVendor != null && glVendor.toLowerCase().contains("vmware")
+            && glRenderer != null && glRenderer.toLowerCase().contains("svga3d"))
+        {
+            this.isVMwareSVGA3D = true;
+        }
+
         this.isAnisotropicTextureFilterAvailable = gl.isExtensionAvailable(GL_EXT_TEXTURE_FILTER_ANISOTROPIC_STRING);
         this.isFramebufferObjectAvailable = gl.isExtensionAvailable(GL_EXT_FRAMEBUFFER_OBJECT_STRING);
         // Vertex Buffer Objects are supported in version 1.5 or greater only.
@@ -113,8 +127,8 @@ public class GLRuntimeCapabilities
             {
                 // The maxAnisotropy value can be any real value. A value less than 2.0 indicates that the graphics
                 // context does not support texture anisotropy.
-                double[] params = new double[1];
-                glContext.getGL().glGetDoublev(GL.GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, params, 0);
+                float[] params = new float[1];
+                gl.glGetFloatv(GL.GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, params, 0);
                 this.maxTextureAnisotropy = params[0];
             }
         }
@@ -122,7 +136,7 @@ public class GLRuntimeCapabilities
         if (this.numTextureUnits == 0)
         {
             int[] params = new int[1];
-            gl.glGetIntegerv(GL.GL_MAX_TEXTURE_UNITS, params, 0);
+            gl.glGetIntegerv(GL2.GL_MAX_TEXTURE_UNITS, params, 0);
             this.numTextureUnits = params[0];
         }
 
@@ -157,8 +171,22 @@ public class GLRuntimeCapabilities
     }
 
     /**
+     * Returns true if the OpenGL implementation is provided by the VMware SVGA 3D driver. Otherwise this returns
+     * false.
+     * <p/>
+     * This flag is used to work around bugs and unusual behavior in the VMware SVGA 3D driver. For details on VMware
+     * graphics drivers, see <a href="http://www.vmware.com/files/pdf/techpaper/vmware-horizon-view-graphics-acceleration-deployment.pdf">http://www.vmware.com/files/pdf/techpaper/vmware-horizon-view-graphics-acceleration-deployment.pdf</a>.
+     *
+     * @return true if the OpenGL implementation is VMware SVGA 3D, and false otherwise.
+     */
+    public boolean isVMwareSVGA3D()
+    {
+        return this.isVMwareSVGA3D;
+    }
+
+    /**
      * Returns true if anisotropic texture filtering is available in the current GL runtime, and is enabled. Otherwise
-     * this returns false. For details on GL anisotropic texture filtering, see <a href="http://www.opengl.org/registry/specs/EXT/texture_filter_anisotropic.txt">.
+     * this returns false. For details on GL anisotropic texture filtering, see <a href="http://www.opengl.org/registry/specs/EXT/texture_filter_anisotropic.txt">http://www.opengl.org/registry/specs/EXT/texture_filter_anisotropic.txt</a>.
      *
      * @return true if anisotropic texture filtering is available and enabled, and false otherwise.
      */
@@ -169,7 +197,7 @@ public class GLRuntimeCapabilities
 
     /**
      * Returns true if framebuffer objects are available in the current GL runtime, and are enabled. Otherwise this
-     * returns false. For details on GL framebuffer objects, see <a href="http://www.opengl.org/registry/specs/EXT/framebuffer_object.txt">.
+     * returns false. For details on GL framebuffer objects, see <a href="http://www.opengl.org/registry/specs/EXT/framebuffer_object.txt">http://www.opengl.org/registry/specs/EXT/framebuffer_object.txt</a>.
      *
      * @return true if framebuffer objects are available and enabled, and false otherwise.
      */
@@ -180,7 +208,7 @@ public class GLRuntimeCapabilities
 
     /**
      * Returns true if vertex buffer objects are available in the current GL runtime, and are enabled. Otherwise this
-     * returns false. For details on GL vertex buffer objects, see <a href="http://www.opengl.org/registry/specs/ARB/vertex_buffer_object.txt"/>.
+     * returns false. For details on GL vertex buffer objects, see <a href="http://www.opengl.org/registry/specs/ARB/vertex_buffer_object.txt">http://www.opengl.org/registry/specs/ARB/vertex_buffer_object.txt</a>.
      *
      * @return true if vertex buffer objects are available and enabled, and false otherwise.
      */

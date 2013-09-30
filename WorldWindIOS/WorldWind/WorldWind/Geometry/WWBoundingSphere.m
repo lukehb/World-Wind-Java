@@ -10,10 +10,11 @@
 #import "WorldWind/WWLog.h"
 #import "WorldWind/Geometry/WWFrustum.h"
 #import "WorldWind/Geometry/WWPlane.h"
+#import "WorldWind/WorldWindConstants.h"
 
 @implementation WWBoundingSphere
 
-- (WWBoundingSphere*) initWithPoints:(NSArray*)points
+- (WWBoundingSphere*) initWithPoints:(NSArray* __unsafe_unretained)points
 {
     if (points == nil)
     {
@@ -30,10 +31,8 @@
     double ymax = ymin;
     double zmax = zmin;
 
-    for (NSUInteger i = 0; i < [points count]; i++)
+    for (WWVec4* __unsafe_unretained point in points)
     {
-        WWVec4* point = [points objectAtIndex:i];
-
         double x = [point x];
         if (x > xmax)
             xmax = x;
@@ -63,19 +62,39 @@
     return self;
 }
 
-- (double) distanceTo:(WWVec4*)point
+- (WWBoundingSphere*) initWithPoint:(WWVec4* __unsafe_unretained)point radius:(double)radius
+{
+    if (point == nil)
+    {
+        WWLOG_AND_THROW(NSInvalidArgumentException, @"Point is nil");
+    }
+
+    if (radius <= 0)
+    {
+        WWLOG_AND_THROW(NSInvalidArgumentException, @"Radius is less than or equal to 0");
+    }
+
+    self = [super init];
+
+    _center = point;
+    _radius = radius;
+
+    return self;
+}
+
+- (double) distanceTo:(WWVec4* __unsafe_unretained)point
 {
     if (point == nil)
     {
         WWLOG_AND_THROW(NSInvalidArgumentException, @"Point is nil")
     }
 
-    double d = [point distanceTo3:_center] - [self radius];
+    double d = [point distanceTo3:_center] - _radius;
 
     return d >= 0 ? d : 0;
 }
 
-- (double) effectiveRadius:(WWPlane*)plane
+- (double) effectiveRadius:(WWPlane* __unsafe_unretained)plane
 {
     if (plane == nil)
         return 0;
@@ -83,7 +102,7 @@
     return _radius;
 }
 
-- (BOOL) intersects:(WWFrustum*)frustum
+- (BOOL) intersects:(WWFrustum* __unsafe_unretained)frustum
 {
     if (frustum == nil)
     {
@@ -109,6 +128,52 @@
         return NO;
 
     return YES;
+}
+
++ (int) intersectsFrustum:(WWFrustum* __unsafe_unretained)frustum center:(WWVec4* __unsafe_unretained)center radius:(double)radius
+{
+    if (frustum == nil)
+    {
+        WWLOG_AND_THROW(NSInvalidArgumentException, @"Frustum is nil")
+    }
+
+    double d = [[frustum far] dot:center];
+    if (d <= -radius)
+        return WW_OUT;
+    if (fabs(d) < radius)
+        return WW_INTERSECTS;
+
+    d = [[frustum near] dot:center];
+    if (d <= -radius)
+        return WW_OUT;
+    if (fabs(d) < radius)
+        return WW_INTERSECTS;
+
+    d = [[frustum left] dot:center];
+    if (d <= -radius)
+        return WW_OUT;
+    if (fabs(d) < radius)
+        return WW_INTERSECTS;
+
+    d = [[frustum right] dot:center];
+    if (d <= -radius)
+        return WW_OUT;
+    if (fabs(d) < radius)
+        return WW_INTERSECTS;
+
+    d = [[frustum top] dot:center];
+    if (d <= -radius)
+        return WW_OUT;
+    if (fabs(d) < radius)
+        return WW_INTERSECTS;
+
+    d = [[frustum bottom] dot:center];
+    if (d <= -radius)
+        return WW_OUT;
+    if (fabs(d) < radius)
+        return WW_INTERSECTS;
+
+    return WW_IN;
 }
 
 @end

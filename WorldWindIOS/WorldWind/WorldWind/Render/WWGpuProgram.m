@@ -9,7 +9,7 @@
 #import "WorldWind/Render/WWGpuShader.h"
 #import "WorldWind/Geometry/WWMatrix.h"
 #import "WorldWind/WWLog.h"
-
+#import "WorldWind/Util/WWColor.h"
 
 @implementation WWGpuProgram
 
@@ -136,7 +136,7 @@
     glUseProgram(_programId);
 }
 
-- (int) getAttributeLocation:(NSString*)attributeName
+- (int) attributeLocation:(NSString*)attributeName
 {
     if (attributeName == nil || attributeName.length == 0)
     {
@@ -157,7 +157,7 @@
     return location.intValue;
 }
 
-- (int) getUniformLocation:(NSString*)uniformName
+- (int) uniformLocation:(NSString*)uniformName
 {
     if (uniformName == nil || uniformName.length == 0)
     {
@@ -178,67 +178,41 @@
     return location.intValue;
 }
 
-- (void) loadUniformMatrix:(NSString*)uniformName matrix:(WWMatrix*)matrix
++ (void) loadUniformMatrix:(WWMatrix* __unsafe_unretained)matrix location:(GLuint)location
 {
-    if (uniformName == nil || uniformName.length == 0)
-    {
-        WWLOG_AND_THROW(NSInvalidArgumentException, @"Uniform matrix name is empty")
-    }
-
-    int location = [self getUniformLocation:uniformName];
-    if (location < 0)
-    {
-        WWLOG_AND_THROW(NSInvalidArgumentException, @"Uniform name is invalid")
-    }
-
     if (matrix == nil)
     {
-        WWLOG_AND_THROW(NSInvalidArgumentException, @"Uniform matrix is nil")
+        WWLOG_AND_THROW(NSInvalidArgumentException, @"Matrix is nil")
     }
 
-    float m[16];
+    static GLfloat components[16];
+    [matrix columnMajorComponents:components];
 
-    // Column 1
-    m[0] = (float) matrix->m[0];
-    m[1] = (float) matrix->m[4];
-    m[2] = (float) matrix->m[8];
-    m[3] = (float) matrix->m[12];
-
-    // Column 2
-    m[4] = (float) matrix->m[1];
-    m[5] = (float) matrix->m[5];
-    m[6] = (float) matrix->m[9];
-    m[7] = (float) matrix->m[13];
-
-    // Column 3
-    m[8] = (float) matrix->m[2];
-    m[9] = (float) matrix->m[6];
-    m[10] = (float) matrix->m[10];
-    m[11] = (float) matrix->m[14];
-
-    // Column 4
-    m[12] = (float) matrix->m[3];
-    m[13] = (float) matrix->m[7];
-    m[14] = (float) matrix->m[11];
-    m[15] = (float) matrix->m[15];
-
-    glUniformMatrix4fv(location, 1, GL_FALSE, m);
+    glUniformMatrix4fv(location, 1, GL_FALSE, components);
 }
 
-- (void) loadUniformSampler:(NSString*)samplerName value:(int)value
++ (void) loadUniformColor:(WWColor* __unsafe_unretained)color location:(GLuint)location
 {
-    if (samplerName == nil || samplerName.length == 0)
+    if (color == nil)
     {
-        WWLOG_AND_THROW(NSInvalidArgumentException, @"Uniform sampler name is empty")
+        WWLOG_AND_THROW(NSInvalidArgumentException, @"Color is nil")
     }
 
-    int location = [self getUniformLocation:samplerName];
-    if (location < 0)
-    {
-        WWLOG_AND_THROW(NSInvalidArgumentException, @"Uniform sampler name is invalid")
-    }
+    static GLfloat components[4];
+    [color premultipliedComponents:components];
 
-    glUniform1i(location, value);
+    glUniform4fv(location, 1, components);
+}
+
++ (void) loadUniformPickColor:(unsigned int)color location:(GLuint)location
+{
+    // Convert the color from a packed int.
+    GLfloat r = ((color >> 24) & 0xff) / 255.0;
+    GLfloat g = ((color >> 16) & 0xff) / 255.0;
+    GLfloat b = ((color >> 8) & 0xff) / 255.0;
+    GLfloat a = (color & 0xff) / 255.0;
+
+    glUniform4f(location, r, g, b, a);
 }
 
 @end

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 United States Government as represented by the Administrator of the
+ * Copyright (C) 2012 United States Government as represented by the Administrator of the
  * National Aeronautics and Space Administration.
  * All Rights Reserved.
  */
@@ -636,12 +636,7 @@ public class PointPlacemarkAttributes implements Exportable
         Offset offset = this.getImageOffset();
         if (offset != null)
         {
-            xmlWriter.writeStartElement("hotSpot");
-            xmlWriter.writeAttribute("x", Double.toString(offset.getX()));
-            xmlWriter.writeAttribute("y", Double.toString(offset.getY()));
-            xmlWriter.writeAttribute("xunits", offset.getXUnits());
-            xmlWriter.writeAttribute("yunits", offset.getYUnits());
-            xmlWriter.writeEndElement(); // hotSpot
+            KMLExportUtil.exportOffset(xmlWriter,offset,"hotSpot");
         }
 
         xmlWriter.writeEndElement(); // IconStyle

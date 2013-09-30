@@ -1,6 +1,5 @@
 /*
- * Copyright (C) 2001, 2010 United States Government
- * as represented by the Administrator of the
+ * Copyright (C) 2012 United States Government as represented by the Administrator of the
  * National Aeronautics and Space Administration.
  * All Rights Reserved.
  */
@@ -112,11 +111,13 @@ public class HotSpotController implements SelectListener, MouseMotionListener
 
             this.updateActiveHotSpot(po);
         }
-        else if (!this.isDragging() && event.isRollover())
+        else if (!this.isDragging() && (event.isRollover() || event.isLeftPress()))
         {
-            // Update the active HotSpot and the currently displayed cursor on drag end events and and on rollover
-            // events when we're not dragging. This ensures that the active HotSpot remains active while it's being
-            // dragged, regardless of what's under the cursor.
+            // Update the active HotSpot and the currently displayed cursor on drag end events, and on rollover and left
+            // press events when we're not dragging. This ensures that the active HotSpot remains active while it's
+            // being dragged, regardless of what's under the cursor. It's necessary to do this on left press to handle
+            // cases in which the mouse starts dragging without a hover event, which can happen if the user starts
+            // dragging while the World Wind window is in the background.
             PickedObject po = event.getTopPickedObject();
             this.updateActiveHotSpot(po);
         }
@@ -131,6 +132,7 @@ public class HotSpotController implements SelectListener, MouseMotionListener
                 // Forward the drag event to the active HotSpot. If the HotSpot consumes the event, track that the
                 // HotSpot is dragging so that we can continue to deliver events to the HotSpot for the duration of the drag.
                 activeHotSpot.selected(event);
+                //noinspection ConstantConditions
                 this.setDragging(event.isConsumed() && !wasConsumed);
             }
             else if (!event.isDragEnd())

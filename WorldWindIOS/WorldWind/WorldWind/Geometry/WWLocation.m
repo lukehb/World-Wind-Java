@@ -7,25 +7,25 @@
 
 #import <CoreLocation/CoreLocation.h>
 #import "WorldWind/Geometry/WWLocation.h"
-#import "WorldWind/Geometry/WWAngle.h"
 #import "WorldWind/Terrain/WWGlobe.h"
 #import "WorldWind/WWLog.h"
+#import "WorldWind/Util/WWMath.h"
 
-#define LONGITUDE_FOR_TIMEZONE(tz) 180.0 * [tz secondsFromGMT] / 43200.0
+#define LONGITUDE_FOR_TIMEZONE(tz) (180.0 * [(tz) secondsFromGMT] / 43200.0)
 
 @implementation WWLocation
 
 - (WWLocation*) initWithDegreesLatitude:(double)latitude longitude:(double)longitude
 {
     self = [super init];
-    
+
     _latitude = latitude;
     _longitude = longitude;
-    
+
     return self;
 }
 
-- (WWLocation*) initWithDegreesLatitude:(double) latitude timeZoneForLongitude:(NSTimeZone*)timeZone
+- (WWLocation*) initWithDegreesLatitude:(double)latitude timeZoneForLongitude:(NSTimeZone* __unsafe_unretained)timeZone
 {
     if (timeZone == nil)
     {
@@ -40,14 +40,14 @@
     return self;
 }
 
-- (WWLocation*) initWithLocation:(WWLocation*)location
+- (WWLocation*) initWithLocation:(WWLocation* __unsafe_unretained)location
 {
-    self = [super init];
-
     if (location == nil)
     {
         WWLOG_AND_THROW(NSInvalidArgumentException, @"Location is nil")
     }
+
+    self = [super init];
 
     _latitude = location->_latitude;
     _longitude = location->_longitude;
@@ -55,14 +55,14 @@
     return self;
 }
 
-- (WWLocation*) initWithCLLocation:(CLLocation*)location
+- (WWLocation*) initWithCLLocation:(CLLocation* __unsafe_unretained)location
 {
-    self = [super init];
-
     if (location == nil)
     {
         WWLOG_AND_THROW(NSInvalidArgumentException, @"Location is nil")
     }
+
+    self = [super init];
 
     CLLocationCoordinate2D coord = [location coordinate];
     _latitude = coord.latitude;
@@ -81,20 +81,28 @@
     return self;
 }
 
-- (id) copyWithZone:(NSZone *)zone
+- (WWLocation*) initWithZeroLocation
 {
-    return [[[self class] alloc] initWithDegreesLatitude:_latitude longitude:_longitude];
-}
+    self = [super init];
 
-- (WWLocation*) setDegreesLatitude:(double)latitude longitude:(double)longitude
-{
-    _latitude = latitude;
-    _longitude = longitude;
+    _latitude = 0;
+    _longitude = 0;
 
     return self;
 }
 
-- (WWLocation*) setDegreesLatitude:(double)latitude timeZoneForLongitude:(NSTimeZone*)timeZone
+- (id) copyWithZone:(NSZone*)zone
+{
+    return [[[self class] alloc] initWithDegreesLatitude:_latitude longitude:_longitude];
+}
+
+- (void) setDegreesLatitude:(double)latitude longitude:(double)longitude
+{
+    _latitude = latitude;
+    _longitude = longitude;
+}
+
+- (void) setDegreesLatitude:(double)latitude timeZoneForLongitude:(NSTimeZone* __unsafe_unretained)timeZone
 {
     if (timeZone == nil)
     {
@@ -103,11 +111,9 @@
 
     _latitude = latitude;
     _longitude = LONGITUDE_FOR_TIMEZONE(timeZone);
-
-    return self;
 }
 
-- (WWLocation*) setLocation:(WWLocation*)location
+- (void) setLocation:(WWLocation* __unsafe_unretained)location
 {
     if (location == nil)
     {
@@ -116,11 +122,9 @@
 
     _latitude = location->_latitude;
     _longitude = location->_longitude;
-
-    return self;
 }
 
-- (WWLocation*) setCLLocation:(CLLocation*)location
+- (void) setCLLocation:(CLLocation* __unsafe_unretained)location
 {
     if (location == nil)
     {
@@ -130,19 +134,15 @@
     CLLocationCoordinate2D coord = [location coordinate];
     _latitude = coord.latitude;
     _longitude = coord.longitude;
-
-    return self;
 }
 
-- (WWLocation*) setCLCoordinate:(CLLocationCoordinate2D)locationCoordinate
+- (void) setCLCoordinate:(CLLocationCoordinate2D)locationCoordinate
 {
     _latitude = locationCoordinate.latitude;
     _longitude = locationCoordinate.longitude;
-
-    return self;
 }
 
--(WWLocation*) addLocation:(WWLocation *)location
+- (void) addLocation:(WWLocation* __unsafe_unretained)location
 {
     if (location == nil)
     {
@@ -151,24 +151,20 @@
 
     _latitude += location.latitude;
     _longitude += location.longitude;
-    
-    return self;
 }
 
--(WWLocation*) subtractLocation:(WWLocation *)location
+- (void) subtractLocation:(WWLocation* __unsafe_unretained)location
 {
     if (location == nil)
     {
         WWLOG_AND_THROW(NSInvalidArgumentException, @"Location is nil")
     }
-    
+
     _latitude -= location.latitude;
     _longitude -= location.longitude;
-    
-    return self;
 }
 
-+ (double) greatCircleAzimuth:(WWLocation*)beginLocation endLocation:(WWLocation*)endLocation
++ (double) greatCircleAzimuth:(WWLocation* __unsafe_unretained)beginLocation endLocation:(WWLocation* __unsafe_unretained)endLocation
 {
     if (beginLocation == nil)
     {
@@ -205,7 +201,7 @@
     return isnan(azimuthRadians) ? 0 : DEGREES(azimuthRadians);
 }
 
-+ (double) greatCircleDistance:(WWLocation*)beginLocation endLocation:(WWLocation*)endLocation
++ (double) greatCircleDistance:(WWLocation* __unsafe_unretained)beginLocation endLocation:(WWLocation* __unsafe_unretained)endLocation
 {
     if (beginLocation == nil)
     {
@@ -237,10 +233,10 @@
     return isnan(distanceRadians) ? 0 : DEGREES(distanceRadians);
 }
 
-+ (void) greatCircleLocation:(WWLocation*)beginLocation
++ (void) greatCircleLocation:(WWLocation* __unsafe_unretained)beginLocation
                      azimuth:(double)azimuth
                     distance:(double)distance
-              outputLocation:(WWLocation*)result
+              outputLocation:(WWLocation* __unsafe_unretained)result
 {
     if (beginLocation == nil)
     {
@@ -269,8 +265,8 @@
 
         if (!isnan(lat2) && !isnan(lon2))
         {
-            latitude = NormalizedDegreesLatitude(DEGREES(lat2));
-            longitude = NormalizedDegreesLongitude(DEGREES(lon2));
+            latitude = [WWMath normalizeDegreesLatitude:DEGREES(lat2)];
+            longitude = [WWMath normalizeDegreesLongitude:DEGREES(lon2)];
         }
     }
 
@@ -278,10 +274,10 @@
     result->_longitude = longitude;
 }
 
-+ (void) greatCircleInterpolate:(WWLocation*)beginLocation
-                    endLocation:(WWLocation*)endLocation
++ (void) greatCircleInterpolate:(WWLocation* __unsafe_unretained)beginLocation
+                    endLocation:(WWLocation* __unsafe_unretained)endLocation
                          amount:(double)amount
-                 outputLocation:(WWLocation*)result
+                 outputLocation:(WWLocation* __unsafe_unretained)result
 {
     if (beginLocation == nil)
     {
@@ -305,7 +301,7 @@
     [WWLocation greatCircleLocation:beginLocation azimuth:azimuth distance:fractionalDistance outputLocation:result];
 }
 
-+ (double) rhumbAzimuth:(WWLocation*)beginLocation endLocation:(WWLocation*)endLocation
++ (double) rhumbAzimuth:(WWLocation* __unsafe_unretained)beginLocation endLocation:(WWLocation* __unsafe_unretained)endLocation
 {
     if (beginLocation == nil)
     {
@@ -343,7 +339,7 @@
     return isnan(azimuthRadians) ? 0 : DEGREES(azimuthRadians);
 }
 
-+ (double) rhumbDistance:(WWLocation*)beginLocation endLocation:(WWLocation*)endLocation
++ (double) rhumbDistance:(WWLocation* __unsafe_unretained)beginLocation endLocation:(WWLocation* __unsafe_unretained)endLocation
 {
     if (beginLocation == nil)
     {
@@ -388,9 +384,10 @@
     return isnan(distanceRadians) ? 0 : DEGREES(distanceRadians);
 }
 
-+ (void) rhumbLocation:(WWLocation*)beginLocation
++ (void) rhumbLocation:(WWLocation* __unsafe_unretained)beginLocation
                azimuth:(double)azimuth
-              distance:(double)distance outputLocation:(WWLocation*)result;
+              distance:(double)distance
+        outputLocation:(WWLocation* __unsafe_unretained)result;
 {
     if (beginLocation == nil)
     {
@@ -435,8 +432,8 @@
 
         if (!isnan(lat2) && !isnan(lon2))
         {
-            latitude = NormalizedDegreesLatitude(DEGREES(lat2));
-            longitude = NormalizedDegreesLongitude(DEGREES(lon2));
+            latitude = [WWMath normalizeDegreesLatitude:DEGREES(lat2)];
+            longitude = [WWMath normalizeDegreesLongitude:DEGREES(lon2)];
         }
     }
 
@@ -444,14 +441,19 @@
     result->_longitude = longitude;
 }
 
-+ (void) rhumbInterpolate:(WWLocation*)beginLocation
-              endLocation:(WWLocation*)endLocation
++ (void) rhumbInterpolate:(WWLocation* __unsafe_unretained)beginLocation
+              endLocation:(WWLocation* __unsafe_unretained)endLocation
                    amount:(double)amount
-           outputLocation:(WWLocation*)result
+           outputLocation:(WWLocation* __unsafe_unretained)result
 {
     if (beginLocation == nil)
     {
         WWLOG_AND_THROW(NSInvalidArgumentException, @"Begin location is nil")
+    }
+
+    if (endLocation == nil)
+    {
+        WWLOG_AND_THROW(NSInvalidArgumentException, @"End location is nil")
     }
 
     if (result == nil)
@@ -466,10 +468,161 @@
     [WWLocation rhumbLocation:beginLocation azimuth:azimuth distance:fractionalDistance outputLocation:result];
 }
 
-+ (void) forecastLocation:(CLLocation*)location
-                  forDate:(NSDate*)date
-                 withGobe:(WWGlobe*)globe
-           outputLocation:(WWLocation*)result
++ (double) linearAzimuth:(WWLocation* __unsafe_unretained)beginLocation endLocation:(WWLocation* __unsafe_unretained)endLocation
+{
+    if (beginLocation == nil)
+    {
+        WWLOG_AND_THROW(NSInvalidArgumentException, @"Begin location is nil")
+    }
+
+    if (endLocation == nil)
+    {
+        WWLOG_AND_THROW(NSInvalidArgumentException, @"End location is nil")
+    }
+
+    // Taken from http://www.movable-type.co.uk/scripts/latlong.html
+
+    double lat1 = RADIANS(beginLocation->_latitude);
+    double lon1 = RADIANS(beginLocation->_longitude);
+    double lat2 = RADIANS(endLocation->_latitude);
+    double lon2 = RADIANS(endLocation->_longitude);
+
+    if (lat1 == lat2 && lon1 == lon2)
+    {
+        return 0;
+    }
+
+    double dLon = lon2 - lon1;
+    double dLat = lat2 - lat1;
+
+    // If lonChange over 180 take shorter rhumb across 180 meridian.
+    if (fabs(dLon) > M_PI)
+    {
+        dLon = dLon > 0 ? -(2 * M_PI - dLon) : (2 * M_PI + dLon);
+    }
+
+    double azimuthRadians = atan2(dLon, dLat);
+
+    return isnan(azimuthRadians) ? 0 : DEGREES(azimuthRadians);
+}
+
++ (double) linearDistance:(WWLocation* __unsafe_unretained)beginLocation endLocation:(WWLocation* __unsafe_unretained)endLocation
+{
+    if (beginLocation == nil)
+    {
+        WWLOG_AND_THROW(NSInvalidArgumentException, @"Begin location is nil")
+    }
+
+    if (endLocation == nil)
+    {
+        WWLOG_AND_THROW(NSInvalidArgumentException, @"End location is nil")
+    }
+
+    // Taken from http://www.movable-type.co.uk/scripts/latlong.html
+
+    double lat1 = RADIANS(beginLocation->_latitude);
+    double lon1 = RADIANS(beginLocation->_longitude);
+    double lat2 = RADIANS(endLocation->_latitude);
+    double lon2 = RADIANS(endLocation->_longitude);
+
+    if (lat1 == lat2 && lon1 == lon2)
+    {
+        return 0;
+    }
+
+    double dLat = lat2 - lat1;
+    double dLon = lon2 - lon1;
+
+    // If lonChange over 180 take shorter rhumb across 180 meridian.
+    if (fabs(dLon) > M_PI)
+    {
+        dLon = dLon > 0 ? -(2 * M_PI - dLon) : (2 * M_PI + dLon);
+    }
+
+    double distanceRadians = hypot(dLat, dLon);
+
+    return isnan(distanceRadians) ? 0 : DEGREES(distanceRadians);
+}
+
++ (void) linearLocation:(WWLocation* __unsafe_unretained)beginLocation
+                azimuth:(double)azimuth
+               distance:(double)distance
+         outputLocation:(WWLocation* __unsafe_unretained)result;
+{
+    if (beginLocation == nil)
+    {
+        WWLOG_AND_THROW(NSInvalidArgumentException, @"Begin location is nil")
+    }
+
+    if (result == nil)
+    {
+        WWLOG_AND_THROW(NSInvalidArgumentException, @"Output location is nil")
+    }
+
+    // Taken from http://www.movable-type.co.uk/scripts/latlong.html
+
+    double latitude = beginLocation->_latitude;
+    double longitude = beginLocation->_longitude;
+
+    if (distance != 0)
+    {
+        double lat1 = RADIANS(latitude);
+        double lon1 = RADIANS(longitude);
+        double a = RADIANS(azimuth);
+        double d = RADIANS(distance);
+
+        double lat2 = lat1 + d * cos(a);
+
+        // Handle latitude passing over either pole.
+        if (fabs(lat2) > M_PI_2)
+        {
+            lat2 = lat2 > 0 ? M_PI - lat2 : -M_PI - lat2;
+        }
+
+        double lon2 = fmod(lon1 + d * sin(a) + M_PI, (2 * M_PI)) - M_PI;
+
+        if (!isnan(lat2) && !isnan(lon2))
+        {
+            latitude = [WWMath normalizeDegreesLatitude:DEGREES(lat2)];
+            longitude = [WWMath normalizeDegreesLongitude:DEGREES(lon2)];
+        }
+    }
+
+    result->_latitude = latitude;
+    result->_longitude = longitude;
+}
+
++ (void) linearInterpolate:(WWLocation* __unsafe_unretained)beginLocation
+               endLocation:(WWLocation* __unsafe_unretained)endLocation
+                    amount:(double)amount
+            outputLocation:(WWLocation* __unsafe_unretained)result
+{
+    if (beginLocation == nil)
+    {
+        WWLOG_AND_THROW(NSInvalidArgumentException, @"Begin location is nil")
+    }
+
+    if (endLocation == nil)
+    {
+        WWLOG_AND_THROW(NSInvalidArgumentException, @"End location is nil")
+    }
+
+    if (result == nil)
+    {
+        WWLOG_AND_THROW(NSInvalidArgumentException, @"Output location is nil")
+    }
+
+    double azimuth = [WWLocation linearAzimuth:beginLocation endLocation:endLocation];
+    double distance = [WWLocation linearDistance:beginLocation endLocation:endLocation];
+    double fractionalDistance = amount * distance;
+
+    [WWLocation linearLocation:beginLocation azimuth:azimuth distance:fractionalDistance outputLocation:result];
+}
+
++ (void) forecastLocation:(CLLocation* __unsafe_unretained)location
+                  forDate:(NSDate* __unsafe_unretained)date
+                  onGlobe:(WWGlobe* __unsafe_unretained)globe
+           outputLocation:(WWLocation* __unsafe_unretained)result
 {
     if (location == nil)
     {

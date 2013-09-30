@@ -19,10 +19,5 @@
             <artifactId>ww-core</artifactId>
             <version>${project.version}</version>
         </dependency>
-        <dependency>
-            <groupId>org.openstreetmap</groupId>
-            <artifactId>osmparser</artifactId>
-            <version>1.0.0</version>
-        </dependency>
     </dependencies>
 </project>

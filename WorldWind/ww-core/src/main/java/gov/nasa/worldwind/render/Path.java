@@ -100,15 +100,6 @@ public class Path extends AbstractShape
     /** The default scale for position dots. The scale is applied to the current outline width to produce the dot size. */
     protected static final double DEFAULT_DRAW_POSITIONS_SCALE = 10;
 
-    /**
-     * Overrides the default materials specified in the base class.
-     */
-    static
-    {
-        defaultAttributes.setInteriorMaterial(DEFAULT_INTERIOR_MATERIAL);
-        defaultAttributes.setOutlineMaterial(DEFAULT_OUTLINE_MATERIAL);
-    }
-
     /** The PositionColors interface defines an RGBA color for each of a path's original positions. */
     public static interface PositionColors
     {
@@ -588,7 +579,7 @@ public class Path extends AbstractShape
                             int ordinal = path.getOrdinal(colorCode - positions.minColorCode);
 
                             // Add the ordinal to the list of picked ordinals on the path's picked object.
-                            List<Integer> ordinalList = (List<Integer>) po.getValue(AVKey.ORDINAL_LIST);
+                            List ordinalList = (List) po.getValue(AVKey.ORDINAL_LIST);
                             if (ordinalList == null)
                                 po.setValue(AVKey.ORDINAL_LIST, ordinalList = new ArrayList<Integer>());
                             ordinalList.add(ordinal);
@@ -2085,7 +2076,7 @@ public class Path extends AbstractShape
                 pos = new Position(latLon, (1 - s) * posA.getElevation() + s * posB.getElevation());
                 color = (colorA != null && colorB != null) ? WWUtil.interpolateColor(s, colorA, colorB) : null;
             }
-            else if (this.pathType == AVKey.RHUMB_LINE) // LOXODROME
+            else if (this.pathType == AVKey.RHUMB_LINE || this.pathType == AVKey.LOXODROME)
             {
                 if (segmentAzimuth == null)
                 {
@@ -2136,7 +2127,7 @@ public class Path extends AbstractShape
         String pathType = this.getPathType();
         if (pathType == AVKey.LINEAR)
             ang = LatLon.linearDistance(llA, llB);
-        else if (pathType == AVKey.RHUMB_LINE)
+        else if (pathType == AVKey.RHUMB_LINE || pathType == AVKey.LOXODROME)
             ang = LatLon.rhumbDistance(llA, llB);
         else // Great circle
             ang = LatLon.greatCircleDistance(llA, llB);

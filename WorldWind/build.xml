@@ -29,18 +29,26 @@
     <target name="build" depends="javadocs,worldwind.core.jarfile,worldwind.extensions.jarfile"
             description="Main build target for the World Wind Java SDK. Compiles the World Wind source, creates the World Wind API documentation, and builds the World Wind JAR files."/>
 
-    <!-- Compiles all World Wind core Java sources under the 'ww-core/src' folder into Java class files under the
-	 'classes' folder. Note that this excludes the Java sources under the 'ww-server' and 'ww-tests' directories.
-	 We configure the javac task parameters 'source' and 'target' in order to explicitly control the Java compiler
-	 version used to build World Wind classes. Without these parameters, the javac task would use the most recent
-	 compiler available on the current machine, and the Java compiler version used to build WorldWind classes would
-	 be unpredictable. For this reason, the Apache ANT manual strongly recommends specifying the 'source' and
-	 'target' parameters. See the following link for more detail: http://ant.apache.org/manual/CoreTasks/javac.html
+    <!-- Compiles all World Wind Java sources under the 'ww-core/src' folder into Java class files under the 'classes'
+         folder. Note that this excludes the Java sources under the 'ww-server' and 'ww-tests' directories.
 
-         The Java compiler version used by the javac task is defined by the build parameter 'worldwind.jdk.version'.
-         By default, this parameter is defined in the file 'build/build.properties'. -->
+         The parameters 'source' and 'target' are configured in order to explicitly define the Java compiler version
+         used to build World Wind classes. Without these parameters, the javac task would use the most recent compiler
+         available on the current machine, and the Java compiler version used to build WorldWind classes would be
+         unpredictable. The Java compiler version used by the javac task is defined by the build parameter
+         'worldwind.jdk.version'. By default, this parameter is defined in the file 'build/build.properties'. See the
+         following link for more detail:
+         http://ant.apache.org/manual/CoreTasks/javac.html
+
+         The compiler argument '-Xlint:unchecked' is specified in order to give more detail for unchecked conversion
+         warnings. This argument is specified in the World Wind Java IntelliJ IDEA project. Its use here keeps the ANT
+         build output in sync with the IntelliJ IDEA project output.
+
+         The compiler argument '-Xlint:-options' suppresses warnings about the compiling for Java 1.6 on a Java 1.7
+         platform without specifying the bootstrap class path. See the following link for more detail:
+         https://blogs.oracle.com/darcy/entry/bootclasspath_older_source -->
     <target name="compile.core"
-            description="Compiles all World Wind core Java sources under the 'ww-core/src' folder into Java class files under the 'classes' folder.">
+            description="Compiles all World Wind Java sources under the 'ww-core/src' folder into Java class files under the 'classes' folder.">
         <mkdir dir="${worldwind.core.dir}/${classes.dir}"/>
         <javac srcdir="${worldwind.core.dir}/${src.dir}"
                destdir="${worldwind.core.dir}/${classes.dir}"
@@ -109,6 +117,8 @@
                 <pathelement location="lib/gdal/gdal-${gdal.version}.jar"/>
                 <pathelement location="${java.home}/lib/plugin.jar"/>
             </classpath>
+            <compilerarg value="-Xlint:unchecked"/>
+            <compilerarg value="-Xlint:-options"/>
         </javac>
     </target>
 
@@ -137,11 +147,10 @@
                 <pathelement location="jogl.jar"/>
                 <pathelement location="gluegen-rt.jar"/>
                 <pathelement location="gdal.jar"/>
-                <pathelement location="osmparser.jar"/>
-                <pathelement location="${java.home}/lib/plugin.jar"/>
+                <pathelement location="plugin.jar"/>
             </classpath>
             <link href="http://download.oracle.com/javase/6/docs/api/"/>
-            <link href="http://worldwind.arc.nasa.gov/java/jogl/1.1.1/docs/"/>
+            <link href="http://worldwind.arc.nasa.gov/java/jogl/docs/"/>
         </javadoc>
     </target>
 
@@ -153,7 +162,7 @@
             description="Builds the World Wind core JAR file 'ww-core.jar'.">
         <jar jarfile="${worldwind.core.dir}/${worldwind.core.jarfile}">
             <manifest>
-                <attribute name="Class-Path" value="lib/jogl/jogl-1.1.1a.jar lib/gluegen-rt/gluegen-rt-1.0.jar lib/gdal/gdal-1.7.2.jar"/>
+                <attribute name="Class-Path" value="lib/jogl/jogl-${jogl.version}.jar lib/gluegen-rt/gluegen-rt-${gluegen-rt.version}.jar lib/gdal/gdal-${gdal.version}.jar"/>
             </manifest>
             <!-- Include the World Wind core package gov.nasa.worldwind, as well as the 3rd party packages
                  com.zebraimaging and org.codehaus.jackson. The zebraimaging package includes an alternative input

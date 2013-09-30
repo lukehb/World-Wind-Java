@@ -16,8 +16,8 @@ application:
 * [World Wind Developer's Guide](http://goworldwind.org/)
 * [World Wind Main Website](http://worldwind.arc.nasa.gov/java/)
 * [World Wind Forum](http://forum.worldwindcentral.com/forumdisplay.php?f=37)
-* [World Wind API Documentation](http://builds.worldwind.arc.nasa.gov/worldwind-releases/1.3/docs/api/index.html)
-* [World Wind Bug Base](http://issues.worldwind.arc.nasa.gov/secure/IssueNavigator.jspa?reset=true&pid=10021&status=1)
+* [World Wind API Documentation](http://builds.worldwind.arc.nasa.gov/worldwind-releases/1.5/docs/api/index.html)
+* [World Wind Bug Base](http://issues.worldwind.arc.nasa.gov/jira/browse/WWJ)
 
 Running a Basic Demo Application
 --------------------------------
@@ -44,8 +44,11 @@ than the graphics card manufacturer's.
 Using World Wind on Windows or Linux 64-bit
 -------------------------------------------
 
-To run World Wind on Windows with a 64-bit Java Virtual Machine, you must extract the 64-bit native libraries:
+NOTE: Running World Wind on Linux currently (1/21/13) causes a JVM crash. We have not been able to run release 1.5.0
+on Linux, including Ubuntu, CentOS and Fedora versions using the current Oracle JVM (both Java 6 and Java 7). See
+http://issues.worldwind.arc.nasa.gov/jira/browse/WWJ-390 to track this issue.
 
+To run World Wind on Windows with a 64-bit Java Virtual Machine, you must extract the 64-bit native libraries:
 1. Open a terminal.
 2. `cd` to the World Wind release folder.
 3. `jar xf jogl-natives-windows-amd64.jar`
@@ -62,12 +65,58 @@ Follow instructions above to extract the archives into the World Wind release fo
 
 New Features and Improvements
 =============================
+* See http://goworldwind.org/releases/ for a description of the major release features.
+
+World Wind Java SDK 1.5.0 - January 21, 2013
+--------------------------------------------
+NOTE: Running World Wind on Linux currently (1/21/13) causes a JVM crash. We have not been able to run release 1.5.0
+on Linux, including Ubuntu, CentOS and Fedora using the current Oracle JVM (both Java 6 and Java 7). See
+http://issues.worldwind.arc.nasa.gov/jira/browse/WWJ-390 to track this issue.
+
+* Added global text decluttering. See the ClutterFilter and Declutterable interfaces.
+* Added support for refreshing KML icons.
+* Added support for applying Earth Gravitational Model offsets (EGM96) to EllipsoidalGlobe.
+* Added support for HighResolutionTerrain line intersection.
+* Added an OpenStreetMap layer provided by a NASA hosted MapServer instance.
+* Added delegate owner support to ScreenImage.
+* Added a section to the Javadoc overview outlining the behavior of World Wind path types.
+* Added static utility methods for equirectangular interpolation to LatLon.
+* Added the PersistSessionState example, which demonstrates how to persist a session's layer and view state.
+* Removed erroneous inclusion of the BGCOLOR parameter in WMS elevation requests. This parameter causes GeoServer to return an exception.
+* Increased the texture cache size from 300 MB to 500 MB.
+* Improved shutdown behavior by simplifying automatic retrieval of WMS capabilities documents in WMSTiledImageLayer and WMSBasicElevationModel.
+* Improved the performance of SectorGeometryList.getSurfacePoint.
+* Repaired Path and Polyline's handling of the LINEAR path type.
+* Repaired Path and Polyline's handling of the LOXODROME alias for RHUMB\_LINE path types.
+* Repaired an OpenGL state leak of GL\_ELEMENT\_ARRAY\_BUFFER binding in terrain rendering.
+* Repaired an OpenGL state leak of the normal pointer binding in COLLADA models, which caused a JVM crash on certain machines.
+* Repaired BasicShapeAttributes' handling of the enableLighting attribute in its restorable state.
+* Repaired Matrix.getInverse, which now returns a correct inverse for all nonsingular matrices.
+* Fixed an issue where World Wind does not compile on Java 7 in IntelliJ IDEA.
+* Fixed a regression bug where Box ignores the R axis while computing its effective radius.
+* Fixed a bug where enabling Path lighting caused the JVM to crash.
+* Fixed a bug where enabling ExtrudedPolygon side lighting with cap lighting disabled caused a NullPointerException.
+* Fixed a bug where the MIL-STD-2525 Fire Support Line graphic appears in the wrong place.
+* Fixed a bug preventing COLLADA models from updating after a position change.
+* Fixed a bug in Triangle.intersectTriangleTypes preventing triangle strip intersection from operating correctly.
+* Fixed a bug in WMSTiledImageLayer causing WMS 1.3 GetMap requests to use the WMS 1.1.1 "srs" query parameter for coordinate system.
+* Fixed a bug in WMSBasicElevationModel causing WMS 1.3 GetMap requests to use the WMS 1.1.1 "srs" query parameter for coordinate system.
+* Fixed a bug where clicking in browser balloons or view controls prevents focus traversal.
+* Fixed a bug where the MeasureToolUsage example hangs on Mac.
+* Fixed a bug where the WorldWindDiagnostics app hangs on Mac.
+* Fixed a bug where the Path shape changes the default shape attributes and affects the color of other AbstractShapes.
+* Fixed a bug preventing the copying of text from browser balloons.
+* Fixed a bug where keyboard input did not work in browser balloons.
+* Modified MIL-STD-2525 symbol code parsing to correctly handle symbol modifier codes without an echelon in the second character.
+* Modified MIL-STD-2525 symbol code parsing to correctly compose the modifier code for the feint/dummy installation modifier.
+* Modified MIL-STD-2525 TacticalGraphicFactory to enable application configuration of MIL-STD-2525 implementation classes.
+* Modified MIL-STD-2525 TacticalGraphicSymbol to enable subclasses to change and extend the symbol layout.
+* Modified SurfaceText to add control over the text size in meters.
+* Modified the World Wind release build script to include the resources directory. This directory is missing from the
+  World Wind 1.3 and 1.4 releases, and will be included in all subsequent releases.
 
 World Wind Java SDK 1.4.0 - July 20, 2012
 -----------------------------------------
-
-* See http://goworldwind.org/releases/ for a description of this release's major features.
-
 * Calculate expiration time using the difference between the Expires and Date headers. This guards against clock skew between client and server.
 * Added ZeroElevationModel example.
 * Fixed bug in KML NetworkLinkControl. NetworkLinkControl expiration time should be read from NetworkLinkControl in the target document, not the document that contains the link. Added test file to make sure that the NetworkLinkControl expiration time takes priority over expiration time set in the HTTP headers.

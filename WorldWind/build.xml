@@ -64,7 +64,7 @@
                memoryMaximumSize="512m">
             <classpath>
 	        <pathelement location="lib/jackson/jackson-core-asl-${jackson.version}.jar"/>
-                <pathelement location="lib/jogl/jogl-${jogl.version}.jar"/>
+                <pathelement location="lib/jogl/jogl-all-${jogl.version}.jar"/>
                 <pathelement location="lib/gluegen-rt/gluegen-rt-${gluegen-rt.version}.jar"/>
                 <pathelement location="lib/gdal/gdal-${gdal.version}.jar"/>
                 <pathelement location="${java.home}/lib/plugin.jar"/>
@@ -89,7 +89,7 @@
             <classpath>
                 <pathelement location="${worldwind.core.dir}/${classes.dir}"/>
                 <pathelement location="lib/jackson/jackson-core-asl-${jackson.version}.jar"/>
-                <pathelement location="lib/jogl/jogl-${jogl.version}.jar"/>
+                <pathelement location="lib/jogl/jogl-all-${jogl.version}.jar"/>
                 <pathelement location="lib/gluegen-rt/gluegen-rt-${gluegen-rt.version}.jar"/>
                 <pathelement location="lib/gdal/gdal-${gdal.version}.jar"/>
                 <pathelement location="${java.home}/lib/plugin.jar"/>
@@ -115,7 +115,7 @@
                 <pathelement location="${worldwind.core.dir}/${classes.dir}"/>
 		<pathelement location="${worldwind.extensions.dir}/${classes.dir}"/>
                 <pathelement location="lib/jackson/jackson-core-asl-${jackson.version}.jar"/>
-                <pathelement location="lib/jogl/jogl-${jogl.version}.jar"/>
+                <pathelement location="lib/jogl/jogl-all-${jogl.version}.jar"/>
                 <pathelement location="lib/gluegen-rt/gluegen-rt-${gluegen-rt.version}.jar"/>
                 <pathelement location="lib/gdal/gdal-${gdal.version}.jar"/>
                 <pathelement location="${java.home}/lib/plugin.jar"/>
@@ -144,10 +144,10 @@
                 <exclude name="gov/nasa/worldwind/formats/**"/>
             </packageset>
             <classpath>
-                <pathelement location="jogl-all.jar"/>
-                <pathelement location="gluegen-rt.jar"/>
-                <pathelement location="gdal.jar"/>
-                <pathelement location="plugin.jar"/>
+                <pathelement location="lib/jogl/jogl-all-${jogl.version}.jar"/>
+                <pathelement location="lib/gluegen-rt/gluegen-rt-${gluegen-rt.version}.jar"/>
+                <pathelement location="lib/gdal-${gdal.version}.jar"/>
+                <pathelement location="${java.home}/lib/plugin.jar"/>
             </classpath>
             <link href="http://download.oracle.com/javase/6/docs/api/"/>
             <link href="http://jogamp.org/deployment/v2.0-rc11/javadoc/jogl/javadoc/"/>
@@ -162,7 +162,7 @@
             description="Builds the World Wind core JAR file 'ww-core.jar'.">
         <jar jarfile="${worldwind.core.dir}/${worldwind.core.jarfile}">
             <manifest>
-                <attribute name="Class-Path" value="lib/jogl/jogl-${jogl.version}.jar lib/gluegen-rt/gluegen-rt-${gluegen-rt.version}.jar lib/gdal/gdal-${gdal.version}.jar"/>
+                <attribute name="Class-Path" value="lib/jogl/jogl-all-${jogl.version}.jar lib/gluegen-rt/gluegen-rt-${gluegen-rt.version}.jar lib/gdal/gdal-${gdal.version}.jar"/>
             </manifest>
             <!-- Include the World Wind core package gov.nasa.worldwind, as well as the 3rd party packages
                  com.zebraimaging and org.codehaus.jackson. The zebraimaging package includes an alternative input

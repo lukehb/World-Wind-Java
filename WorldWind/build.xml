@@ -56,7 +56,6 @@
                destdir="${worldwind.core.dir}/${classes.dir}"
                source="${worldwind.jdk.version}"
                target="${worldwind.jdk.version}"
-               encoding="UTF-8"
                fork="true"
                includeantruntime="false"
 	       debug="true"
@@ -97,34 +96,6 @@
         </javac>
     </target>
 
-    <!-- Compiles all World Wind performance Java sources under the 'ww-performance/src' folder into Java class files
-	 under the 'classes' folder. -->
-    <target name="compile.performance" depends="compile.extensions"
-            description="Compiles all World Wind performance Java sources under the 'ww-performance/src' folder into Java class files under the 'classes' folder.">
-        <mkdir dir="${worldwind.performance.dir}/${classes.dir}"/>
-        <javac srcdir="${worldwind.performance.dir}/${src.dir}"
-               destdir="${worldwind.performance.dir}/${classes.dir}"
-               source="${worldwind.jdk.version}"
-               target="${worldwind.jdk.version}"
-               fork="true"
-               includeantruntime="false"
-	       debug="true"
-               encoding="ISO-8859-1"
-               memoryMaximumSize="512m">
-            <classpath>
-                <pathelement location="${worldwind.core.dir}/${classes.dir}"/>
-		<pathelement location="${worldwind.extensions.dir}/${classes.dir}"/>
-                <pathelement location="lib/jackson/jackson-core-asl-${jackson.version}.jar"/>
-                <pathelement location="lib/jogl/jogl-all-${jogl.version}.jar"/>
-                <pathelement location="lib/gluegen-rt/gluegen-rt-${gluegen-rt.version}.jar"/>
-                <pathelement location="lib/gdal/gdal-${gdal.version}.jar"/>
-                <pathelement location="${java.home}/lib/plugin.jar"/>
-            </classpath>
-            <compilerarg value="-Xlint:unchecked"/>
-            <compilerarg value="-Xlint:-options"/>
-        </javac>
-    </target>
-
     <!-- Builds the World Wind API documentation for all core and extension packages into the 'doc' folder. Includes all
          World Wind core classes under the packages 'gov.nasa.worldwind' and World Wind extension classes under the
          package 'gov.nasa.worldwindx'. Excludes World Wind format classes under the package
@@ -133,7 +104,6 @@
             description="Builds the World Wind API documentation for all core and extension packages into the 'doc' folder.">
         <javadoc destdir="${worldwind.doc.dir}"
                  overview="${worldwind.src.dir}/overview.html"
-                 encoding="UTF-8"
                  windowtitle="NASA World Wind" doctitle="NASA World Wind API" header="NASA World Wind"
                  splitindex="true" protected="true" nodeprecated="true" version="false" author="false" use="true"
                  maxmemory="512m"
@@ -222,40 +192,12 @@
         </jar>
     </target>
 
-    <!-- Builds the World Wind performance Jar file 'ww-performance.jar'. Includes all World Wind performance
-         class files and data resource files. The resultant Jar file is dependent on the World Wind core Jar file and
-         the World Wind extensions Jar file, and has those Jar files added to its class-path. -->
-    <target name="worldwind.performance.jarfile" depends="compile.performance"
-            description="Builds the World Wind performance JAR file 'ww-performance.jar'.">
-        <jar jarfile="${worldwind.performance.dir}/${worldwind.performance.jarfile}">
-            <manifest>
-                <attribute name="Class-Path" value="${worldwind.core.dir}/${worldwind.core.jarfile} ${worldwind.extensions.dir}/${worldwind.extensions.jarfile}"/>
-                <attribute name="Main-Class" value="${worldwind.performance.jarfile.mainclass}"/>
-            </manifest>
-            <!-- Include class files for the World Wind performance package performance. -->
-            <fileset dir="${worldwind.performance.dir}/${classes.dir}">
-                <include name="**/*.class"/>
-                <type type="file"/>
-            </fileset>
-            <!-- Include the the resource files required by the performance packages. We include only specific files to
-                 avoid including the entire testData folder, which contains many files that are not required to run the
-                 performance applications. -->
-            <fileset dir="${worldwind.performance.dir}/${resource.dir}">
-                <include name="testData/Final.jpg"/>
-                <type type="file"/>
-            </fileset>
-        </jar>
-    </target>
-
     <!-- Individual clean targets corresponding to each build target above. -->
     <target name="clean.core.classes">
         <delete dir="${worldwind.core.dir}/${classes.dir}"/>
     </target>
     <target name="clean.extensions.classes">
         <delete dir="${worldwind.extensions.dir}/${classes.dir}"/>
-    </target>
-    <target name="clean.performance.classes">
-        <delete dir="${worldwind.performance.dir}/${classes.dir}"/>
     </target>
     <target name="clean.javadocs">
         <delete dir="${worldwind.doc.dir}"/>
@@ -266,16 +208,11 @@
     <target name="clean.worldwind.extensions.jarfile">
         <delete file="${worldwind.extensions.dir}/${worldwind.extensions.jarfile}"/>
     </target>
-    <target name="clean.worldwind.performance.jarfile">
-        <delete file="$${worldwind.performance.dir}/${worldwind.performance.jarfile}"/>
-    </target>
     <target name="clean.build" depends="clean.core.classes,
                                         clean.extensions.classes,
-					clean.performance.classes,
                                         clean.javadocs,
                                         clean.worldwind.core.jarfile,
-                                        clean.worldwind.extensions.jarfile,
-                                        clean.worldwind.performance.jarfile"/>
+                                        clean.worldwind.extensions.jarfile"/>
     <!-- Main clean target for the World Wind Java SDK. Removes all files and directories created by all World Wind
          build targets. -->
     <target name="clean.all" depends="clean.build,

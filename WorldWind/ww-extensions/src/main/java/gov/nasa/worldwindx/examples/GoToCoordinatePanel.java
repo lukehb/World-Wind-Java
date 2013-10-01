@@ -1,9 +1,8 @@
 /*
-Copyright (C) 2001, 2011 United States Government
-as represented by the Administrator of the
-National Aeronautics and Space Administration.
-All Rights Reserved.
-*/
+ * Copyright (C) 2012 United States Government as represented by the Administrator of the
+ * National Aeronautics and Space Administration.
+ * All Rights Reserved.
+ */
 package gov.nasa.worldwindx.examples;
 
 import gov.nasa.worldwind.*;
@@ -137,7 +136,7 @@ public class GoToCoordinatePanel extends JPanel
         {
             coordInput.setText(coordInput.getText().toUpperCase());
             resultLabel.setText(String.format("Lat %7.4f\u00B0 Lon %7.4f\u00B0",
-                latLon.getLatitude().degrees,  latLon.getLongitude().degrees));
+                    latLon.getLatitude().degrees,  latLon.getLongitude().degrees));
         }
         else
         {

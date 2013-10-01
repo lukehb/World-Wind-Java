@@ -4,19 +4,13 @@
     <groupId>gov.nasa.worldwind</groupId>
     <artifactId>ww-core</artifactId>
     <packaging>jar</packaging>
-    <version>1.5.0</version>
+    <version>2.0.0</version>
     <name>ww-core</name>
-    
-    <properties>
-        <jogl.version>1.1.1a</jogl.version>
-        <gluegen.version>1.0</gluegen.version>
-        <gdal.version>1.7.2</gdal.version>
-    </properties>
     
     <parent>
         <groupId>gov.nasa.worldwind</groupId>
         <artifactId>worldwind</artifactId>
-        <version>1.5.0</version>
+        <version>2.0.0</version>
     </parent>
     
     <dependencies>
@@ -30,21 +24,21 @@
         </dependency>
         
         <dependency>
-            <groupId>net.java.dev.jogl</groupId>
-            <artifactId>jogl-${operating-system}</artifactId>
-            <version>${jogl.version}</version>
+            <groupId>org.jogamp.jogl</groupId>
+            <artifactId>jogl-all-main</artifactId>
+            <version>2.0-rc11</version>
         </dependency>
         
         <dependency>
-            <groupId>net.java.dev.gluegen</groupId>
-            <artifactId>gluegen-rt-${operating-system}</artifactId>
-            <version>${gluegen.version}</version>
+            <groupId>org.jogamp.gluegen</groupId>
+            <artifactId>gluegen-rt-main</artifactId>
+            <version>2.0-rc11</version>
         </dependency>
         
         <dependency>
             <groupId>org.gdal</groupId>
             <artifactId>gdal-${operating-system}</artifactId>
-            <version>${gdal.version}</version>
+            <version>1.7.2</version>
         </dependency>
         
         <dependency>

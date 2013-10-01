@@ -23,9 +23,9 @@ import java.net.URL;
  */
 public class OGLUtilTest
 {
-    protected static final String PNG_FILE = "./src/images/earth-map-512x256.png";
-    protected static final String DDS_FILE = "./src/images/BMNG_world.topo.bathy.200405.3.2048x1024.dds";
-    protected static final String JPG_FILE = "./src/images/BMNG_world.topo.bathy.200405.3.2048x1024.jpg";
+    protected static final String PNG_FILE = "../ww-core/src/main/resources/images/earth-map-512x256.png";
+    protected static final String DDS_FILE = "../ww-core/src/main/resources/images/BMNG_world.topo.bathy.200405.3.2048x1024.dds";
+    protected static final String JPG_FILE = "../ww-core/src/main/resources/images/BMNG_world.topo.bathy.200405.3.2048x1024.jpg";
 
     @Test
     public void testPngFile() throws IOException

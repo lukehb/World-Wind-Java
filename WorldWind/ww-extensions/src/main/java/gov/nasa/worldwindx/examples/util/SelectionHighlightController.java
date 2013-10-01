@@ -11,10 +11,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
-    * Extends HighlightController to add the capability to highlight objects selected by a ScreenSelector. This tracks
-    * objects highlighted by both cursor rollover events and screen selection changes, and ensures that objects stay
-    * highlighted when they are either under cursor or in the ScreenSelector's selection rectangle.
-    */
+ * Extends HighlightController to add the capability to highlight objects selected by a ScreenSelector. This tracks
+ * objects highlighted by both cursor rollover events and screen selection changes, and ensures that objects stay
+ * highlighted when they are either under cursor or in the ScreenSelector's selection rectangle.
+ */
 public class SelectionHighlightController extends HighlightController implements MessageListener
 {
     protected ScreenSelector screenSelector;

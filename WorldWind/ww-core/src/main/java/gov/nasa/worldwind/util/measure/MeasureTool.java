@@ -130,7 +130,7 @@ public class MeasureTool extends AVListImpl implements Disposable
     protected CustomRenderableLayer shapeLayer;
     protected Polyline line;
     protected SurfaceShape surfaceShape;
-    protected ScreenAnnotation annotation;
+    protected GlobeAnnotation annotation;
 
     protected Color lineColor = Color.YELLOW;
     protected Color fillColor = new Color(.6f, .6f, .4f, .5f);
@@ -253,7 +253,7 @@ public class MeasureTool extends AVListImpl implements Disposable
         this.annotationAttributes.setTextColor(Color.WHITE);
         this.annotationAttributes.setBackgroundColor(Color.BLACK);
         this.annotationAttributes.setSize(new Dimension(220, 0));
-        this.annotation = new ScreenAnnotation("", new Point(0, 0), this.annotationAttributes);
+        this.annotation = new GlobeAnnotation("", Position.ZERO, this.annotationAttributes);
         this.annotation.getAttributes().setVisible(false);
         this.annotation.getAttributes().setDrawOffset(null); // use defaults
         this.shapeLayer.addRenderable(this.annotation);
@@ -2114,9 +2114,7 @@ public class MeasureTool extends AVListImpl implements Disposable
 
         this.annotation.setText(displayString);
 
-        Vec4 screenPoint = this.computeAnnotationPosition(pos);
-        if (screenPoint != null)
-            this.annotation.setScreenPoint(new Point((int) screenPoint.x, (int) screenPoint.y));
+        this.annotation.setPosition(pos);
 
         this.annotation.getAttributes().setVisible(true);
     }
@@ -2154,20 +2152,6 @@ public class MeasureTool extends AVListImpl implements Disposable
         }
 
         return displayString;
-    }
-
-    protected Vec4 computeAnnotationPosition(Position pos)
-    {
-        Vec4 surfacePoint = this.wwd.getSceneController().getTerrain().getSurfacePoint(
-            pos.getLatitude(), pos.getLongitude());
-        if (surfacePoint == null)
-        {
-            Globe globe = this.wwd.getModel().getGlobe();
-            surfacePoint = globe.computePointFromPosition(pos.getLatitude(), pos.getLongitude(),
-                globe.getElevation(pos.getLatitude(), pos.getLongitude()));
-        }
-
-        return this.wwd.getView().project(surfacePoint);
     }
 
     protected String formatCircleMeasurements(Position pos)

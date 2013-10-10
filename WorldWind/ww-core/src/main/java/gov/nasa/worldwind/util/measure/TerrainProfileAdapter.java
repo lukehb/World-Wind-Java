@@ -8,20 +8,46 @@ package gov.nasa.worldwind.util.measure;
 import gov.nasa.worldwind.WorldWindow;
 import gov.nasa.worldwind.geom.LatLon;
 import gov.nasa.worldwind.layers.TerrainProfileLayer;
+import gov.nasa.worldwind.util.Logging;
 
-import java.beans.PropertyChangeEvent;
-import java.beans.PropertyChangeListener;
+import java.beans.*;
 import java.util.ArrayList;
 
+/**
+ * Adapter that forwards control-point position changes from a {@link MeasureTool}
+ * to a {@link TerrainProfileLayer} so that the height-data along the measured
+ * path can be visualized.
+ * 
+ * @author Wiehann Matthysen
+ */
 public class TerrainProfileAdapter implements PropertyChangeListener
 {
-    private final WorldWindow ww;
-    private final TerrainProfileLayer profileLayer;
+    protected WorldWindow wwd;
+    protected TerrainProfileLayer profileLayer;
     
-    public TerrainProfileAdapter(WorldWindow ww, TerrainProfileLayer profileLayer)
+    /**
+     * Construct an adapter for the specified <code>WorldWindow</code> and <code>TerrainProfileLayer</code>.
+     *
+     * @param wwd the <code>WorldWindow</code> the specified layer is associated with.
+     * @param layer the layer to forward control-point events to.
+     */
+    public TerrainProfileAdapter(WorldWindow wwd, TerrainProfileLayer layer)
     {
-        this.ww = ww;
-        this.profileLayer = profileLayer;
+        if (wwd == null)
+        {
+            String msg = Logging.getMessage("nullValue.WorldWindow");
+            Logging.logger().severe(msg);
+            throw new IllegalArgumentException(msg);
+        }
+        if (layer == null)
+        {
+            String msg = Logging.getMessage("nullValue.LayerIsNull");
+            Logging.logger().severe(msg);
+            throw new IllegalArgumentException(msg);
+        }
+        
+        this.wwd = wwd;
+        this.profileLayer = layer;
     }
 
     @Override
@@ -42,7 +68,7 @@ public class TerrainProfileAdapter implements PropertyChangeListener
             {
                 this.profileLayer.setEnabled(false);
             }
-            this.ww.redraw();
+            this.wwd.redraw();
         }
     }
 }

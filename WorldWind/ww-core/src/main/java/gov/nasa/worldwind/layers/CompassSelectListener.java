@@ -21,7 +21,6 @@ import gov.nasa.worldwind.view.orbit.BasicOrbitView;
  *
  * @author Wiehann Matthysen
  * @version $Id$
- * @see ViewControlsLayer
  */
 public class CompassSelectListener implements SelectListener
 {

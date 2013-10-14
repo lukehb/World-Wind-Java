@@ -130,7 +130,7 @@ public class MeasureTool extends AVListImpl implements Disposable
     protected CustomRenderableLayer shapeLayer;
     protected Polyline line;
     protected SurfaceShape surfaceShape;
-    protected GlobeAnnotation annotation;
+    protected Annotation annotation;
 
     protected Color lineColor = Color.YELLOW;
     protected Color fillColor = new Color(.6f, .6f, .4f, .5f);
@@ -2114,7 +2114,11 @@ public class MeasureTool extends AVListImpl implements Disposable
 
         this.annotation.setText(displayString);
 
-        this.annotation.setPosition(pos);
+        if (this.annotation instanceof GlobeAnnotation)
+        {
+            GlobeAnnotation annot = (GlobeAnnotation)this.annotation;
+            annot.setPosition(pos);
+        }
 
         this.annotation.getAttributes().setVisible(true);
     }

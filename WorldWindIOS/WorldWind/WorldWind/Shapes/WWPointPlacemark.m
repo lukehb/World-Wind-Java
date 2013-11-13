@@ -18,14 +18,13 @@
 #import "WorldWind/Render/WWTexture.h"
 #import "WorldWind/Shaders/WWBasicTextureProgram.h"
 #import "WorldWind/Terrain/WWTerrain.h"
-#import "WorldWind/Util/WWColor.h"
-#import "WorldWind/Util/WWGpuResourceCache.h"
 #import "WorldWind/Util/WWMath.h"
 #import "WorldWind/Util/WWOffset.h"
 #import "WorldWind/Util/WWResourceLoader.h"
 #import "WorldWind/WorldWind.h"
+#import "WWLayer.h"
 
-#define DEFAULT_DEPTH_OFFSET -0.01
+#define DEFAULT_DEPTH_OFFSET -0.003
 
 // Temporary objects shared by all point placemarks and used during rendering.
 static WWVec4* point;
@@ -101,7 +100,7 @@ static WWTexture* currentTexture;
 
         if ([dc pickingMode])
         {
-            [pickSupport resolvePick:dc layer:pickLayer];
+            [pickSupport resolvePick:dc layer:layer];
         }
     }
     else
@@ -141,10 +140,7 @@ static WWTexture* currentTexture;
         return;
     }
 
-    if ([dc pickingMode])
-    {
-        pickLayer = [dc currentLayer];
-    }
+    layer = [dc currentLayer];
 
     [dc addOrderedRenderable:self];
 }
@@ -275,6 +271,7 @@ static WWTexture* currentTexture;
     else
     {
         [program loadColor:[activeAttributes imageColor]];
+        [program loadOpacity:[layer opacity]];
 
         if (currentTexture != activeTexture) // avoid unnecessary texture state changes
         {

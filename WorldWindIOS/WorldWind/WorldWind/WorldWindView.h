@@ -13,6 +13,7 @@
 @class WWSceneController;
 @class WWVec4;
 @protocol WWNavigator;
+@protocol WorldWindViewDelegate;
 
 /**
 * Provides a view with a World Wind virtual globe. This is the top-level World Wind object and the fundamental object
@@ -63,6 +64,10 @@
 /// The view's OpenGL depth buffer. Applications typically do not need to be aware of this object.
 @property(nonatomic, readonly) GLuint depthBuffer;
 
+/// The number of bitplanes in the view's OpenGL depth buffer. Applications typically do not need to be aware of this
+/// value.
+@property(nonatomic, readonly) GLint depthBits;
+
 /// The view's OpenGL picking frame buffer. Applications typically do not need to be aware of this object.
 @property(nonatomic, readonly) GLuint pickingFrameBuffer;
 
@@ -83,7 +88,7 @@
 @property BOOL redrawRequested;
 
 /// Specifies whether the view should redraw itself continuously. This is used only for diagnostics and performance
-// statistic gathering and should not be used by the application.
+/// statistic gathering and should not be used by the application.
 @property(nonatomic) BOOL drawContinuously;
 
 /// @name Redrawing World Wind Views
@@ -127,5 +132,21 @@
 * @param notification The notification to respond to.
 */
 - (void) handleNotification:(NSNotification*)notification;
+
+/// @name Interposing in View Operations
+
+/**
+* Adds a delegate to this view's list of delegates called at key points in the view's lifecycle.
+*
+* @param delegate The delegate to call at lifecycle points.
+*/
+- (void) addDelegate:(id <WorldWindViewDelegate>)delegate;
+
+/**
+* Removes previously added delegates.
+*
+* @param delegate The delegate to remove.
+*/
+- (void) removeDelegate:(id <WorldWindViewDelegate>)delegate;
 
 @end

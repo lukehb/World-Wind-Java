@@ -120,7 +120,7 @@
                 <pathelement location="${java.home}/lib/plugin.jar"/>
             </classpath>
             <link href="http://download.oracle.com/javase/6/docs/api/"/>
-            <link href="http://jogamp.org/deployment/v2.0-rc11/javadoc/jogl/javadoc/"/>
+            <link href="http://jogamp.org/deployment/v2.1.0/javadoc/jogl/javadoc/"/>
         </javadoc>
     </target>
 
@@ -131,7 +131,13 @@
     <target name="worldwind.core.jarfile" depends="compile.core"
             description="Builds the World Wind core JAR file 'ww-core.jar'.">
         <jar jarfile="${worldwind.core.dir}/${worldwind.core.jarfile}">
+            <!-- Add the World Wind core Jar file's dependencies to the class path, and specify the Permissions
+                 attribute. The Permissions attribute is ignored for locally launched applications, but is required for
+                 signed Web Start Applications and Applets starting in Java 7 update 45. This property must match the
+                 setting specified in the JNLP file or Applet used to launch the application. See
+                 http://docs.oracle.com/javase/7/docs/technotes/guides/jweb/manifest.html#permissions -->
             <manifest>
+                <attribute name="Permissions" value="all-permissions"/>
                 <attribute name="Class-Path" value="lib/jogl/jogl-all-${jogl.version}.jar lib/gluegen-rt/gluegen-rt-${gluegen-rt.version}.jar lib/gdal/gdal-${gdal.version}.jar"/>
             </manifest>
             <!-- Include the World Wind core package gov.nasa.worldwind, as well as the 3rd party packages
@@ -163,7 +169,13 @@
     <target name="worldwind.extensions.jarfile" depends="compile.extensions"
             description="Builds the World Wind extensions JAR file 'ww-extensions.jar'.">
         <jar jarfile="${worldwind.extensions.dir}/${worldwind.extensions.jarfile}">
+            <!-- Add the World Wind extensions Jar file's dependencies to the class path, and specify the Permissions
+                 attribute. The Permissions attribute is ignored for locally launched applications, but is required for
+                 signed Web Start Applications and Applets starting in Java 7 update 45. This property must match the
+                 setting specified in the JNLP file or Applet used to launch the application. See
+                 http://docs.oracle.com/javase/7/docs/technotes/guides/jweb/manifest.html#permissions -->
             <manifest>
+                <attribute name="Permissions" value="all-permissions"/>
                 <attribute name="Class-Path" value="${worldwind.core.dir}/${worldwind.core.jarfile}"/>
                 <attribute name="Main-Class" value="${worldwind.extensions.jarfile.mainclass}"/>
             </manifest>

@@ -12,10 +12,12 @@
 #import "WorldWind/Util/WWFrameStatistics.h"
 #import "WorldWind/WorldWindConstants.h"
 #import "WorldWind/WWLog.h"
+#import "WorldWindViewDelegate.h"
 
 @implementation WorldWindView
 {
     NSLock* redrawRequestLock;
+    NSMutableArray* delegates;
 }
 
 + (Class) layerClass
@@ -28,6 +30,7 @@
     if (self = [super initWithFrame:frame])
     {
         self->redrawRequestLock = [[NSLock alloc] init];
+        self->delegates = [[NSMutableArray alloc] init];
 
         CAEAGLLayer* eaglLayer = (CAEAGLLayer*) super.layer;
         eaglLayer.opaque = YES;
@@ -136,6 +139,18 @@
     self->_pickingFrameBuffer = 0;
 }
 
+- (void) addDelegate:(id <WorldWindViewDelegate>)delegate
+{
+    if (delegate != nil)
+        [delegates addObject:delegate];
+}
+
+- (void) removeDelegate:(id <WorldWindViewDelegate>)delegate
+{
+    if (delegate != nil)
+        [delegates removeObject:delegate];
+}
+
 - (void) drawView
 {
     [_frameStatistics beginFrame];
@@ -143,6 +158,12 @@
     @synchronized (self->redrawRequestLock)
     {
         [self setRedrawRequested:NO];
+    }
+
+    for (id <WorldWindViewDelegate> delegate in delegates)
+    {
+        if ([delegate respondsToSelector:@selector(viewWillDraw:)])
+            [delegate viewWillDraw:self];
     }
 
     [EAGLContext setCurrentContext:self.context];
@@ -166,6 +187,12 @@
     {
         NSNotification* redrawNotification = [NSNotification notificationWithName:WW_REQUEST_REDRAW object:self];
         [[NSNotificationCenter defaultCenter] postNotification:redrawNotification];
+    }
+
+    for (id <WorldWindViewDelegate> delegate in delegates)
+    {
+        if ([delegate respondsToSelector:@selector(viewDidDraw:)])
+            [delegate viewDidDraw:self];
     }
 
     [_frameStatistics endFrame];
@@ -210,6 +237,7 @@
     // color renderbuffer and the depth renderbuffer must have the same dimensions.
     glBindRenderbuffer(GL_RENDERBUFFER, self->_depthBuffer);
     glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24_OES, (GLsizei) width, (GLsizei) height);
+    glGetIntegerv(GL_DEPTH_BITS, &_depthBits);
 
     // Allocate storage for the picking render buffers.
     glBindRenderbuffer(GL_RENDERBUFFER, _pickingColorBuffer);

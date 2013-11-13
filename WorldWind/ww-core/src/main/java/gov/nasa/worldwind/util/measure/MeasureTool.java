@@ -482,8 +482,12 @@ public class MeasureTool extends AVListImpl implements Disposable
         boolean closedShape = newPositions.get(0).equals(newPositions.get(newPositions.size() - 1));
         if (newPositions.size() > 2 && closedShape)
             setMeasureShapeType(SHAPE_POLYGON);
-        else
-            setMeasureShapeType(getPathType(newPositions));
+        else {
+            // If the path-type is not already set to a value, then set it.
+            if (!this.measureShapeType.equals(SHAPE_LINE) && !this.measureShapeType.equals(SHAPE_PATH)) {
+                setMeasureShapeType(getPathType(newPositions));
+            }
+        }
 
         // Import positions and create control points
         for (int i = 0; i < newPositions.size(); i++)

@@ -35,6 +35,7 @@ public class SurfaceImage extends WWObjectImpl
     private Sector sector;
     private Position referencePosition;
     private double opacity = 1.0;
+    private boolean isVisible = true;
     private boolean pickEnabled = true;
 
     protected Object imageSource;
@@ -131,6 +132,16 @@ public class SurfaceImage extends WWObjectImpl
 
         // Update the surface image's geometry. This also clears the current generated texture (if any).
         initializeGeometry(corners);
+    }
+    
+    public boolean isVisible()
+    {
+        return this.isVisible;
+    }
+    
+    public void setVisible(boolean visible)
+    {
+        this.isVisible = visible;
     }
 
     public boolean isPickEnabled()
@@ -260,6 +271,9 @@ public class SurfaceImage extends WWObjectImpl
             Logging.logger().severe(message);
             throw new IllegalStateException(message);
         }
+        
+        if (!this.isVisible)
+            return;
 
         if (dc.isPickingMode() && !this.isPickEnabled())
             return;

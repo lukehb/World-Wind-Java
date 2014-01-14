@@ -18,7 +18,7 @@
 
 - (WaypointFile*) init;
 
-- (void) loadDAFIFAirports:(NSURL*)url finishedBlock:(void (^)(void))finishedBlock;
+- (void) loadWaypointLocations:(NSArray*)locationArray finishedBlock:(void (^)(WaypointFile*))finishedBlock;
 
 - (NSArray*) waypoints;
 

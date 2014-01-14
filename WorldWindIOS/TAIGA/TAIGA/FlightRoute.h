@@ -6,19 +6,29 @@
  */
 
 #import <Foundation/Foundation.h>
+#import <CoreLocation/CoreLocation.h>
 #import "WorldWind/Render/WWRenderable.h"
 
 @class Waypoint;
+@class WWGlobe;
 @class WWPath;
+@class WWPosition;
+@class WWSector;
 @class WWShapeAttributes;
+@protocol WWExtent;
 
 @interface FlightRoute : NSObject <WWRenderable>
 {
 @protected
     NSMutableArray* waypoints;
     NSMutableArray* waypointPositions;
-    WWPath* path;
+    NSMutableArray* waypointShapes;
+    WWPath* waypointPath;
+    WWShapeAttributes* shapeAttrs;
+    WWPosition* currentPosition;
 }
+
++ (NSArray*) flightRouteColors;
 
 /// Indicates this flight route's display name.
 @property (nonatomic) NSString* displayName;
@@ -37,7 +47,13 @@
 
 - (FlightRoute*) initWithWaypoints:(NSArray*)waypointArray;
 
-+ (NSArray*) flightRouteColors;
+- (id<WWExtent>) extentOnGlobe:(WWGlobe*)globe;
+
+- (void) locationForPercent:(double)pct
+                   latitude:(CLLocationDegrees*)latitude
+                  longitude:(CLLocationDegrees*)longitude
+                   altitude:(CLLocationDistance*)altitude
+                     course:(CLLocationDirection*)course;
 
 - (NSUInteger) waypointCount;
 

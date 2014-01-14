@@ -8,7 +8,7 @@
 #import "ViewController.h"
 #import "LayerListController.h"
 #import "NavigatorSettingsController.h"
-#import "TrackingController.h"
+#import "LocationTrackingController.h"
 #import "AnyGestureRecognizer.h"
 #import "PathFollower.h"
 #import "CrashDataLayer.h"
@@ -45,14 +45,16 @@
 #import "BulkRetrieverController.h"
 #import "FrameStatisticsController.h"
 #import "WorldWind/Layer/WWBMNGLandsatCombinedLayer.h"
+#import "WorldWind/WorldWindView.h"
 #import "WorldWind.h"
 #import "DimensionedLayerController.h"
 #import "WorldWind/Layer/WWWMSDimensionedLayer.h"
 #import "WorldWind/Shapes/WWScreenImage.h"
 #import "WorldWind/Util/WWOffset.h"
 #import "WWElevationShadingLayer.h"
+#import "CurrentPositionLayer.h"
+#import "LocationServicesController.h"
 
-#define TOOLBAR_HEIGHT 44
 #define SEARCHBAR_PLACEHOLDER @"Search or Address"
 
 @implementation ViewController
@@ -76,7 +78,8 @@
     METARDataViewController* metarDataViewController;
     NavigatorSettingsController* navigatorSettingsController;
     UIPopoverController* navigatorSettingsPopoverController;
-    TrackingController* trackingController;
+    LocationServicesController* locationServicesController;
+    LocationTrackingController* locationTrackingController;
     PathFollower* pathFollower;
     UISearchBar* searchBar;
     CLGeocoder* geocoder;
@@ -110,11 +113,39 @@
 
 - (void) loadView
 {
-    self.view = [[UIView alloc] initWithFrame:[[UIScreen mainScreen] applicationFrame]];
-    self.view.autoresizesSubviews = YES;
+    self.view = [[UIView alloc] init];
 
     [self createWorldWindView];
     [self createToolbar];
+    [self createLocationController];
+    [self layout];
+}
+
+- (void) layout
+{
+    NSDictionary* viewsDictionary = NSDictionaryOfVariableBindings(_toolbar, _wwv);
+    [_toolbar setTranslatesAutoresizingMaskIntoConstraints:NO];
+    [_wwv setTranslatesAutoresizingMaskIntoConstraints:NO];
+
+    UIView* view = [self view];
+    [view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:|[_toolbar]|" options:0 metrics:nil views:viewsDictionary]];
+    [view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:|[_wwv]|" options:0 metrics:nil views:viewsDictionary]];
+
+    if ([self respondsToSelector:@selector(topLayoutGuide)])
+    {
+        id topLayoutGuide = [self topLayoutGuide];
+        viewsDictionary = NSDictionaryOfVariableBindings(topLayoutGuide, _toolbar, _wwv);
+        [view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"V:|[topLayoutGuide][_toolbar(44)][_wwv]|" options:0 metrics:nil views:viewsDictionary]];
+    }
+    else
+    {
+        [view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"V:|[_toolbar(44)][_wwv]|" options:0 metrics:nil views:viewsDictionary]];
+    }
+}
+
+- (UIStatusBarStyle) preferredStatusBarStyle
+{
+    return UIStatusBarStyleLightContent;
 }
 
 - (void) viewDidLoad
@@ -160,9 +191,8 @@
     layer = [[CompassLayer alloc] init];
     [layers addLayer:layer];
 
-    [self makeTrackingController];
     [self makeFlightPathsLayer];
-//
+
 //    layer = [[WWShowTessellationLayer alloc] init];
 //    [layers addLayer:layer];
 
@@ -172,6 +202,9 @@
 
     layer = [[METARLayer alloc] init];
     [layer setEnabled:NO];
+    [layers addLayer:layer];
+
+    layer = [[CurrentPositionLayer alloc] init];
     [layers addLayer:layer];
 
     tapGestureRecognizer = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleTap:)];
@@ -191,13 +224,6 @@
 
     screenImageDragPanGestureRecognizer = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector
     (handleScreenImageDragGesture:)];
-}
-
-- (void) makeTrackingController
-{
-    trackingController = [[TrackingController alloc] initWithView:_wwv];
-    [trackingController addObserver:self forKeyPath:@"enabled"
-                            options:NSKeyValueObservingOptionNew | NSKeyValueObservingOptionInitial context:NULL];
 }
 
 - (void) makeFlightPathsLayer
@@ -311,11 +337,7 @@
 
 - (void) createWorldWindView
 {
-    CGFloat wwvWidth = self.view.bounds.size.width;
-    CGFloat wwvHeight = self.view.bounds.size.height - TOOLBAR_HEIGHT;
-    CGFloat wwvOriginY = self.view.bounds.origin.y + TOOLBAR_HEIGHT;
-
-    _wwv = [[WorldWindView alloc] initWithFrame:CGRectMake(0, wwvOriginY, wwvWidth, wwvHeight)];
+    _wwv = [[WorldWindView alloc] initWithFrame:CGRectMake(0, 0, 1, 1)];
     if (_wwv == nil)
     {
         NSLog(@"Unable to create a WorldWindView");
@@ -329,8 +351,6 @@
 - (void) createToolbar
 {
     _toolbar = [[UIToolbar alloc] init];
-    _toolbar.frame = CGRectMake(0, 0, self.view.frame.size.width, TOOLBAR_HEIGHT);
-    [_toolbar setAutoresizingMask:UIViewAutoresizingFlexibleWidth];
     [_toolbar setBarStyle:UIBarStyleBlack];
     [_toolbar setTranslucent:NO];
 
@@ -339,34 +359,45 @@
     layerButton = [[UIBarButtonItem alloc] initWithImage:[UIImage imageNamed:@"LayerList"]
                                                    style:UIBarButtonItemStylePlain
                                                   target:self action:@selector(handleLayerButtonTap)];
+    [layerButton setTintColor:[UIColor whiteColor]];
     layerListController = [[LayerListController alloc] initWithWorldWindView:_wwv];
 
     wmsServersButton = [[UIBarButtonItem alloc] initWithImage:[UIImage imageNamed:@"401-globe"]
                                                         style:UIBarButtonItemStylePlain
                                                        target:self action:@selector(handleWMSServersListButtonTap)];
+    [wmsServersButton setTintColor:[UIColor whiteColor]];
     wmsServersListController = [[WMSServerListController alloc] initWithWorldWindView:_wwv];
 
     bulkRetrieverButton = [[UIBarButtonItem alloc] initWithImage:[UIImage imageNamed:@"265-download"]
                                                            style:UIBarButtonItemStylePlain
                                                           target:self action:@selector(handleBulkRetrieverButtonTap)];
+    [bulkRetrieverButton setTintColor:[UIColor whiteColor]];
     [bulkRetrieverButton setEnabled:NO];
     bulkRetrieverController = [[BulkRetrieverController alloc] initWithWorldWindView:_wwv];
 
     navigatorButton = [[UIBarButtonItem alloc] initWithImage:[UIImage imageNamed:@"12-eye"]
                                                        style:UIBarButtonItemStylePlain
                                                       target:self action:@selector(handleNavigatorButtonTap)];
+    [navigatorButton setTintColor:[UIColor whiteColor]];
     navigatorSettingsController = [[NavigatorSettingsController alloc] initWithWorldWindView:_wwv];
 
     trackButton = [[UIBarButtonItem alloc] initWithImage:nil style:UIBarButtonItemStylePlain
                                                   target:self action:@selector(handleTrackButtonTap)];
+    [trackButton setTintColor:[UIColor whiteColor]];
 
     flightButton = [[UIBarButtonItem alloc] initWithImage:nil style:UIBarButtonItemStylePlain
                                                    target:self action:@selector(handleFlightButtonTap)];
+    [flightButton setTintColor:[UIColor whiteColor]];
 
-    self->searchBar = [[UISearchBar alloc] initWithFrame:CGRectMake(0, 0, 200, TOOLBAR_HEIGHT)];
-    [self->searchBar setPlaceholder:SEARCHBAR_PLACEHOLDER];
-    UIBarButtonItem* searchBarButtonItem = [[UIBarButtonItem alloc] initWithCustomView:self->searchBar];
-    [self->searchBar setDelegate:self];
+    searchBar = [[UISearchBar alloc] initWithFrame:CGRectMake(0, 0, 200, 44)];
+    [searchBar setPlaceholder:SEARCHBAR_PLACEHOLDER];
+    [searchBar setDelegate:self];
+    [searchBar setTranslucent:NO];
+    if ([searchBar respondsToSelector:@selector(barTintColor)])
+    {
+        [searchBar setBarTintColor:[UIColor lightGrayColor]];
+    }
+    UIBarButtonItem* searchBarButtonItem = [[UIBarButtonItem alloc] initWithCustomView:searchBar];
 
     UIBarButtonItem* flexibleSpace1 = [[UIBarButtonItem alloc]
             initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil];
@@ -475,9 +506,9 @@
 
 - (void) handleTrackButtonTap
 {
-    [trackingController setEnabled:![trackingController isEnabled]];
+    [locationTrackingController setEnabled:![locationTrackingController enabled]];
 
-    if ([trackingController isEnabled])
+    if ([locationTrackingController enabled])
     {
         [pathFollower setEnabled:NO];
     }
@@ -485,11 +516,11 @@
 
 - (void) handleFlightButtonTap
 {
-    [pathFollower setEnabled:![pathFollower isEnabled]];
+    [pathFollower setEnabled:![pathFollower enabled]];
 
-    if ([pathFollower isEnabled])
+    if ([pathFollower enabled])
     {
-        [trackingController setEnabled:NO];
+        [locationTrackingController setEnabled:NO];
     }
 }
 
@@ -498,16 +529,27 @@
                          change:(NSDictionary*)change
                         context:(void*)context
 {
-    if (object == trackingController && [keyPath isEqualToString:@"enabled"])
+    if (object == locationTrackingController && [keyPath isEqualToString:@"enabled"])
     {
-        NSNumber* value = [change objectForKey:NSKeyValueChangeNewKey];
-        [trackButton setImage:[UIImage imageNamed:[value boolValue] ? @"LocationArrowWithLine" : @"LocationArrow"]];
+        BOOL enabled = [[change objectForKey:NSKeyValueChangeNewKey] boolValue];
+        [trackButton setImage:[UIImage imageNamed:enabled ? @"LocationArrowWithLine" : @"LocationArrow"]];
+        [locationServicesController setMode:enabled ? LocationServicesControllerModeAllChanges : LocationServicesControllerModeSignificantChanges];
     }
     else if (object == pathFollower && [keyPath isEqualToString:@"enabled"])
     {
-        NSNumber* value = [change objectForKey:NSKeyValueChangeNewKey];
-        [flightButton setImage:[UIImage imageNamed:[value boolValue] ? @"38-airplane-location" : @"38-airplane"]];
+        BOOL enabled = [[change objectForKey:NSKeyValueChangeNewKey] boolValue];
+        [flightButton setImage:[UIImage imageNamed:enabled ? @"38-airplane-location" : @"38-airplane"]];
     }
+}
+
+- (void) createLocationController
+{
+    locationServicesController = [[LocationServicesController alloc] init];
+    [locationServicesController setMode:LocationServicesControllerModeSignificantChanges];
+
+    locationTrackingController = [[LocationTrackingController alloc] initWithView:_wwv];
+    [locationTrackingController addObserver:self forKeyPath:@"enabled"
+                                    options:NSKeyValueObservingOptionNew | NSKeyValueObservingOptionInitial context:NULL];
 }
 
 - (void) dismissSearchBar
@@ -543,10 +585,13 @@
     {
         CLPlacemark* firstPlacemark = [placemarks objectAtIndex:0];
         CLRegion* region = [firstPlacemark region];
-        WWPosition* center = [[WWPosition alloc] initWithCLCoordinate:[region center] altitude:0];
+        WWLocation* center = [[WWLocation alloc] initWithCLCoordinate:[region center]];
         double radius = [region radius];
 
-        [[_wwv navigator] animateToRegionWithCenter:center radius:radius overDuration:WWNavigatorDurationDefault];
+        [[_wwv navigator] animateWithDuration:WWNavigatorDurationAutomatic animations:^
+        {
+            [[_wwv navigator] setCenterLocation:center radius:radius];
+        }];
     }
     else
     {
@@ -765,7 +810,7 @@
     [selectedPath setHighlighted:NO];
     [path setHighlighted:YES];
     selectedPath = path;
-    [[NSNotificationCenter defaultCenter] postNotificationName:WW_REQUEST_REDRAW object:self];
+    [WorldWindView requestRedraw];
 
     if (path != nil)
     {
@@ -857,7 +902,7 @@
         [currentScreenImage setScreenOffset:newOffset];
     }
 
-    [[NSNotificationCenter defaultCenter] postNotificationName:WW_REQUEST_REDRAW object:self];
+    [WorldWindView requestRedraw];
 }
 
 @end

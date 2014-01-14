@@ -5,23 +5,22 @@
  @version $Id$
  */
 
-#import "TerrainAltitudeController.h"
+#import "TerrainAltitudeDetailController.h"
 #import "WWLog.h"
 #import "WWElevationShadingLayer.h"
-#import "WorldWindConstants.h"
 #import "SliderCellWithReadout.h"
 #import "AppConstants.h"
 #import "Settings.h"
 
 #define MAX_WARNING_OFFSET_IN_FEET (1000)
 
-@implementation TerrainAltitudeController
+@implementation TerrainAltitudeDetailController
 {
     SliderCellWithReadout* opacityCell;
     SliderCellWithReadout* warningOffsetCell;
 }
 
-- (TerrainAltitudeController*) initWithLayer:(WWElevationShadingLayer*)layer
+- (TerrainAltitudeDetailController*) initWithLayer:(WWElevationShadingLayer*)layer
 {
     if (layer == nil)
     {
@@ -108,10 +107,7 @@
 {
     [_layer setOpacity:[opacitySlider value]];
     [Settings setFloat:[opacitySlider value] forName:TAIGA_SHADED_ELEVATION_OPACITY];
-
     [[opacityCell readout] setText:[self opacityString]];
-
-    [[NSNotificationCenter defaultCenter] postNotificationName:WW_REQUEST_REDRAW object:self];
 }
 
 - (void) warningOffsetValueChanged:(UISlider*)slider
@@ -120,8 +116,6 @@
     [_layer setYellowThreshold:[_layer redThreshold] - offsetInMeters];
     [Settings setFloat:offsetInMeters forName:TAIGA_SHADED_ELEVATION_OFFSET];
     [[warningOffsetCell readout] setText:[self warningOffsetString]];
-
-    [[NSNotificationCenter defaultCenter] postNotificationName:WW_REQUEST_REDRAW object:self];
 }
 
 - (NSString*) opacityString

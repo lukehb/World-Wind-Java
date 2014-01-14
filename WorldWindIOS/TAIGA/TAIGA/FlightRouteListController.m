@@ -10,11 +10,18 @@
 #import "FlightRoute.h"
 #import "Waypoint.h"
 #import "WaypointFile.h"
-#import "WorldWind/Layer/WWRenderableLayer.h"
-#import "WorldWind/Util/WWColor.h"
-#import "WorldWind/WorldWindConstants.h"
-#import "WorldWind/WWLog.h"
 #import "AppConstants.h"
+#import "WorldWind/Geometry/WWExtent.h"
+#import "WorldWind/Geometry/WWPosition.h"
+#import "WorldWind/Geometry/WWVec4.h"
+#import "WorldWind/Layer/WWRenderableLayer.h"
+#import "WorldWind/Navigate/WWNavigator.h"
+#import "WorldWind/Render/WWSceneController.h"
+#import "WorldWind/Terrain/WWGlobe.h"
+#import "WorldWind/Util/WWColor.h"
+#import "WorldWind/Util/WWMath.h"
+#import "WorldWind/WorldWindView.h"
+#import "WorldWind/WWLog.h"
 
 @implementation FlightRouteListController
 
@@ -22,7 +29,7 @@
 //-- Initializing FlightRouteListController --//
 //--------------------------------------------------------------------------------------------------------------------//
 
-- (FlightRouteListController*) initWithLayer:(WWRenderableLayer*)layer
+- (FlightRouteListController*) initWithWorldWindView:(WorldWindView*)wwv flightRouteLayer:(WWRenderableLayer*)flightRouteLayer waypointFile:(WaypointFile*)waypointFile
 {
     self = [super initWithStyle:UITableViewStylePlain];
 
@@ -35,26 +42,15 @@
     [[self tableView] setSeparatorStyle:UITableViewCellSeparatorStyleNone];
     [self setPreferredContentSize:CGSizeMake(350, 1000)];
 
-    _layer = layer;
-
-    NSURL* airportsUrl = [NSURL URLWithString:@"http://worldwindserver.net/taiga/dafif/ARPT2_ALASKA.TXT"];
-    waypointFile = [[WaypointFile alloc] init];
-    [waypointFile loadDAFIFAirports:airportsUrl finishedBlock:^
-    {
-        [self didLoadWaypoints];
-    }];
+    _wwv = wwv;
+    _flightRouteLayer = flightRouteLayer;
+    _waypointFile = waypointFile;
+    [self restoreAllFlightRouteState]; // restore state with waypointFile
 
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(handleFlightRouteNotification:)
                                                  name:TAIGA_FLIGHT_ROUTE_CHANGED object:nil];
 
     return self;
-}
-
-- (void) didLoadWaypoints
-{
-    [self restoreAllFlightRouteState];
-    [[self tableView] reloadData];
-    [self requestRedraw];
 }
 
 - (void) navigationController:(UINavigationController*)navigationController
@@ -71,9 +67,9 @@
 
     // Ignore notifications for flight routes not in this controller's layer. This avoids saving state or refreshing the
     // screen for during flight route initialization or restoration.
-    if ([[_layer renderables] containsObject:flightRoute])
+    if ([[_flightRouteLayer renderables] containsObject:flightRoute])
     {
-        [self flightRouteDidChange:flightRoute];
+        [self flightRouteDidChange:flightRoute notification:notification];
     }
 }
 
@@ -83,18 +79,18 @@
 
 - (NSUInteger) flightRouteCount
 {
-    return [[_layer renderables] count];
+    return [[_flightRouteLayer renderables] count];
 }
 
 - (FlightRoute*) flightRouteAtIndex:(NSUInteger)index
 {
-    return [[_layer renderables] objectAtIndex:index];
+    return [[_flightRouteLayer renderables] objectAtIndex:index];
 }
 
 - (UIViewController*) flightRouteDetailControllerAtIndex:(NSUInteger)index
 {
     FlightRoute* flightRoute = [self flightRouteAtIndex:index];
-    return [[FlightRouteDetailController alloc] initWithFlightRoute:flightRoute waypointFile:waypointFile];
+    return [[FlightRouteDetailController alloc] initWithFlightRoute:flightRoute waypointFile:_waypointFile view:_wwv];
 }
 
 - (void) addFlightRouteAtIndex:(NSUInteger)index withDisplayName:(NSString*)displayName
@@ -104,7 +100,7 @@
     [flightRoute setAltitude:1524]; // 5,000ft
     [flightRoute setColorIndex:flightRouteColorIndex];
     [flightRoute setUserObject:[[NSProcessInfo processInfo] globallyUniqueString]]; // Create a state key for the flight route.
-    [[_layer renderables] insertObject:flightRoute atIndex:index]; // Add flight route to layer after initialization to avoid saving state during initialization.
+    [[_flightRouteLayer renderables] insertObject:flightRoute atIndex:index]; // Add flight route to layer after initialization to avoid saving state during initialization.
 
     if (++flightRouteColorIndex >= [[FlightRoute flightRouteColors] count])
     {
@@ -113,40 +109,51 @@
 
     [self saveFlightRouteState:flightRoute];
     [self saveFlightRouteListState];
-    [self requestRedraw];
+    [WorldWindView requestRedraw];
 }
 
 - (void) removeFlightRouteAtIndex:(NSUInteger)index
 {
-    FlightRoute* flightRoute = [[_layer renderables] objectAtIndex:index];
-    [_layer removeRenderable:flightRoute];
+    FlightRoute* flightRoute = [[_flightRouteLayer renderables] objectAtIndex:index];
+    [_flightRouteLayer removeRenderable:flightRoute];
 
     [self removeFlightRouteState:flightRoute];
     [self saveFlightRouteListState];
-    [self requestRedraw];
+    [WorldWindView requestRedraw];
+
+    [[NSNotificationCenter defaultCenter] postNotificationName:TAIGA_FLIGHT_ROUTE_REMOVED object:flightRoute];
 }
 
 - (void) moveFlightRouteFromIndex:(NSUInteger)fromIndex toIndex:(NSUInteger)toIndex
 {
-    NSMutableArray* flightRoutes = [_layer renderables];
+    NSMutableArray* flightRoutes = [_flightRouteLayer renderables];
     FlightRoute* flightRoute = [flightRoutes objectAtIndex:fromIndex];
     [flightRoutes removeObjectAtIndex:fromIndex];
     [flightRoutes insertObject:flightRoute atIndex:toIndex];
 
     [self saveFlightRouteListState];
-    [self requestRedraw];
+    [WorldWindView requestRedraw];
 }
 
-- (void) flightRouteDidChange:(FlightRoute*)flightRoute
+- (void) flightRouteDidChange:(FlightRoute*)flightRoute notification:(NSNotification*)notification
 {
     // Refresh the table row corresponding to the flight route that changed.
-    NSInteger index  = [[_layer renderables] indexOfObject:flightRoute];
+    NSInteger index  = [[_flightRouteLayer renderables] indexOfObject:flightRoute];
     NSIndexPath* indexPath = [NSIndexPath indexPathForRow:index inSection:0];
     [[self tableView] reloadRowsAtIndexPaths:[NSArray arrayWithObject:indexPath]
                             withRowAnimation:UITableViewRowAnimationAutomatic];
 
+    // Save the flight route's state and request that the WorldWindView to redraw itself. The view must be redrawn even
+    // when the navigator logic below is not invoked in order to display flight route changes that do not result in
+    // changes to the navigator.
     [self saveFlightRouteState:flightRoute];
-    [self requestRedraw];
+    [WorldWindView requestRedraw];
+
+    // Show the the flight route in the WorldWindView when the flight route's waypoint list has changed.
+    if ([[notification userInfo] objectForKey:TAIGA_FLIGHT_ROUTE_WAYPOINT_INDEX] != nil)
+    {
+        [self navigateToFlightRoute:flightRoute];
+    }
 }
 
 - (void) saveFlightRouteState:(FlightRoute*)flightRoute
@@ -182,7 +189,7 @@
 
 - (void) saveFlightRouteListState
 {
-    NSMutableArray* flightRoutes = [_layer renderables];
+    NSMutableArray* flightRoutes = [_flightRouteLayer renderables];
     NSMutableArray* flightRouteKeys = [NSMutableArray arrayWithCapacity:[flightRoutes count]];
     for (FlightRoute* flightRoute in flightRoutes)
     {
@@ -207,7 +214,7 @@
         NSArray* waypointKeys = [userState arrayForKey:[NSString stringWithFormat:@"gov.nasa.worldwind.taiga.flightpath.%@.waypointKeys", frKey]];
         for (NSString* wpKey in waypointKeys)
         {
-            Waypoint* waypoint = [waypointFile waypointForKey:wpKey];
+            Waypoint* waypoint = [_waypointFile waypointForKey:wpKey];
             if (waypoint != nil)
             {
                 [waypoints addObject:waypoint];
@@ -229,7 +236,7 @@
         [flightRoute setAltitude:altitude];
         [flightRoute setColorIndex:(NSUInteger) colorIndex];
         [flightRoute setUserObject:frKey]; // Assign the flight route its state key.
-        [_layer addRenderable:flightRoute];  // Add flight route to layer after initialization to avoid saving state during restore.
+        [_flightRouteLayer addRenderable:flightRoute];  // Add flight route to layer after initialization to avoid saving state during restore.
     }
 
     flightRouteColorIndex = (NSUInteger) [userState integerForKey:@"gov.nasa.worldwind.taiga.flightPathColorIndex"];
@@ -362,9 +369,47 @@ moveRowAtIndexPath:(NSIndexPath*)sourceIndexPath
 //-- WorldWindView Interface --//
 //--------------------------------------------------------------------------------------------------------------------//
 
-- (void) requestRedraw
+- (void) navigateToFlightRoute:(FlightRoute*)flightRoute
 {
-    [[NSNotificationCenter defaultCenter] postNotificationName:WW_REQUEST_REDRAW object:self];
+    WWGlobe* globe = [[_wwv sceneController] globe];
+    id<WWExtent> extent = [flightRoute extentOnGlobe:globe];
+
+    if (extent == nil)
+        return; // empty flight route; nothing to navigate to
+
+    // Compute the center and radius of a region that bounds the flight path's waypoints. If the flight route contains
+    // only a single unique waypoint we use default radius of 100km. This sphere defines the region that will be shown
+    // in the left half of the WorldWindView's viewport.
+    WWPosition* center = [[WWPosition alloc] initWithZeroPosition];
+    WWVec4* centerPoint = [extent center];
+    [globe computePositionFromPoint:[centerPoint x] y:[centerPoint y] z:[centerPoint z] outputPosition:center];
+    double globeRadius = MAX([globe equatorialRadius], [globe polarRadius]);
+    double radiusMeters = [extent radius] > 0 ? [extent radius] : 100000;
+    double radiusDegrees = DEGREES(radiusMeters / globeRadius);
+
+    // Compute the scale that we'll apply to the region's radius in order to make it fit in the left half of the
+    // WorldWindView's viewport. The navigator will fit the radius we provide into the smaller of the two viewport
+    // dimensions. When the device is in portrait mode, the radius is fit to the viewport width, so the visible region's
+    // radius must be twice the actual region's radius. When the device is in landscape mode, the radius is fit to the
+    // viewport height, so the visible region's radius must be scaled based on the relative size of the viewport width
+    // and height.
+    id<WWNavigator> navigator = [_wwv navigator];
+    CGRect viewport = [_wwv viewport];
+    CGFloat viewportWidth = CGRectGetWidth(viewport);
+    CGFloat viewportHeight = CGRectGetHeight(viewport);
+    double radiusScale = viewportWidth < viewportHeight ? 2 : (viewportWidth < 2 * viewportHeight ? 2 * viewportHeight / viewportWidth : 1);
+
+    // Navigate to the center and radius of the a region that places the flight route's bounding sector in the left half
+    // of the WorldWindView's viewport. This region has its center at the eastern edge of the flight route relative to
+    // the navigator's current heading, and has its radius scaled such that the flight route fits in half of the
+    // viewport width.
+    WWLocation* lookAtCenter = [[WWLocation alloc] initWithZeroLocation];
+    [WWLocation greatCircleLocation:center azimuth:[navigator heading] + 90 distance:radiusDegrees outputLocation:lookAtCenter];
+    double lookAtRadius = radiusMeters * radiusScale;
+    [navigator animateWithDuration:WWNavigatorDurationAutomatic animations:^
+    {
+        [navigator setCenterLocation:lookAtCenter radius:lookAtRadius];
+    }];
 }
 
 @end

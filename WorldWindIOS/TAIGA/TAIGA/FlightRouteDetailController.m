@@ -8,17 +8,24 @@
 #import "FlightRouteDetailController.h"
 #import "FlightRoute.h"
 #import "Waypoint.h"
+#import "WaypointCell.h"
 #import "WaypointFileControl.h"
 #import "AltitudePicker.h"
 #import "ColorPicker.h"
-#import "AppConstants.h"
 #import "WorldWind/Util/WWColor.h"
+#import "WorldWindView.h"
+#import "BulkRetrieverController.h"
+#import "WaypointFile.h"
+#import "WWSector.h"
+#import "AppConstants.h"
+#import "WWLocation.h"
 
 #define EDIT_ANIMATION_DURATION (0.3)
 #define SECTION_PROPERTIES (0)
 #define SECTION_WAYPOINTS (1)
 #define ROW_COLOR (0)
 #define ROW_ALTITUDE (1)
+#define ROW_DOWNLOAD (2)
 
 @implementation FlightRouteDetailController
 
@@ -26,7 +33,9 @@
 //-- Initializing FlightRouteDetailController --//
 //--------------------------------------------------------------------------------------------------------------------//
 
-- (FlightRouteDetailController*) initWithFlightRoute:(FlightRoute*)flightRoute waypointFile:(WaypointFile*)waypointFile
+- (FlightRouteDetailController*) initWithFlightRoute:(FlightRoute*)flightRoute
+                                        waypointFile:(WaypointFile*)waypointFile
+                                                view:(WorldWindView*)wwv;
 {
     self = [super initWithNibName:nil bundle:nil];
 
@@ -35,6 +44,7 @@
 
     _flightRoute = flightRoute;
     _waypointFile = waypointFile;
+    _wwv = wwv;
     altitudeFormatter = [[NSNumberFormatter alloc] init];
     [altitudeFormatter setNumberStyle:NSNumberFormatterDecimalStyle];
     [altitudeFormatter setMultiplier:@TAIGA_METERS_TO_FEET];
@@ -62,7 +72,7 @@
 - (void) loadView
 {
     UIView* view = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 1, 1)];
-    [view setAutoresizingMask:UIViewAutoresizingFlexibleWidth|UIViewAutoresizingFlexibleHeight];
+    [view setAutoresizingMask:UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight];
     [self setView:view];
 
     flightRouteTable = [[UITableView alloc] initWithFrame:CGRectMake(0, 0, 1, 1) style:UITableViewStyleGrouped];
@@ -135,6 +145,11 @@
 
     // Place the table in editing mode and refresh the properties section, which has custom editing controls.
     [flightRouteTable setEditing:editing animated:animated];
+
+    if (!editing)
+    {
+        [waypointFileControl resignFirstResponder];
+    }
 }
 
 //--------------------------------------------------------------------------------------------------------------------//
@@ -151,7 +166,7 @@
     switch (section)
     {
         case SECTION_PROPERTIES:
-            return 2;
+            return 3;
         case SECTION_WAYPOINTS:
             return [_flightRoute waypointCount];
         default:
@@ -188,11 +203,13 @@
 - (UITableViewCell*) tableView:(UITableView*)tableView cellForProperty:(NSIndexPath*)indexPath
 {
     static NSString* propertyCellId = @"propertyCellId";
+    static UIColor* detailTextColor;
     UITableViewCell* cell = [tableView dequeueReusableCellWithIdentifier:propertyCellId];
     if (cell == nil)
     {
         cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:propertyCellId];
         [cell setAccessoryType:UITableViewCellAccessoryDisclosureIndicator];
+        detailTextColor = [[cell detailTextLabel] textColor];
     }
 
     if ([indexPath row] == ROW_COLOR)
@@ -207,6 +224,12 @@
         double altitude = [_flightRoute altitude];
         [[cell textLabel] setText:@"Altitude"];
         [[cell detailTextLabel] setText:[altitudeFormatter stringFromNumber:[NSNumber numberWithDouble:altitude]]];
+        [[cell detailTextLabel] setTextColor:detailTextColor]; // show altitude detail text in the default color
+    }
+    else if ([indexPath row] == ROW_DOWNLOAD)
+    {
+        [[cell textLabel] setText:@"Download data"];
+        [[cell detailTextLabel] setText:nil];
     }
 
     return cell;
@@ -215,15 +238,14 @@
 - (UITableViewCell*) tableView:(UITableView*)tableView cellForWaypoint:(NSIndexPath*)indexPath
 {
     static NSString* waypointCellId = @"waypointCellId";
-    UITableViewCell*cell = [tableView dequeueReusableCellWithIdentifier:waypointCellId];
+    WaypointCell* cell = [tableView dequeueReusableCellWithIdentifier:waypointCellId];
     if (cell == nil)
     {
-        cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:waypointCellId];
+        cell = [[WaypointCell alloc] initWithReuseIdentifier:waypointCellId];
     }
 
     Waypoint* waypoint = [_flightRoute waypointAtIndex:(NSUInteger) [indexPath row]];
-    [[cell textLabel] setText:[waypoint displayName]];
-    [[cell detailTextLabel] setText:[waypoint displayNameLong]];
+    [cell setToWaypoint:waypoint];
 
     return cell;
 }
@@ -248,8 +270,8 @@
     {
         AltitudePicker* picker = [[AltitudePicker alloc] initWithFrame:CGRectMake(0, 44, 1, 216)];
         [picker addTarget:self action:@selector(didPickAltitude:) forControlEvents:UIControlEventValueChanged];
-        [picker setMinimumAltitude:0];
-        [picker setMaximumAltitude:30480]; // 100,000ft maximum
+        [picker setMinimumAltitude:152.4];
+        [picker setMaximumAltitude:6096]; // 100,000ft maximum
         [picker setAltitudeInterval:152.4]; // 500ft interval
         [picker setAltitude:[_flightRoute altitude]];
         [picker setFormatter:altitudeFormatter];
@@ -259,6 +281,66 @@
         [viewController setTitle:@"Altitude"];
         [[self navigationController] pushViewController:viewController animated:YES];
     }
+    else if ([indexPath section] == SECTION_PROPERTIES && [indexPath row] == ROW_DOWNLOAD)
+    {
+        if (bulkRetrieverController == nil)
+            bulkRetrieverController = [[BulkRetrieverController alloc] initWithWorldWindView:_wwv];
+        [((UINavigationController*) [self parentViewController]) pushViewController:bulkRetrieverController animated:YES];
+
+        if ([_flightRoute waypointCount] == 0)
+        {
+            WWSector* sector = [[WWSector alloc] initWithDegreesMinLatitude:0 maxLatitude:0
+                                                               minLongitude:0 maxLongitude:0];
+            [bulkRetrieverController setSectors:[[NSArray alloc] initWithObjects:sector, nil]];
+        }
+        else if ([_flightRoute waypointCount] == 1)
+        {
+            Waypoint* waypoint = [_flightRoute waypointAtIndex:0];
+            WWSector* sector = [[WWSector alloc] initWithLocations:[[NSArray alloc] initWithObjects:[waypoint location], nil]];
+            [bulkRetrieverController setSectors:[[NSArray alloc] initWithObjects:sector, nil]];
+        }
+        else
+        {
+            // The BulkRetrievalController can handle multiple sectors, but we use only one here. See the commented
+            // out code below for logic that defines one sector per flight-path segment. Doing that causes
+            // over-estimation of the amount of data that needs to be downloaded, so we don't use it.
+            NSMutableArray* locations = [[NSMutableArray alloc] initWithCapacity:2];
+            for (NSUInteger i = 0; i < [_flightRoute waypointCount]; i++)
+            {
+                [locations addObject:[[_flightRoute waypointAtIndex:i] location]];
+            }
+//
+//            // The below is an approximation of the full state of Alaska. I'm leaving it here so that we can do
+//            // data size calculations.
+//            [locations removeAllObjects];
+//            [locations addObject:[[WWLocation alloc] initWithDegreesLatitude:55.7 longitude:-169.2]];
+//            [locations addObject:[[WWLocation alloc] initWithDegreesLatitude:55.7 longitude:-129.5]];
+//            [locations addObject:[[WWLocation alloc] initWithDegreesLatitude:71.1 longitude:-129.5]];
+//            [locations addObject:[[WWLocation alloc] initWithDegreesLatitude:71.1 longitude:-169.2]];
+
+            [bulkRetrieverController setSectors:[[NSArray alloc] initWithObjects:[[WWSector alloc]
+                    initWithLocations:locations], nil]];
+        }
+//        else
+//        {
+//        // This logic causes over-estimation of the amount of data that needs to be downloaded. To avoid that the
+//        // else clause above is used instead.
+//            NSMutableArray* sectors = [[NSMutableArray alloc] initWithCapacity:[_flightRoute waypointCount] - 1];
+//            NSMutableArray* locations = [[NSMutableArray alloc] initWithCapacity:2];
+//            for (NSUInteger i = 0; i < [_flightRoute waypointCount] - 1; i++)
+//            {
+//                [locations removeAllObjects];
+//
+//                [locations addObject:[[_flightRoute waypointAtIndex:i] location]];
+//                [locations addObject:[[_flightRoute waypointAtIndex:i + 1] location]];
+//
+//                [sectors addObject:[[WWSector alloc] initWithLocations:locations]];
+//            }
+//
+//            [bulkRetrieverController setSectors:sectors];
+//        }
+    }
+
 }
 
 - (BOOL) tableView:(UITableView*)tableView canEditRowAtIndexPath:(NSIndexPath*)indexPath
@@ -287,7 +369,7 @@
     }
 }
 
-- (NSIndexPath*) tableView:(UITableView*)tableView
+- (NSIndexPath*)               tableView:(UITableView*)tableView
 targetIndexPathForMoveFromRowAtIndexPath:(NSIndexPath*)sourceIndexPath
                      toProposedIndexPath:(NSIndexPath*)proposedDestinationIndexPath
 {
@@ -322,10 +404,10 @@ moveRowAtIndexPath:(NSIndexPath*)sourceIndexPath
        toIndexPath:(NSIndexPath*)destinationIndexPath
 {
     if ([sourceIndexPath section] == SECTION_WAYPOINTS
-     && [destinationIndexPath section] == SECTION_WAYPOINTS)
+            && [destinationIndexPath section] == SECTION_WAYPOINTS)
     {
         [_flightRoute moveWaypointAtIndex:(NSUInteger) [sourceIndexPath row]
-                                 toIndex:(NSUInteger) [destinationIndexPath row]];
+                                  toIndex:(NSUInteger) [destinationIndexPath row]];
     }
 }
 

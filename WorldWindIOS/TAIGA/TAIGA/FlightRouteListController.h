@@ -8,17 +8,21 @@
 #import <Foundation/Foundation.h>
 
 @class WaypointFile;
+@class WorldWindView;
 @class WWRenderableLayer;
 
 @interface FlightRouteListController : UITableViewController <UINavigationControllerDelegate, UIAlertViewDelegate>
 {
 @protected
-    WaypointFile* waypointFile;
     NSUInteger flightRouteColorIndex;
 }
 
-@property (nonatomic, readonly) WWRenderableLayer* layer;
+@property (nonatomic, readonly) WorldWindView* wwv;
 
-- (FlightRouteListController*) initWithLayer:(WWRenderableLayer*)layer;
+@property (nonatomic, readonly) WWRenderableLayer* flightRouteLayer;
+
+@property (nonatomic, readonly) WaypointFile* waypointFile;
+
+- (FlightRouteListController*) initWithWorldWindView:(WorldWindView*)wwv flightRouteLayer:(WWRenderableLayer*)flightRouteLayer waypointFile:(WaypointFile*)waypointFile;
 
 @end

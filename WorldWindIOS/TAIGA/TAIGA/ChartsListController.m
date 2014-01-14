@@ -13,18 +13,22 @@
 
 @implementation ChartsListController
 {
-    ChartsScreenController* parentScreen;
+    id parentController;
     NSString* chartsServer;
     NSString* airportsCachePath;
     NSArray* airportCharts;
+    NSMutableArray* filteredCharts;
     UIRefreshControl* refreshControl;
 }
 
-- (ChartsListController*) initWithParent:(ChartsScreenController*)parent
+- (ChartsListController*) initWithParent:(id)parent
 {
     self = [super initWithStyle:UITableViewStylePlain];
 
-    parentScreen = parent;
+    [[self navigationItem] setTitle:@"Charts"];
+
+    parentController = parent;
+    filteredCharts = [[NSMutableArray alloc] init];
 
     self.view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     self.view.autoresizesSubviews = YES;
@@ -44,6 +48,26 @@
     [self loadChartsTOC];
 
     return self;
+}
+
+- (void) setFilter:(NSString*)filter
+{
+    [filteredCharts removeAllObjects];
+
+    if (filter == nil || filter.length == 0)
+    {
+        [filteredCharts addObjectsFromArray:airportCharts];
+    }
+    else
+    {
+        for (NSString* name in airportCharts)
+        {
+            if ([name rangeOfString:filter options:NSCaseInsensitiveSearch].location != NSNotFound)
+                [filteredCharts addObject:name];
+        }
+    }
+
+    [[self tableView] reloadData];
 }
 
 - (void) loadChartsTOC
@@ -100,6 +124,10 @@
         return [nameA compare:nameB];
     }];
 
+    [filteredCharts addObjectsFromArray:airportCharts];
+
+    [[self tableView] reloadData];
+
     [refreshControl endRefreshing];
 }
 
@@ -110,7 +138,7 @@
 
 - (NSInteger) tableView:(UITableView*)tableView numberOfRowsInSection:(NSInteger)section
 {
-    return airportCharts != nil ? [airportCharts count] : 0;
+    return filteredCharts != nil ? [filteredCharts count] : 0;
 }
 
 - (UITableViewCell*) tableView:(UITableView*)tableView cellForRowAtIndexPath:(NSIndexPath*)indexPath
@@ -123,7 +151,7 @@
         cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:cellIdentifier];
     }
 
-    NSString* chartLine = [airportCharts objectAtIndex:(NSUInteger) [indexPath row]];
+    NSString* chartLine = [filteredCharts objectAtIndex:(NSUInteger) [indexPath row]];
     [[cell textLabel] setText:[chartLine componentsSeparatedByString:@","][1]];
 
     return cell;
@@ -131,7 +159,7 @@
 
 - (void) tableView:(UITableView*)tableView didSelectRowAtIndexPath:(NSIndexPath*)indexPath
 {
-    NSString* chartLine = [airportCharts objectAtIndex:(NSUInteger) [indexPath row]];
+    NSString* chartLine = [filteredCharts objectAtIndex:(NSUInteger) [indexPath row]];
     NSString* chartFileName = [chartLine componentsSeparatedByString:@","][0];
     NSString* chartName = [chartLine componentsSeparatedByString:@","][1];
 
@@ -155,13 +183,14 @@
     NSString* chartFileName = [[retriever url] lastPathComponent];
     NSString* chartPath = [airportsCachePath stringByAppendingPathComponent:chartFileName];
 
-    // If the retrieval was successful, cache the retrieved TOC.
+    // If the retrieval was successful, cache the retrieved chart.
     if ([[retriever status] isEqualToString:WW_SUCCEEDED] && [[retriever retrievedData] length] > 0)
     {
         [[retriever retrievedData] writeToFile:chartPath atomically:YES];
     }
 
-    [parentScreen loadChart:chartPath chartName:[retriever userData]];
+    [parentController loadChart:chartPath chartName:[retriever userData]];
+
 //
 //    for (NSUInteger i = 0; i < [airportCharts count]; i++)
 //    {

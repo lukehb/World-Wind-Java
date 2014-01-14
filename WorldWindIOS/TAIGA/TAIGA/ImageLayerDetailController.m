@@ -5,11 +5,12 @@
  @version $Id$
  */
 
-#import <WWTiledImageLayer.h>
 #import "ImageLayerDetailController.h"
-#import "WorldWind/WWLog.h"
-#import "WorldWind/WorldWindConstants.h"
+#import "RedrawingSlider.h"
 #import "Settings.h"
+#import "WorldWind/Layer/WWTiledImageLayer.h"
+#import "WorldWind/WorldWindView.h"
+#import "WorldWind/WWLog.h"
 
 @implementation ImageLayerDetailController
 
@@ -73,7 +74,7 @@
             cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:layerControlCellIdentifier];
             [cell setSelectionStyle:UITableViewCellSelectionStyleNone];
             [[cell textLabel] setText:@"Opacity"];
-            UISlider* slider = [[UISlider alloc] init];
+            RedrawingSlider* slider = [[RedrawingSlider alloc] init];
             [slider setTag:sliderTag];
             [slider addTarget:self action:@selector(opacityValueChanged:) forControlEvents:UIControlEventValueChanged];
             [cell setAccessoryView:slider];
@@ -94,17 +95,13 @@
 
     NSString* settingName = [[NSString alloc] initWithFormat:@"gov.nasa.worldwind.taiga.layer.%@.opacity",
                                                              [_layer displayName]];
-
     [Settings setFloat:[_layer opacity] forName:settingName];
-
-    NSNotification* redrawNotification = [NSNotification notificationWithName:WW_REQUEST_REDRAW object:self];
-    [[NSNotificationCenter defaultCenter] postNotification:redrawNotification];
 }
 
 - (void) handleRefreshButtonTap
 {
     [_layer setExpiration:[[NSDate alloc] initWithTimeIntervalSinceNow:-1]];
-    [[NSNotificationCenter defaultCenter] postNotificationName:WW_REQUEST_REDRAW object:_layer];
+    [WorldWindView requestRedraw];
 }
 
 @end

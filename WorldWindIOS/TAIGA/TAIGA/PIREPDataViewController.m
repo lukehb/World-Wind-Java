@@ -62,7 +62,7 @@ static NSArray* TAIGA_PIREP_DISPLAY_FIELDS;
 {
     [super viewDidAppear:animated];
 
-    [[self tableView] flashScrollIndicators];
+    [self flashScrollIndicator];
 }
 
 - (void) setEntries:(NSDictionary*)entries
@@ -70,6 +70,11 @@ static NSArray* TAIGA_PIREP_DISPLAY_FIELDS;
     _entries = entries;
     [self initializeNamesAndValues];
     [[self tableView] reloadData];
+}
+
+- (void) flashScrollIndicator
+{
+    [[self tableView] performSelector:@selector(flashScrollIndicators) withObject:nil afterDelay:0];
 }
 
 - (NSInteger) numberOfSectionsInTableView:(UITableView*)tableView

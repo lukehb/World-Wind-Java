@@ -15,15 +15,14 @@
 #import "WorldWind/Terrain/WWGlobe.h"
 #import "WorldWind/Util/WWMath.h"
 #import "WorldWind/WorldWindView.h"
-#import "WorldWind/WorldWindConstants.h"
 #import "WorldWind/WWLog.h"
 
+#define ANIMATION_FRAME_INTERVAL (3)
 #define DEFAULT_HEADING 0
 #define DEFAULT_TILT 0
 #define DEFAULT_ROLL 0
 #define DEFAULT_NEAR_DISTANCE 1
 #define DEFAULT_FAR_DISTANCE 10000000
-#define DISPLAY_LINK_FRAME_INTERVAL 3
 #define MIN_NEAR_DISTANCE 1
 #define MIN_FAR_DISTANCE 1000
 #define TARGET_FAR_RESOLUTION 10.0
@@ -60,11 +59,20 @@
 
 - (void) dispose
 {
-    // Invalidate the display link if the navigator is de-allocated before the display link can be cleaned up normally.
-    if (displayLink != nil)
+    if (gestureCount > 0)
     {
-        [displayLink invalidate];
-        displayLink = nil;
+        gestureCount = 0;
+        [WorldWindView stopRedrawing]; // send a stop redrawing request for this navigator's active gestures
+    }
+
+    if (animating)
+    {
+        animating = NO;
+        animationBlock = NULL;
+        completionBlock = NULL;
+        [animationDisplayLink invalidate];
+        animationDisplayLink = nil;
+        [WorldWindView stopRedrawing]; // send a stop redrawing request for this navigator's running animation
     }
 }
 
@@ -143,24 +151,90 @@
 //-- Setting the Location of Interest --//
 //--------------------------------------------------------------------------------------------------------------------//
 
-- (void) setToPosition:(WWPosition*)position
+- (void) setCenterLocation:(WWLocation*)location
 {
-    // Must be implemented by subclass
+    // Must be implemented by subclass.
 }
 
-- (void) setToRegionWithCenter:(WWPosition*)center radius:(double)radius
+- (void) setCenterLocation:(WWLocation*)location radius:(double)radius
 {
-    // Must be implemented by subclass
+    // Must be implemented by subclass.
 }
 
-- (void) animateToPosition:(WWPosition*)position overDuration:(NSTimeInterval)duration
+//--------------------------------------------------------------------------------------------------------------------//
+//-- Animating the Navigator --//
+//--------------------------------------------------------------------------------------------------------------------//
+
+- (void) animateWithDuration:(NSTimeInterval)duration animations:(void (^)(void))animations
 {
-    // Must be implemented by subclass
+    if (duration < 0)
+    {
+        WWLOG_AND_THROW(NSInvalidArgumentException, @"Duration is invalid")
+    }
+
+    if (animations == NULL)
+    {
+        WWLOG_AND_THROW(NSInvalidArgumentException, @"Animations block is NULL")
+    }
+
+    [self animateWithDuration:duration animations:animations completion:NULL];
 }
 
-- (void) animateToRegionWithCenter:(WWPosition*)center radius:(double)radius overDuration:(NSTimeInterval)duration
+- (void) animateWithDuration:(NSTimeInterval)duration animations:(void (^)(void))animations completion:(void (^)(BOOL finished))completion
 {
-    // Must be implemented by subclass
+    if (duration < 0)
+    {
+        WWLOG_AND_THROW(NSInvalidArgumentException, @"Duration is invalid")
+    }
+
+    if (animations == NULL)
+    {
+        WWLOG_AND_THROW(NSInvalidArgumentException, @"Animations block is NULL")
+    }
+
+    if (animating)
+    {
+        [self endAnimation:NO]; // end current animation without finishing it
+    }
+
+    completionBlock = completion; // re-assign the completion block after ending any existing animation
+    [self setupAnimationWithDuration:duration animations:animations];
+    [self beginAnimation];
+}
+
+- (void) animateWithBlock:(void (^)(NSDate* timestamp, BOOL* stop))block
+{
+    if (block == NULL)
+    {
+        WWLOG_AND_THROW(NSInvalidArgumentException, @"Block is NULL")
+    }
+
+    [self animateWithBlock:block completion:NULL];
+}
+
+- (void) animateWithBlock:(void (^)(NSDate* timestamp, BOOL* stop))block completion:(void (^)(BOOL finished))completion
+{
+    if (block == NULL)
+    {
+        WWLOG_AND_THROW(NSInvalidArgumentException, @"Block is NULL")
+    }
+
+    if (animating)
+    {
+        [self endAnimation:NO]; // end current animation without finishing it
+    }
+
+    animationBlock = block;
+    completionBlock = completion; // re-assign the completion block after ending any existing animation
+    [self beginAnimation];
+}
+
+- (void) stopAnimations
+{
+    if (animating)
+    {
+        [self endAnimation:NO]; // end current animation without finishing it
+    }
 }
 
 //--------------------------------------------------------------------------------------------------------------------//
@@ -192,145 +266,100 @@
 }
 
 //--------------------------------------------------------------------------------------------------------------------//
-//-- Display Link Interface for Subclasses --//
-//--------------------------------------------------------------------------------------------------------------------//
-
-- (void) startDisplayLink
-{
-    if (displayLinkObservers == 0)
-    {
-        displayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(displayLinkDidFire:)];
-        [displayLink setFrameInterval:DISPLAY_LINK_FRAME_INTERVAL];
-        [displayLink addToRunLoop:[NSRunLoop currentRunLoop] forMode:NSDefaultRunLoopMode];
-    }
-
-    displayLinkObservers++;
-}
-
-- (void) stopDisplayLink
-{
-    displayLinkObservers--;
-
-    if (displayLinkObservers == 0)
-    {
-        [displayLink invalidate];
-        displayLink = nil;
-    }
-}
-
-- (void) displayLinkDidFire:(CADisplayLink*)notifyingDisplayLink
-{
-    if (animating)
-    {
-        NSDate* now = [NSDate date];
-        [self updateAnimationForDate:now];
-    }
-
-    [_view drawView]; // The view is a weak reference; this has no effect if the view has been deallocated.
-}
-
-//--------------------------------------------------------------------------------------------------------------------//
 //-- Gesture Recognizer Interface for Subclasses --//
 //--------------------------------------------------------------------------------------------------------------------//
 
 - (void) gestureRecognizerDidBegin:(UIGestureRecognizer*)recognizer
 {
-    // Cancel any currently active animations and start the display link. Navigator gestures override any currently
-    // active animation.
-    [self cancelAnimation];
-    [self startDisplayLink];
+    if (animating) // Stop any currently running animation without finishing it. Navigator gestures override animations.
+    {
+        [self endAnimation:NO];
+    }
 
-    // Post a notification that the navigator has recognized a gesture. Do this last so that the navigator posts the
-    // gesture recognized notification after any animation cancelled notifications.
-    NSNotification* notification = [NSNotification notificationWithName:WW_NAVIGATOR_GESTURE_RECOGNIZED object:self];
-    [[NSNotificationCenter defaultCenter] postNotification:notification];
+    if (++gestureCount == 1) // start redrawing when the first gesture begins and keep track of the total gesture count
+    {
+        [WorldWindView startRedrawing];
+    }
 }
 
 - (void) gestureRecognizerDidEnd:(UIGestureRecognizer*)recognizer
 {
-    // Stop the display link and redraw the view. This handles the case when the last gesture update and the gesture end
-    // occur before the display link has a chance to fire and redraw the view.
-    [self stopDisplayLink];
-    [_view drawView]; // The view is a weak reference; this has no effect if the view has been deallocated.
+    if (--gestureCount == 0) // stop redrawing when all gestures have ended
+    {
+        [WorldWindView stopRedrawing];
+    }
 }
 
 //--------------------------------------------------------------------------------------------------------------------//
 //-- Animation Interface for Subclasses --//
 //--------------------------------------------------------------------------------------------------------------------//
 
-- (void) beginAnimationWithDuration:(NSTimeInterval)duration
+- (void) beginAnimation
 {
-    if (!animating)
-    {
-        // Compute the animation's begin and end date based on the current time and the specified duration.
-        animBeginDate = [NSDate date];
-        animEndDate = [NSDate dateWithTimeInterval:duration sinceDate:animBeginDate];
+    if (animating) // the current animation must end or be forced to end before another one can begin
+        return;
 
-        [self animationDidBegin];
-        animating = YES;
+    animating = YES;
+    animationDisplayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(updateAnimation)];
+    [animationDisplayLink setFrameInterval:ANIMATION_FRAME_INTERVAL];
+    [animationDisplayLink addToRunLoop:[NSRunLoop currentRunLoop] forMode:NSDefaultRunLoopMode];
+    [WorldWindView startRedrawing]; // Redraw the view continuously while the animation is running.
+}
+
+- (void) endAnimation:(BOOL)finished
+{
+    if (!animating) // ignore this call when there's no animation running
+        return;
+
+    animating = NO;
+    [animationDisplayLink invalidate];
+    animationDisplayLink = nil;
+    [WorldWindView stopRedrawing]; // Stop redrawing the view continuously when the animation ends.
+
+    if (animationBlock != NULL)
+    {
+        animationBlock = NULL;
+    }
+
+    if (completionBlock != NULL)
+    {
+        void (^completionBlockCopy)(BOOL) = completionBlock;
+        completionBlock = NULL;
+        completionBlockCopy(finished); // invoke a copy to support animations in the completion block
     }
 }
 
-- (void) endAnimation
+- (void) updateAnimation
 {
-    if (animating)
+    if (!animating) // ignore this call when there's no animation running
+        return;
+
+    NSDate* timestamp = [NSDate date]; // now
+
+    if (animationBlock != NULL)
     {
-        [self animationDidEnd];
-        animating = NO;
+        BOOL stop = NO; // stop the animation when the caller's block requests it
+        animationBlock(timestamp, &stop);
+
+        if (stop) // the caller's block requested that the animation stop
+        {
+            [self endAnimation:YES];
+        }
+
+        return; // animation block takes precedence over navigator supported animations
     }
+
+    [self doUpdateAnimation:timestamp];
 }
 
-- (void) cancelAnimation
+- (void) doUpdateAnimation:(NSDate*)timestamp
 {
-    if (animating)
-    {
-        [self animationWasCancelled];
-        animating = NO;
-    }
+    // Must be implemented by subclass.
 }
 
-- (void) updateAnimationForDate:(NSDate*)date
+- (void) setupAnimationWithDuration:(NSTimeInterval)duration animations:(void (^)(void))animations
 {
-    NSTimeInterval now = [date timeIntervalSinceReferenceDate];
-    NSTimeInterval endTime = [animEndDate timeIntervalSinceReferenceDate];
-
-    if (now >= endTime) // The animation has reached its scheduled end.
-    {
-        [self endAnimation];
-    }
-    else
-    {
-        [self animationDidUpdate:date begin:animBeginDate end:animEndDate];
-    }
-}
-
-- (void) animationDidBegin
-{
-    [self startDisplayLink];
-
-    NSNotification* notification = [NSNotification notificationWithName:WW_NAVIGATOR_ANIMATION_BEGAN object:self];
-    [[NSNotificationCenter defaultCenter] postNotification:notification];
-}
-
-- (void) animationDidEnd
-{
-    [self stopDisplayLink];
-
-    NSNotification* notification = [NSNotification notificationWithName:WW_NAVIGATOR_ANIMATION_ENDED object:self];
-    [[NSNotificationCenter defaultCenter] postNotification:notification];
-}
-
-- (void) animationWasCancelled
-{
-    [self stopDisplayLink];
-
-    NSNotification* notification = [NSNotification notificationWithName:WW_NAVIGATOR_ANIMATION_CANCELLED object:self];
-    [[NSNotificationCenter defaultCenter] postNotification:notification];
-}
-
-- (void) animationDidUpdate:(NSDate*)date begin:(NSDate*)begin end:(NSDate*)end
-{
-    // Must be implemented by subclass
+    // Must be implemented by subclass.
 }
 
 @end

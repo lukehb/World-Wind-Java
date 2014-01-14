@@ -37,20 +37,32 @@
 * When a layer or other aspect of the view is changed, the view must redraw to effect the change on the screen. This
 * is performed automatically during navigation and for layer list changes. Applications must explicitly request a
 * redraw when they make changes to layer contents, including the shapes in a WWRenderableLayer. Redraws can be
-* requested either by calling the World Wind view's requestRedraw method or by sending a WW_REQUEST_REDRAW notification
-* to the default notification center. See the implementation of WorldWindView.requestRedraw for an example of how to
-* form and send the notification. The benefit of the notification approach is that the application object requesting
-* the redraw need not have a reference to the WorldWindView object.
+* requested by calling WorldWindView's requestRedraw method, which posts a WW_REQUEST_REDRAW notification to the default
+* notification center. The benefit of using requestRedraw rather than posting notifications explicitly is that this
+* method will coalesce redundant redraw requests.
 */
 @interface WorldWindView : UIView <WWDisposable>
+{
+@protected
+    NSUInteger startRedrawingRequests;
+    CADisplayLink* redrawDisplayLink;
+    NSMutableArray* delegates;
+}
 
-/// @name World Wind View attributes
+/// @name Attributes
 
 /// The view's scene controller. Use this to add and remove layers.
 @property(nonatomic, readonly) WWSceneController* sceneController;
 
 /// The view's navigator.
 @property(nonatomic) id <WWNavigator> navigator;
+
+/// The view's frame statistics associated with the most recent frame. Frame statistics provides measurements indicating
+/// the view's current and average rendering performance.
+@property(nonatomic, readonly) WWFrameStatistics* frameStatistics;
+
+/// The view's OpenGL context. Applications typically do not need to be aware of this object.
+@property(nonatomic, readonly) EAGLContext* context;
 
 /// The view's viewport, in screen coordinates.
 @property(nonatomic, readonly) CGRect viewport;
@@ -77,37 +89,59 @@
 /// The view's OpenGL picking depth buffer. Applications typically do not need to be aware of this object.
 @property(nonatomic, readonly) GLuint pickingDepthBuffer;
 
-/// The view's OpenGL context. Applications typically do not need to be aware of this object.
-@property(nonatomic, readonly) EAGLContext* context;
-
-/// The view's frame statistics associated with the most recent frame. Frame statistics provides measurements indicating
-/// the view's current and average rendering performance.
-@property(nonatomic, readonly) WWFrameStatistics* frameStatistics;
-
-/// A flag indicating that a redraw has been requested. Applications typically do not need to be aware of this object.
-@property BOOL redrawRequested;
-
-/// Specifies whether the view should redraw itself continuously. This is used only for diagnostics and performance
-/// statistic gathering and should not be used by the application.
-@property(nonatomic) BOOL drawContinuously;
-
-/// @name Redrawing World Wind Views
+/// @name Updating the World Wind Scene
 
 /**
-* Redraw the view. The redraw is performed immediately.
+* Redraws this view's scene.
 *
-* Applications should typically not use this method to redraw, but should call requestRedraw instead.
+* The redraw is performed immediately. Applications should typically not use this method to redraw, but should use
+* requestRedraw, startRedrawing and stopRedrawing instead.
 */
 - (void) drawView;
 
 /**
-* Request that the view be redrawn.
+* Requests that WorldWindViews redraw themselves when the current run loop completes.
 *
-* This method collapses multiple redraw requests so that the view is not redrawn excessively.
+* This methods queues a redraw request then returns immediately to the caller, without waiting for the redraw to
+* complete. Multiple redraw requests posted during the same run loop iteration are coalesced so that views are not
+* redrawn excessively. Redraw requests submitted while a view is continuously redrawing are ignored. See startRedrawing
+* for information on continuous redrawing.
+*
+* It is safe to call this method from any thread. Requests received on a non-main thread are automatically forwarded to
+* the main thread.
 */
-- (void) requestRedraw;
++ (void) requestRedraw;
 
-/// @name Picking
+/**
+* Requests that WorldWindViews start redrawing themselves continuously. This must be paired with a corresponding call to
+* stopRedrawing.
+*
+* This method causes WorldWindViews to start redrawing themselves continuously then returns to the caller. The first
+* redraw is performed during the next run loop iteration. Single redraw requests submitted while a view is continuously
+* redrawing are ignored. See requestRedraw for information on single redraw requests.
+*
+* Continuous WorldWindView redrawing is synchronized with the refresh rate of the display using a CADisplayLink. The
+* display link may be configured to draw at an implementation defined fraction of the native refresh rate in order to
+* maintain a steady redraw rate.
+*
+* It is safe to call this method from any thread. Requests received on a non-main thread are automatically forwarded to
+* the main thread.
+*/
++ (void) startRedrawing;
+
+/**
+* Requests that WorldWindViews stop redrawing themselves continuously. This must be paired with a corresponding call to
+* startRedrawing.
+*
+* This method requests that WorldWindViews redraw themselves one final time, then causes WorldWindViews to stop drawing
+* themselves continuously and returns to the caller.
+*
+* It is safe to call this method from any thread. Requests received on a non-main thread are automatically forwarded to
+* the main thread.
+*/
++ (void) stopRedrawing;
+
+/// @name Picking Objects in the World Wind Scene
 
 /**
 * Request the objects at a specified pick point.
@@ -118,20 +152,6 @@
 * the returned list contains an object identifying the associated geographic position.
 */
 - (WWPickedObjectList*) pick:(CGPoint)pickPoint;
-
-/// @name Methods of Interest Only to Subclasses
-
-/**
-* Releases the OpenGL objects created when the view was initialized.
-*/
-- (void) tearDownGL;
-
-/**
-* Responds to notifications of interest to the view.
-*
-* @param notification The notification to respond to.
-*/
-- (void) handleNotification:(NSNotification*)notification;
 
 /// @name Interposing in View Operations
 
@@ -148,5 +168,49 @@
 * @param delegate The delegate to remove.
 */
 - (void) removeDelegate:(id <WorldWindViewDelegate>)delegate;
+
+/// @name Methods of Interest Only to Subclasses
+
+/**
+* Allocates storage for this view's OpenGL renderbuffer objects and updates the viewport and depthBits properties to
+* match the current renderbuffer storage configuration.
+*
+* Called when this view is initialized and any time its OpenGL renderbuffer dimensions change thereafter.
+*
+* @param drawable The EAGLDrawable instance that will serve as the storage target for this view's OpenGL rendering.
+*/
+- (void) establishRenderbufferStorage:(id <EAGLDrawable>)drawable;
+
+/**
+* Releases the OpenGL framebuffer objects and renderbuffer objects created when this view was initialized.
+*/
+- (void) deleteRenderbuffers;
+
+/**
+* Responds to notifications posted by requestRedraw and any notification named WW_REQUEST_REDRAW.
+*
+* This correctly handles notifications posted on any thread.
+*
+* @param notification The posted notification.
+*/
+- (void) handleRequestRedraw:(NSNotification*)notification;
+
+/**
+* Responds to notifications posted by startRedrawing and any notification named WW_START_REDRAWING.
+*
+* This correctly handles notifications posted on any thread.
+*
+* @param notification The posted notification.
+*/
+- (void) handleStartRedrawing:(NSNotification*)notification;
+
+/**
+* Responds to notifications posted by stopRedrawing and any notification named WW_STOP_REDRAWING.
+*
+* This correctly handles notifications posted on any thread.
+*
+* @param notification The posted notification.
+*/
+- (void) handleStopRedrawing:(NSNotification*)notification;
 
 @end

@@ -8,6 +8,7 @@
 #import "WaypointFileControl.h"
 #import "WaypointFile.h"
 #import "Waypoint.h"
+#import "WaypointCell.h"
 
 @implementation WaypointFileControl
 
@@ -75,9 +76,13 @@
     [waypointTable reloadData];
 }
 
-- (void) flashScrollIndicators
+- (void) didSelectWaypointForIndex:(NSUInteger)index
 {
-    [waypointTable flashScrollIndicators];
+    Waypoint* waypoint = [waypoints objectAtIndex:index];
+    [self sendActionForWaypoint:waypoint];
+
+    [waypointSearchBar setText:nil]; // clear search field after waypoint selection
+    [self filterWaypoints];
 }
 
 - (void) sendActionForWaypoint:(Waypoint*)waypoint
@@ -86,6 +91,16 @@
 #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
     [_target performSelector:_action withObject:waypoint];
 #pragma clang diagnostic pop
+}
+
+- (void) flashScrollIndicators
+{
+    [waypointTable flashScrollIndicators];
+}
+
+- (BOOL) resignFirstResponder
+{
+    return [waypointSearchBar resignFirstResponder];
 }
 
 //--------------------------------------------------------------------------------------------------------------------//
@@ -99,6 +114,7 @@
 
 - (void) searchBarSearchButtonClicked:(UISearchBar*)searchBar
 {
+    [searchBar resignFirstResponder];
     [self filterWaypoints];
 }
 
@@ -119,15 +135,14 @@
 - (UITableViewCell*) tableView:(UITableView*)tableView cellForRowAtIndexPath:(NSIndexPath*)indexPath
 {
     static NSString* cellIdentifier = @"cell";
-    UITableViewCell* cell = [tableView dequeueReusableCellWithIdentifier:cellIdentifier];
+    WaypointCell* cell = [tableView dequeueReusableCellWithIdentifier:cellIdentifier];
     if (cell == nil)
     {
-        cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:cellIdentifier];
+        cell = [[WaypointCell alloc] initWithReuseIdentifier:cellIdentifier];
     }
 
     Waypoint* waypoint = [waypoints objectAtIndex:(NSUInteger) [indexPath row]];
-    [[cell textLabel] setText:[waypoint displayName]];
-    [[cell detailTextLabel] setText:[waypoint displayNameLong]];
+    [cell setToWaypoint:waypoint];
 
     return cell;
 }
@@ -137,7 +152,7 @@
     return YES;
 }
 
-- (UITableViewCellEditingStyle) tableView:(UITableView *)tableView editingStyleForRowAtIndexPath:(NSIndexPath *)indexPath
+- (UITableViewCellEditingStyle) tableView:(UITableView*)tableView editingStyleForRowAtIndexPath:(NSIndexPath*)indexPath
 {
     return UITableViewCellEditingStyleInsert;
 }
@@ -146,19 +161,13 @@
 commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
  forRowAtIndexPath:(NSIndexPath*)indexPath
 {
-    Waypoint* waypoint = [waypoints objectAtIndex:(NSUInteger) [indexPath row]];
-    [self sendActionForWaypoint:waypoint];
+    [self didSelectWaypointForIndex:(NSUInteger) [indexPath row]];
 }
 
 - (void) tableView:(UITableView*)tableView didSelectRowAtIndexPath:(NSIndexPath*)indexPath
 {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
-
-    if ([waypoints count] > 0)
-    {
-        Waypoint* waypoint = [waypoints objectAtIndex:(NSUInteger) [indexPath row]];
-        [self sendActionForWaypoint:waypoint];
-    }
+    [self didSelectWaypointForIndex:(NSUInteger) [indexPath row]];
 }
 
 @end

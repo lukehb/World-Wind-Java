@@ -15,7 +15,7 @@
 #import "ImageLayerDetailController.h"
 #import "RenderableLayerDetailController.h"
 #import "WWElevationShadingLayer.h"
-#import "TerrainAltitudeController.h"
+#import "TerrainAltitudeDetailController.h"
 #import "AppConstants.h"
 #import "METARLayer.h"
 #import "PIREPLayer.h"
@@ -39,6 +39,18 @@
                                                object:nil];
 
     return self;
+}
+
+- (void) viewDidAppear:(BOOL)animated
+{
+    [super viewDidAppear:animated];
+
+    [[self tableView] flashScrollIndicators];
+}
+
+- (void) flashScrollIndicator
+{
+    [[self tableView] performSelector:@selector(flashScrollIndicators) withObject:nil afterDelay:0];
 }
 
 - (void) navigationController:(UINavigationController*)navigationController willShowViewController:(UIViewController*)viewController animated:(BOOL)animated
@@ -66,7 +78,7 @@
     [Settings setBool:[layer enabled] forName:
             [[NSString alloc] initWithFormat:@"gov.nasa.worldwind.taiga.layer.enabled.%@", [layer displayName]]];
     [[self tableView] reloadData];
-    [self requestRedraw];
+    [WorldWindView requestRedraw];
 }
 
 - (UITableViewCell*) tableView:(UITableView*)tableView cellForRowAtIndexPath:(NSIndexPath*)indexPath
@@ -115,8 +127,8 @@
     }
     else if ([layer isKindOfClass:[WWElevationShadingLayer class]])
     {
-        TerrainAltitudeController* detailController =
-                [[TerrainAltitudeController alloc] initWithLayer:(WWElevationShadingLayer*) layer];
+        TerrainAltitudeDetailController* detailController =
+                [[TerrainAltitudeDetailController alloc] initWithLayer:(WWElevationShadingLayer*) layer];
 
         [((UINavigationController*) [self parentViewController]) pushViewController:detailController animated:YES];
     }
@@ -137,11 +149,6 @@
     }
 
     return nonHiddenLayers;
-}
-
-- (void) requestRedraw
-{
-    [[NSNotificationCenter defaultCenter] postNotificationName:WW_REQUEST_REDRAW object:self];
 }
 
 - (void) handleNotification:(NSNotification*)notification

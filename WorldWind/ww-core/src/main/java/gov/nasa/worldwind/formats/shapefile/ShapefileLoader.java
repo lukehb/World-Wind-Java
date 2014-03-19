@@ -3,16 +3,16 @@
  * National Aeronautics and Space Administration.
  * All Rights Reserved.
  */
-package gov.nasa.worldwindx.examples.util;
+package gov.nasa.worldwind.formats.shapefile;
 
 import gov.nasa.worldwind.WorldWind;
 import gov.nasa.worldwind.avlist.AVKey;
-import gov.nasa.worldwind.formats.shapefile.*;
 import gov.nasa.worldwind.geom.*;
 import gov.nasa.worldwind.layers.*;
 import gov.nasa.worldwind.render.*;
 import gov.nasa.worldwind.util.*;
 
+import java.awt.Color;
 import java.util.*;
 
 /**
@@ -33,14 +33,33 @@ import java.util.*;
  * @author dcollins
  * @version $Id$
  */
-public class ShapefileLoader
+public final class ShapefileLoader
 {
-    protected static final RandomShapeAttributes randomAttrs = new RandomShapeAttributes();
-
     /** Indicates the maximum number of polygons to place in a layer before creating an additional layer. */
     protected int numPolygonsPerLayer = 5000;
+    
+    protected final Color DEFAULT_POINT_COLOR = Color.RED;
+    protected final double DEFAULT_POINT_SCALE = 7.0;
+    
+    protected final Color DEFAULT_LINE_COLOR = Color.YELLOW;
+    protected final double DEFAULT_LINE_WIDTH = 1.5;
+    
+    protected final Color DEFAULT_POLYGON_INTERIOR_COLOR = Color.WHITE;
+    protected final Color DEFAULT_POLYGON_OUTLINE_COLOR = Color.BLUE;
+    protected final double DEFAULT_POLYGON_OPACITY = 0.5;
+    protected final double DEFAULT_POLYGON_LINE_WIDTH = 3.0;
+    
+    protected Color pointColor = DEFAULT_POINT_COLOR;
+    protected double pointScale = DEFAULT_POINT_SCALE;
+    
+    protected Color lineColor = DEFAULT_LINE_COLOR;
+    protected double lineWidth = DEFAULT_LINE_WIDTH;
+    
+    protected Color polygonInteriorColor = DEFAULT_POLYGON_INTERIOR_COLOR;
+    protected Color polygonOutlineColor = DEFAULT_POLYGON_OUTLINE_COLOR;
+    protected double polygonOpacity = DEFAULT_POLYGON_OPACITY;
+    protected double polygonLineWidth = DEFAULT_POLYGON_LINE_WIDTH;
 
-    /** Constructs a ShapefileLoader, but otherwise does nothing. */
     public ShapefileLoader()
     {
     }
@@ -122,6 +141,51 @@ public class ShapefileLoader
             WWIO.closeStream(shp, source.toString());
         }
     }
+    
+    /**
+     * Populate a {@link gov.nasa.worldwind.layers.Layer} from a general Shapefile.
+     *
+     * @param shp the Shapefile to load the shapes from.
+     * @param layer the Layer to populate with the shapes.
+     *
+     * @throws IllegalArgumentException if the Shapefile is null, or if the Shapefile's primitive type is unrecognized.
+     */
+    public void populateLayerFromShapefile(Shapefile shp, Layer layer)
+    {
+        if (shp == null)
+        {
+            String message = Logging.getMessage("nullValue.ShapefileIsNull");
+            Logging.logger().severe(message);
+            throw new IllegalArgumentException(message);
+        }
+        if (layer == null)
+        {
+            String message = Logging.getMessage("nullValue.ShapefileIsNull");
+            Logging.logger().severe(message);
+            throw new IllegalArgumentException(message);
+        }
+
+        if (Shapefile.isPointType(shp.getShapeType()))
+        {
+            this.addRenderablesForPoints(shp, (RenderableLayer) layer);
+        }
+        else if (Shapefile.isMultiPointType(shp.getShapeType()))
+        {
+            this.addRenderablesForMultiPoints(shp, (RenderableLayer) layer);
+        }
+        else if (Shapefile.isPolylineType(shp.getShapeType()))
+        {
+            this.addRenderablesForPolylines(shp, (RenderableLayer) layer);
+        }
+        else if (Shapefile.isPolygonType(shp.getShapeType()))
+        {
+            this.addRenderablesForPolygons(shp, (RenderableLayer) layer);
+        }
+        else
+        {
+            Logging.logger().warning(Logging.getMessage("generic.UnrecognizedShapeType", shp.getShapeType()));
+        }
+    }
 
     /**
      * Creates a {@link gov.nasa.worldwind.layers.Layer} from a general Shapefile.
@@ -134,41 +198,8 @@ public class ShapefileLoader
      */
     public Layer createLayerFromShapefile(Shapefile shp)
     {
-        if (shp == null)
-        {
-            String message = Logging.getMessage("nullValue.ShapefileIsNull");
-            Logging.logger().severe(message);
-            throw new IllegalArgumentException(message);
-        }
-
-        Layer layer = null;
-
-        if (Shapefile.isPointType(shp.getShapeType()))
-        {
-            layer = new RenderableLayer();
-            this.addRenderablesForPoints(shp, (RenderableLayer) layer);
-        }
-        else if (Shapefile.isMultiPointType(shp.getShapeType()))
-        {
-            layer = new RenderableLayer();
-            this.addRenderablesForMultiPoints(shp, (RenderableLayer) layer);
-        }
-        else if (Shapefile.isPolylineType(shp.getShapeType()))
-        {
-            layer = new RenderableLayer();
-            this.addRenderablesForPolylines(shp, (RenderableLayer) layer);
-        }
-        else if (Shapefile.isPolygonType(shp.getShapeType()))
-        {
-            List<Layer> layers = new ArrayList<Layer>();
-            this.addRenderablesForPolygons(shp, layers);
-            layer = layers.get(0);
-        }
-        else
-        {
-            Logging.logger().warning(Logging.getMessage("generic.UnrecognizedShapeType", shp.getShapeType()));
-        }
-
+        Layer layer = new RenderableLayer();
+        populateLayerFromShapefile(shp, layer);
         return layer;
     }
 
@@ -259,6 +290,177 @@ public class ShapefileLoader
 
         this.numPolygonsPerLayer = numPolygonsPerLayer;
     }
+    
+    /**
+     * Indicates the color that is used for point-type shapes when reading a
+     * shape-file.
+     * 
+     * @return the color that is used for point-type shapes.
+     */
+    public Color getPointColor()
+    {
+        return this.pointColor;
+    }
+    
+    /**
+     * Specified the color that will be used for point-type shapes when reading
+     * a shape-file.
+     * 
+     * @param pointColor the color that will be used for point-type shapes.
+     */
+    public void setPointColor(Color pointColor)
+    {
+        this.pointColor = pointColor;
+    }
+    
+    /**
+     * Indicates the scale of point-type shapes when reading a shape-file.
+     * 
+     * @return the scale of point-type shapes.
+     */
+    public double getPointScale()
+    {
+        return this.pointScale;
+    }
+    
+    /**
+     * Specified the scale of point-type shapes when reading a shape-file.
+     * 
+     * @param pointScale the scale of point-type shapes.
+     */
+    public void setPointScale(double pointScale)
+    {
+        this.pointScale = pointScale;
+    }
+    
+    /**
+     * Indicates the color that is used for line-type shapes when reading a
+     * shape-file.
+     * 
+     * @return the color that is used for line-type shapes.
+     */
+    public Color getLineColor()
+    {
+        return this.lineColor;
+    }
+    
+    /**
+     * Specified the color that will be used for line-type shapes when reading
+     * a shape-file.
+     * 
+     * @param lineColor the color that will be used for line-type shapes.
+     */
+    public void setLineColor(Color lineColor)
+    {
+        this.lineColor = lineColor;
+    }
+    
+    /**
+     * Indicates the width of line-type shapes when reading a shape-file.
+     * 
+     * @return the width of line-type shapes.
+     */
+    public double getLineWidth()
+    {
+        return this.lineWidth;
+    }
+    
+    /**
+     * Specified the width of line-type shapes when reading a shape-file.
+     * 
+     * @param lineWidth the width of line-type shapes.
+     */
+    public void setLineWidth(double lineWidth)
+    {
+        this.lineWidth = lineWidth;
+    }
+    
+    /**
+     * Indicates the interior color that is used for polygon-type shapes when
+     * reading a shape-file.
+     * 
+     * @return the color that is used for the interior of polygon-type shapes.
+     */
+    public Color getPolygonInteriorColor()
+    {
+        return this.polygonInteriorColor;
+    }
+    
+    /**
+     * Specified the interior color that will be used for polygon-type shapes
+     * when reading a shape-file.
+     * 
+     * @param polygonInteriorColor the color that will be used for the interior
+     * of polygon-type shapes.
+     */
+    public void setPolygonInteriorColor(Color polygonInteriorColor)
+    {
+        this.polygonInteriorColor = polygonInteriorColor;
+    }
+    
+    /**
+     * Indicates the outline color that is used for polygon-type shapes when
+     * reading a shape-file.
+     * 
+     * @return the color that is used for the outline of polygon-type shapes.
+     */
+    public Color getPolygonOutlineColor()
+    {
+        return this.polygonOutlineColor;
+    }
+    
+    /**
+     * Specified the outline color that will be used for polygon-type shapes
+     * when reading a shape-file.
+     * 
+     * @param polygonOutlineColor the color that will be used for the outline
+     * of polygon-type shapes.
+     */
+    public void setPolygonOutlineColor(Color polygonOutlineColor)
+    {
+        this.polygonOutlineColor = polygonOutlineColor;
+    }
+    
+    /**
+     * Indicates the opacity of polygon-type shapes when reading a shape-file.
+     * 
+     * @return the opacity of polygon-type shapes.
+     */
+    public double getPolygonOpacity()
+    {
+        return this.polygonOpacity;
+    }
+    
+    /**
+     * Specified the opacity of polygon-type shapes when reading a shape-file.
+     * 
+     * @param polygonOpacity the opacity of polygon-type shapes.
+     */
+    public void setPolygonOpacity(double polygonOpacity)
+    {
+        this.polygonOpacity = polygonOpacity;
+    }
+    
+    /**
+     * Indicates the outline width of polygon-type shapes when reading a shape-file.
+     * 
+     * @return the outline width of polygon-type shapes.
+     */
+    public double getPolygonLineWidth()
+    {
+        return this.polygonLineWidth;
+    }
+    
+    /**
+     * Specified the outline width of polygon-type shapes when reading a shape-file.
+     * 
+     * @param polygonLineWidth the outline width of polygon-type shapes.
+     */
+    public void setPolygonLineWidth(double polygonLineWidth)
+    {
+        this.polygonLineWidth = polygonLineWidth;
+    }
+    
     //**************************************************************//
     //********************  Geometry Conversion  *******************//
     //**************************************************************//
@@ -322,8 +524,38 @@ public class ShapefileLoader
             shp.nextRecord();
         }
 
-        ShapeAttributes attrs = this.createPolylineAttributes(null);
+        ShapeAttributes attrs = this.createPolylineAttributes();
         layer.addRenderable(this.createPolyline(shp, attrs));
+    }
+    
+    protected void addRenderablesForPolygons(Shapefile shp, RenderableLayer layer)
+    {
+        int recordNumber = 0;
+        while (shp.hasNext())
+        {
+            try
+            {
+                ShapefileRecord record = shp.nextRecord();
+                recordNumber = record.getRecordNumber();
+
+                if (!Shapefile.isPolygonType(record.getShapeType()))
+                    continue;
+
+                ShapeAttributes attrs = this.createPolygonAttributes(record);
+                this.createPolygon(record, attrs, layer);
+                
+                if (layer.getNumRenderables() > this.numPolygonsPerLayer)
+                {
+                    break; // We exit to avoid adding too many polygons to layer.
+                }
+            }
+            catch (Exception e)
+            {
+                Logging.logger().warning(Logging.getMessage("SHP.ExceptionAttemptingToConvertShapefileRecord",
+                    recordNumber, e));
+                // continue with the remaining records
+            }
+        }
     }
 
     /**
@@ -491,18 +723,30 @@ public class ShapefileLoader
     @SuppressWarnings({"UnusedDeclaration"})
     protected PointPlacemarkAttributes createPointAttributes(ShapefileRecord record)
     {
-        return randomAttrs.nextPointAttributes();
+        PointPlacemarkAttributes attrs = new PointPlacemarkAttributes();
+        attrs.setUsePointAsDefaultImage(true);
+        attrs.setLineMaterial(new Material(this.pointColor));
+        attrs.setScale(this.pointScale);
+        return attrs;
     }
 
     @SuppressWarnings({"UnusedDeclaration"})
-    protected ShapeAttributes createPolylineAttributes(ShapefileRecord record)
+    protected ShapeAttributes createPolylineAttributes()
     {
-        return randomAttrs.nextPolylineAttributes();
+        ShapeAttributes attrs = new BasicShapeAttributes();
+        attrs.setOutlineMaterial(new Material(this.lineColor));
+        attrs.setOutlineWidth(this.lineWidth);
+        return attrs;
     }
 
     @SuppressWarnings({"UnusedDeclaration"})
     protected ShapeAttributes createPolygonAttributes(ShapefileRecord record)
     {
-        return randomAttrs.nextPolygonAttributes();
+        ShapeAttributes attrs = new BasicShapeAttributes();
+        attrs.setInteriorMaterial(new Material(this.polygonInteriorColor));
+        attrs.setOutlineMaterial(new Material(WWUtil.makeColorBrighter(this.polygonOutlineColor)));
+        attrs.setInteriorOpacity(this.polygonOpacity);
+        attrs.setOutlineWidth(this.polygonLineWidth);
+        return attrs;
     }
 }

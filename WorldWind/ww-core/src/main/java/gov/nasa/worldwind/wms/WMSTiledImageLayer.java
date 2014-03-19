@@ -163,6 +163,7 @@ public class WMSTiledImageLayer extends BasicTiledImageLayer
         private final String imageFormat;
         private final String wmsVersion;
         private final String crs;
+        private final String transparent;
         private final String backgroundColor;
         public String URLTemplate;
 
@@ -171,6 +172,7 @@ public class WMSTiledImageLayer extends BasicTiledImageLayer
             this.layerNames = params.getStringValue(AVKey.LAYER_NAMES);
             this.styleNames = params.getStringValue(AVKey.STYLE_NAMES);
             this.imageFormat = params.getStringValue(AVKey.IMAGE_FORMAT);
+            this.transparent = params.getStringValue(AVKey.USE_TRANSPARENT_TEXTURES);
             this.backgroundColor = params.getStringValue(AVKey.WMS_BACKGROUND_COLOR);
             String version = params.getStringValue(AVKey.WMS_VERSION);
 
@@ -200,7 +202,7 @@ public class WMSTiledImageLayer extends BasicTiledImageLayer
                 sb.append(this.crs);
                 sb.append("&layers=").append(this.layerNames);
                 sb.append("&styles=").append(this.styleNames != null ? this.styleNames : "");
-                sb.append("&transparent=TRUE");
+                sb.append("&transparent=").append(this.transparent);
                 if (this.backgroundColor != null)
                     sb.append("&bgcolor=").append(this.backgroundColor);
 

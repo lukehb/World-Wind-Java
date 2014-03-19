@@ -6,9 +6,10 @@
 package gov.nasa.worldwindx.examples;
 
 import gov.nasa.worldwind.Configuration;
-import gov.nasa.worldwindx.examples.util.*;
+import gov.nasa.worldwind.formats.shapefile.ShapefileLoader;
 import gov.nasa.worldwind.layers.Layer;
 import gov.nasa.worldwind.util.*;
+import gov.nasa.worldwindx.examples.util.OpenStreetMapShapefileLoader;
 
 import javax.swing.*;
 import javax.swing.border.*;

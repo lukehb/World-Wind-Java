@@ -11,7 +11,7 @@ import gov.nasa.worldwind.ogc.kml.KMLRoot;
 import gov.nasa.worldwind.ogc.kml.impl.KMLController;
 import gov.nasa.worldwind.util.*;
 import gov.nasa.worldwindx.applications.worldwindow.core.layermanager.*;
-import gov.nasa.worldwindx.examples.util.ShapefileLoader;
+import gov.nasa.worldwind.formats.shapefile.ShapefileLoader;
 
 import javax.swing.*;
 import javax.xml.stream.XMLStreamException;

@@ -20,7 +20,7 @@ import java.beans.*;
 import java.util.*;
 
 /**
- * <code>WorldWindowGLCanvas</code> is a lightweight Swing component for displaying World Wind {@link Model}s (globe and
+ * <code>WorldWindowGLJPanel</code> is a lightweight Swing component for displaying World Wind {@link Model}s (globe and
  * layers). It's a self-contained component intended to serve as an application's <code>WorldWindow</code>. Construction
  * options exist to specify a specific graphics device and to share graphics resources with another graphics device.
  * <p/>
@@ -35,7 +35,7 @@ import java.util.*;
  * Java VM property "gov.nasa.worldwind.stereo.mode=device" prior to creating an instance of this class. A stereo
  * capable {@link SceneController} such as {@link gov.nasa.worldwind.StereoSceneController} must also be specified in
  * the World Wind {@link Configuration}. The default configuration specifies a stereo-capable controller. To prevent
- * stereo from being used by subsequently opened {@code WorldWindowGLCanvas}es, set the property to a an empty string,
+ * stereo from being used by subsequently opened {@code WorldWindowGLJPanel}s, set the property to a an empty string,
  * "". If a stereo device cannot be selected and used, this falls back to a non-stereo device that supports World Wind's
  * minimum requirements.
  * <p/>
@@ -57,7 +57,7 @@ public class WorldWindowGLJPanel extends GLJPanel implements WorldWindow, Proper
     /** The drawable to which {@link WorldWindow} methods are delegated. */
     protected final WorldWindowGLDrawable wwd; // WorldWindow interface delegates to wwd
 
-    /** Constructs a new <code>WorldWindowGLCanvas</code> window on the default graphics device. */
+    /** Constructs a new <code>WorldWindowGLJPanel</code> window on the default graphics device. */
     public WorldWindowGLJPanel()
     {
         super(Configuration.getRequiredGLCapabilities(), new BasicGLCapabilitiesChooser(), null);
@@ -86,7 +86,7 @@ public class WorldWindowGLJPanel extends GLJPanel implements WorldWindow, Proper
      *
      * @param shareWith a <code>WorldWindow</code> with which to share graphics resources. May be null, in which case
      *                  it's assumed that the window will be shared with another, unspecified, <code>WorldWindow</code>
-     *                  that will reference this <code>WorldWindowGLCanvas</code> as its shared window. Specifying null
+     *                  that will reference this <code>WorldWindowGLJPanel</code> as its shared window. Specifying null
      *                  prevents this window's GPU resource cache from being cleared when the window is closed, thereby
      *                  leaving those resources in tact for the shared windows.
      *
@@ -126,7 +126,7 @@ public class WorldWindowGLJPanel extends GLJPanel implements WorldWindow, Proper
      *
      * @param shareWith    a <code>WorldWindow</code> with which to share graphics resources. May be null, in which case
      *                     it's assumed that the window will be shared with another, unspecified,
-     *                     <code>WorldWindow</code> that will reference this <code>WorldWindowGLCanvas</code> as its
+     *                     <code>WorldWindow</code> that will reference this <code>WorldWindowGLJPanel</code> as its
      *                     shared window. Specifying null prevents this window's GPU resource cache from being cleared
      *                     when the window is closed, thereby leaving those resources in tact for the shared windows.
      * @param capabilities a capabilities object indicating the OpenGL rendering context's capabilities. May be null, in

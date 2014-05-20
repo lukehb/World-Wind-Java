@@ -1237,7 +1237,7 @@ public class LatLon
         if (o == null || getClass() != o.getClass())
             return false;
 
-        final gov.nasa.worldwind.geom.LatLon latLon = (gov.nasa.worldwind.geom.LatLon) o;
+        final LatLon latLon = (LatLon) o;
 
         if (!latitude.equals(latLon.latitude))
             return false;

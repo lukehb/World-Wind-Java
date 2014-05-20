@@ -161,8 +161,8 @@ public class Angle implements Comparable<Angle>
             Logging.logger().severe(message);
             throw new IllegalArgumentException(message);
         }
-
-        return Angle.fromDegrees(Math.signum(degrees) * (Math.abs(degrees) + minutes / 60d + seconds / 3600d));
+        float sign = (degrees == 0) ? 1.0f : Math.signum(degrees);
+        return Angle.fromDegrees(sign * (Math.abs(degrees) + minutes / 60d + seconds / 3600d));
     }
 
     public static Angle fromDMdS(int degrees, double minutes)
@@ -173,8 +173,8 @@ public class Angle implements Comparable<Angle>
             Logging.logger().severe(message);
             throw new IllegalArgumentException(message);
         }
-
-        return Angle.fromDegrees(Math.signum(degrees) * (Math.abs(degrees) + minutes / 60d));
+        float sign = (degrees == 0) ? 1.0f : Math.signum(degrees);
+        return Angle.fromDegrees(sign * (Math.abs(degrees) + minutes / 60d));
     }
 
     /**

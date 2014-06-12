@@ -201,6 +201,7 @@ public class WMSTiledImageLayer extends BasicTiledImageLayer
                 sb.append("&layers=").append(this.layerNames);
                 sb.append("&styles=").append(this.styleNames != null ? this.styleNames : "");
                 sb.append("&transparent=TRUE");
+                sb.append("&tiled=TRUE");
                 if (this.backgroundColor != null)
                     sb.append("&bgcolor=").append(this.backgroundColor);
 

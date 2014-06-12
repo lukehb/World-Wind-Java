@@ -747,20 +747,17 @@ public class Polyline extends AVListImpl implements Renderable, OrderedRenderabl
                 // Since segments can very often be very short -- two vertices -- use explicit rendering. The
                 // overhead of batched rendering, e.g., gl.glDrawArrays, is too high because it requires copying
                 // the vertices into a DoubleBuffer, and DoubleBuffer creation and access performs relatively poorly.
-                if (dc.isPickingMode() || this.color.getAlpha() != 0) {
-                
-                    gl.glBegin(primType);
-                    for (Vec4 p : span)
-                    {
-                        gl.glVertex3d(p.x, p.y, p.z);
-                    }
-                    gl.glEnd();
+                gl.glBegin(primType);
+                for (Vec4 p : span)
+                {
+                    gl.glVertex3d(p.x, p.y, p.z);
                 }
+                gl.glEnd();
             }
 
             if (this.highlighted)
             {
-                if (!dc.isPickingMode() && this.highlightColor.getAlpha() != 0)
+                if (!dc.isPickingMode())
                 {
                     if (this.highlightColor.getAlpha() != 255)
                     {

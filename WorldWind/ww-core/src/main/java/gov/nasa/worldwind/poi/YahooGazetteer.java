@@ -108,6 +108,8 @@ public class YahooGazetteer implements Gazetteer
                 displayName.append(xpath.evaluate("city", location));
                 displayName.append(", ");
                 displayName.append(xpath.evaluate("state", location));
+                displayName.append(", ");
+                displayName.append(xpath.evaluate("country", location));
 
                 if (lat != null && lon != null)
                 {

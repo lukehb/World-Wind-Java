@@ -9,11 +9,13 @@ import gov.nasa.worldwind.avlist.AVKey;
 import gov.nasa.worldwind.geom.*;
 import gov.nasa.worldwind.render.*;
 
+import java.awt.*;
+
 /**
  * @author dcollins
  * @version $Id$
  */
-public abstract class DialogAnnotation extends GlobeAnnotation implements java.awt.event.ActionListener
+public class DialogAnnotation extends GlobeAnnotation implements java.awt.event.ActionListener
 {
     protected static final String CLOSE_IMAGE_PATH = "gov/nasa/worldwindx/examples/images/16x16-button-cancel.png";
     protected static final String BUSY_IMAGE_PATH = "images/indicator-16.gif";
@@ -26,13 +28,28 @@ public abstract class DialogAnnotation extends GlobeAnnotation implements java.a
     protected ButtonAnnotation closeButton;
     protected ImageAnnotation busyImage;
     protected javax.swing.event.EventListenerList listenerList = new javax.swing.event.EventListenerList();
-
-    protected DialogAnnotation(Position position)
+    
+    public DialogAnnotation(String text, Position position, Font font, Color textColor)
     {
-        super("", position);
+        super(text, position, font, textColor);
         this.initComponents();
         this.layoutComponents();
         this.setBusy(false);
+    }
+    
+    public DialogAnnotation(String text, Position position, Font font)
+    {
+        this(text, position, font, null);
+    }
+    
+    public DialogAnnotation(String text, Position position)
+    {
+        this(text, position, null);
+    }
+
+    public DialogAnnotation(Position position)
+    {
+        this("", position);
     }
 
     public boolean isBusy()

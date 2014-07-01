@@ -16,7 +16,7 @@ import java.awt.event.*;
  * @author dcollins
  * @version $Id$
  */
-public abstract class DialogAnnotationController implements ActionListener, SelectListener
+public class DialogAnnotationController implements ActionListener, SelectListener
 {
     private WorldWindow wwd;
     private boolean enabled;
@@ -107,6 +107,7 @@ public abstract class DialogAnnotationController implements ActionListener, Sele
 
     protected void onActionPerformed(ActionEvent e)
     {
+        this.setCursor(java.awt.Cursor.getDefaultCursor());
     }
 
     //**************************************************************//
@@ -123,11 +124,11 @@ public abstract class DialogAnnotationController implements ActionListener, Sele
 
     protected void onSelected(SelectEvent e)
     {
-        // Forward this event to any ButtonAnnotations under the main annotation.
-        this.forwardToButtonAnnotations(this.getAnnotation(), e);
-
         // Change the cursor type if a ButtonAnnotation is beneath the cursor.
         this.updateCursor(e);
+        
+        // Forward this event to any ButtonAnnotations under the main annotation.
+        this.forwardToButtonAnnotations(this.getAnnotation(), e);
 
         // Show a tool tip if an ButtonAnnotation is beneath the cursor.
         this.updateToolTip(e);

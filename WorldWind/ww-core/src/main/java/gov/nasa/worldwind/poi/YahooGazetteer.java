@@ -24,11 +24,12 @@ import java.util.logging.Level;
  * @author tag
  * @version $Id$
  */
-public class YahooGazetteer implements Gazetteer
+public class YahooGazetteer implements Gazetteer, ReverseLookupGazetteer
 {
     protected static final String GEOCODE_SERVICE =
         "http://query.yahooapis.com/v1/public/yql?q=select%20*%20from%20geo.placefinder%20where%20text%3D";
 
+    @Override
     public List<PointOfInterest> findPlaces(String lookupString) throws NoItemException, ServiceException
     {
         if (lookupString == null || lookupString.length() < 1)
@@ -59,6 +60,28 @@ public class YahooGazetteer implements Gazetteer
         return this.parseLocationString(locationString);
     }
 
+    @Override
+    public List<PointOfInterest> findPlaces(LatLon latlon) throws NoItemException, ServiceException
+    {
+        if (latlon == null)
+        {
+            return null;
+        }
+        
+        String latStr = String.format("%.6f", latlon.getLatitude().getDegrees());
+        String lonStr = String.format("%.6f", latlon.getLongitude().getDegrees());
+        String urlString = GEOCODE_SERVICE + "%22" + latStr + "%2C%20" + lonStr + "%22" + "%20and%20gflags%3D%22R%22";
+        
+        String locationString = POIUtils.callService(urlString);
+        
+        if (locationString == null || locationString.length() < 1)
+        {
+            return null;
+        }
+        
+        return this.parseLocationString(locationString);
+    }
+
     protected boolean isNumber(String lookupString)
     {
         lookupString = lookupString.trim();
@@ -66,7 +89,7 @@ public class YahooGazetteer implements Gazetteer
         return lookupString.startsWith("-") || lookupString.startsWith("+") || Character.isDigit(lookupString.charAt(0));
     }
 
-    protected ArrayList<PointOfInterest> parseLocationString(String locationString) throws WWRuntimeException
+    protected List<PointOfInterest> parseLocationString(String locationString) throws WWRuntimeException
     {
         try
         {
@@ -81,7 +104,7 @@ public class YahooGazetteer implements Gazetteer
             org.w3c.dom.NodeList resultNodes =
                 (org.w3c.dom.NodeList) xpath.evaluate("/query/results/Result", doc, XPathConstants.NODESET);
 
-            ArrayList<PointOfInterest> positions = new ArrayList<PointOfInterest>(resultNodes.getLength());
+            List<PointOfInterest> positions = new ArrayList<PointOfInterest>(resultNodes.getLength());
 
             for (int i = 0; i < resultNodes.getLength(); i++)
             {
@@ -89,27 +112,58 @@ public class YahooGazetteer implements Gazetteer
                 String lat = xpath.evaluate("latitude", location);
                 String lon = xpath.evaluate("longitude", location);
                 StringBuilder displayName = new StringBuilder();
-
+                
+                String name = xpath.evaluate("name", location);
+                if (name != null && !name.equals("") && !name.equals(lat + ", " + lon))
+                {
+                    displayName.append(name);
+                    displayName.append(", ");
+                }
+                
                 String house = xpath.evaluate("house", location);
-                String street = xpath.evaluate("street", location);
-
                 if (house != null && !house.equals(""))
                 {
                     displayName.append(house);
                     displayName.append(" ");
                 }
 
+                String street = xpath.evaluate("street", location);
                 if (street != null && !street.equals(""))
                 {
                     displayName.append(street);
                     displayName.append(", ");
                 }
+                
+                String neighborhood = xpath.evaluate("neighborhood", location);
+                if (neighborhood != null && !neighborhood.equals(""))
+                {
+                    displayName.append(neighborhood);
+                    displayName.append(", ");
+                }
 
-                displayName.append(xpath.evaluate("city", location));
-                displayName.append(", ");
-                displayName.append(xpath.evaluate("state", location));
-                displayName.append(", ");
-                displayName.append(xpath.evaluate("country", location));
+                String city = xpath.evaluate("city", location);
+                if (city != null && !city.equals(""))
+                {
+                    displayName.append(city);
+                    displayName.append(", ");
+                }
+                
+                String county = xpath.evaluate("county", location);
+                if (county != null && !county.equals(""))
+                {
+                    displayName.append(county);
+                    displayName.append(", ");
+                }
+                
+                String state = xpath.evaluate("state", location);
+                if (state != null && !state.equals(""))
+                {
+                    displayName.append(state);
+                    displayName.append(", ");
+                }
+                
+                String country = xpath.evaluate("country", location);
+                displayName.append(country);
 
                 if (lat != null && lon != null)
                 {

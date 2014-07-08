@@ -17,8 +17,6 @@ import java.awt.event.ActionListener;
 import java.io.File;
 import javax.swing.Timer;
 
-import org.junit.Ignore;
-
 /**
  * Test loading a COLLADA model and moving the model along a path. World Wind does not support animations defined in
  * COLLADA files, but models may be animated by application logic.
@@ -26,7 +24,6 @@ import org.junit.Ignore;
  * @author pabercrombie
  * @version $Id$
  */
-@Ignore
 public class ColladaMovingModel extends ColladaViewer
 {
     public static class AppFrame extends ColladaViewer.AppFrame

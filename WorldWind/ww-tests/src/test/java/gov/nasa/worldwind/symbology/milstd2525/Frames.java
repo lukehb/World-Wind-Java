@@ -21,13 +21,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 
-import org.junit.Ignore;
-
 /**
  * @author ccrick
  * @version $Id: Symbology.java 132 2011-10-25 18:47:52Z ccrick $
  */
-@Ignore
 public class Frames extends ApplicationTemplate
 {
     public static class AppFrame extends ApplicationTemplate.AppFrame

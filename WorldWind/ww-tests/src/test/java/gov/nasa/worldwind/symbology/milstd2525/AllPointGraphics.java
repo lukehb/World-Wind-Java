@@ -37,8 +37,6 @@ import javax.swing.JSlider;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
-import org.junit.Ignore;
-
 /**
  * Display all MIL-STD-2525 point graphics in a grid so that a human operator can confirm that they are rendered
  * correctly.
@@ -46,7 +44,6 @@ import org.junit.Ignore;
  * @author pabercrombie
  * @version $Id$
  */
-@Ignore
 public class AllPointGraphics extends ApplicationTemplate
 {
     public static class AppFrame extends ApplicationTemplate.AppFrame

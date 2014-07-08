@@ -9,10 +9,12 @@ package gov.nasa.worldwind.util;
 import gov.nasa.worldwind.geom.*;
 import gov.nasa.worldwind.globes.*;
 import gov.nasa.worldwind.terrain.*;
-import junit.framework.*;
-import junit.textui.TestRunner;
 
 import java.util.*;
+
+import org.junit.Test;
+
+import static org.junit.Assert.assertFalse;
 
 /**
  * Checks for re-occurrence of WWJ-521.
@@ -29,92 +31,85 @@ public class HighResolutionTerrainTest2
     static final Sector SECTOR = Sector.boundingSector(
         LatLon.fromDegrees(49.99657, -122.25573),
         LatLon.fromDegrees(50.00240, -122.24467));
+    
+    protected int GRID_SIZE = 3;//50;
 
-    public static class Tests extends TestCase
+    protected static ArrayList<Position> generateReferenceLocations(Sector sector, int numLats, int numLons)
     {
-        protected int GRID_SIZE = 3;//50;
+        int decimalPlaces = 5;
+        ArrayList<Position> locations = new ArrayList<Position>();
+        double dLat = (sector.getMaxLatitude().degrees - sector.getMinLatitude().degrees) / (numLats - 1);
+        double dLon = (sector.getMaxLongitude().degrees - sector.getMinLongitude().degrees) / (numLons - 1);
 
-        protected static ArrayList<Position> generateReferenceLocations(Sector sector, int numLats, int numLons)
+        Position p0 = Position.fromDegrees(
+            round(decimalPlaces, sector.getMinLatitude().degrees),
+            round(decimalPlaces, sector.getMinLongitude().degrees), 0);
+        for (int j = 1; j < numLats; j++)
         {
-            int decimalPlaces = 5;
-            ArrayList<Position> locations = new ArrayList<Position>();
-            double dLat = (sector.getMaxLatitude().degrees - sector.getMinLatitude().degrees) / (numLats - 1);
-            double dLon = (sector.getMaxLongitude().degrees - sector.getMinLongitude().degrees) / (numLons - 1);
+            double lat = sector.getMinLatitude().degrees + j * dLat;
 
-            Position p0 = Position.fromDegrees(
-                round(decimalPlaces, sector.getMinLatitude().degrees),
-                round(decimalPlaces, sector.getMinLongitude().degrees), 0);
-            for (int j = 1; j < numLats; j++)
+            for (int i = 0; i < numLons; i++)
             {
-                double lat = sector.getMinLatitude().degrees + j * dLat;
+                double lon = sector.getMinLongitude().degrees + i * dLon;
 
-                for (int i = 0; i < numLons; i++)
-                {
-                    double lon = sector.getMinLongitude().degrees + i * dLon;
-
-                    locations.add(p0);
-                    locations.add(Position.fromDegrees(round(decimalPlaces, lat), round(decimalPlaces, lon), 0));
-                }
+                locations.add(p0);
+                locations.add(Position.fromDegrees(round(decimalPlaces, lat), round(decimalPlaces, lon), 0));
             }
-
-            return locations;
         }
 
-        protected static double round(int decimalPlaces, double value)
-        {
-            double scale = Math.pow(10, decimalPlaces);
-            return Math.round(value * scale) / scale;
-        }
-
-        protected boolean failed;
-
-        public void testConsistencyOfBulkPositions()
-        {
-            ArrayList<Position> referencePositions = generateReferenceLocations(SECTOR, GRID_SIZE, GRID_SIZE);
-
-            Globe globe = new Earth();
-
-            /**
-             * Use old elevation model for this example...
-             */
-            globe.setElevationModel(EllipsoidalGlobe.makeElevationModel(
-                "config/Earth/EarthElevationModelAsBil16.xml",
-                "config/Earth/EarthElevationModelAsBil16.xml"));
-
-            System.out.println("Starting Intersection Calculation");
-            HighResolutionTerrain hrt = new HighResolutionTerrain(globe, SECTOR, null, 1.0);
-            hrt.setTimeout(10000L);
-            try
-            {
-                hrt.intersect(referencePositions, new HighResolutionTerrain.IntersectionCallback()
-                {
-                    @Override
-                    public void intersection(Position pA, Position pB, Intersection[] intersections)
-                    {
-                        /**
-                         * do nothing - we  just want to complete
-                         */
-                    }
-
-                    public void exception(Exception e)
-                    {
-                        failed = true;
-                    }
-                });
-            }
-            catch (Exception e)
-            {
-            }
-
-            assertFalse("Intersection calculation timed out", failed);
-
-            System.out.println("Completed Intersection Calculation");
-        }
+        return locations;
     }
 
-    public static void main(String[] args)
+    protected static double round(int decimalPlaces, double value)
     {
-        new TestRunner().doRun(new TestSuite(Tests.class));
+        double scale = Math.pow(10, decimalPlaces);
+        return Math.round(value * scale) / scale;
+    }
+
+    protected boolean failed;
+
+    @Test
+    public void testConsistencyOfBulkPositions()
+    {
+        ArrayList<Position> referencePositions = generateReferenceLocations(SECTOR, GRID_SIZE, GRID_SIZE);
+
+        Globe globe = new Earth();
+
+        /**
+         * Use old elevation model for this example...
+         */
+        globe.setElevationModel(EllipsoidalGlobe.makeElevationModel(
+            "config/Earth/EarthElevationModelAsBil16.xml",
+            "config/Earth/EarthElevationModelAsBil16.xml"));
+
+        System.out.println("Starting Intersection Calculation");
+        HighResolutionTerrain hrt = new HighResolutionTerrain(globe, SECTOR, null, 1.0);
+        hrt.setTimeout(10000L);
+        try
+        {
+            hrt.intersect(referencePositions, new HighResolutionTerrain.IntersectionCallback()
+            {
+                @Override
+                public void intersection(Position pA, Position pB, Intersection[] intersections)
+                {
+                    /**
+                     * do nothing - we  just want to complete
+                     */
+                }
+
+                public void exception(Exception e)
+                {
+                    failed = true;
+                }
+            });
+        }
+        catch (Exception e)
+        {
+        }
+
+        assertFalse("Intersection calculation timed out", failed);
+
+        System.out.println("Completed Intersection Calculation");
     }
 }
 

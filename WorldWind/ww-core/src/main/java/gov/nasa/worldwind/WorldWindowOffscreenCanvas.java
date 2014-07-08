@@ -223,6 +223,18 @@ public class WorldWindowOffscreenCanvas implements WorldWindow, PropertyChangeLi
         this.wwd.shutdown();
         this.canvas.destroy();
     }
+    
+    @Override
+    public boolean isEnableGpuCacheReinitialization()
+    {
+        return this.wwd.isEnableGpuCacheReinitialization();
+    }
+
+    @Override
+    public void setEnableGpuCacheReinitialization(boolean enableGpuCacheReinitialization)
+    {
+        this.wwd.setEnableGpuCacheReinitialization(enableGpuCacheReinitialization);
+    }
 
     /** Constructs and attaches the {@link View} for this <code>WorldWindow</code>. */
     protected void createView()

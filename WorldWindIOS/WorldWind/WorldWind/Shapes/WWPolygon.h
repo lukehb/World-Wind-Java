@@ -7,8 +7,9 @@
 
 #import <Foundation/Foundation.h>
 #import <OpenGLES/ES2/gl.h>
-#import "WorldWind/GLU/glu.h"
 #import "WorldWind/Shapes/WWAbstractShape.h"
+
+@class WWPolygonTessellator;
 
 /**
 * Displays a polygon who's vertices are specified by an array of positions. Polygons have separate attributes for normal
@@ -19,8 +20,8 @@
 * by adding an inner boundary using [WWPolygon addInnerBoundary:]. Inner boundaries placed inside the polygon's
 * positions cause the inner region to be removed from the polygon's filled interior, while inner boundaries placed
 * inside another inner boundary cause the innermost region to be added back to the polygon's filled interior. This makes
-* it possible to create a polygons with complex interiors, such as a state boundary omitting a lake but including
-* islands on that lake. In either case, the winding order of the outer boundary and the inner boundaries is irrelevant.
+* it possible to create polygons with complex interiors, such as a state boundary omitting a lake but including islands
+* on that lake. In either case, the winding order of the outer boundary and the inner boundaries is irrelevant.
 *
 * The positions and inner boundaries may be in any winding order, and need not describe a closed contour. WWPolygon
 * correctly displays its outer boundary and its inner boundaries regardless of whether they are arranged in a clockwise
@@ -41,13 +42,8 @@
     WWVec4* referenceNormal;
 
     // Data structures used during polygon tessellation.
-    GLenum tessPrimType; // indicates the current OpenGL primitive type used during tessellation
-    GLsizei tessIndexCount; // the number of primitive indices output by tessellation
-    NSMutableArray* tessVertices; // vertices collected during tessellation
-    NSMutableArray* tessIndices; // indices collected during tessellation
-    NSMutableArray* vertexIndices; // locations of vertices in the vertex array
-    NSNumber* tessIndex1; // placeholder to one of the indices that defines a tri-fan or tri-strip primitive
-    NSNumber* tessIndex2; // placeholder to one of the indices that defines a tri-fan or tri-strip primitive
+    WWPolygonTessellator* tess;
+    NSMutableArray* tessVertices;
 
     // Data structures submitted to OpenGL during rendering.
     GLsizei vertexCount; // the number of vertices in the vertex array
@@ -55,12 +51,14 @@
     GLfloat* vertices; // the vertex array
     GLsizei indexCount; // the number of values in the index array
     GLushort* indices; // the index array
+    NSRange interiorIndexRange; // the range of interior indices in the index array
+    NSRange outlineIndexRange; // the range of outline indices in the index array
 }
 
 /// @name Attributes
 
 /**
-* Returns an array indicating the polygon's outer boundary vertices.
+* Returns an array indicating the polygon's outer boundary positions.
 *
 * @return The positions indicating the polygon's outer boundary vertices.
 */
@@ -112,13 +110,7 @@
 
 - (void) tessellatePolygon:(WWDrawContext*)dc;
 
-- (void) tessBegin:(GLenum)type;
-
-- (void) tessVertex:(void*)vertexData;
-
-- (void) tessEnd;
-
-- (void) tessCombine:(GLdouble[3])coords vertexData:(void*[4])vertexData weight:(GLdouble[4])weight outData:(void**)outData;
+- (void) tessellatePolygon:(WWDrawContext*)dc combineVertex:(double)x y:(double)y z:(double)z outIndex:(GLushort*)outIndex;
 
 - (void) makeRenderedPolygon:(WWDrawContext*)dc;
 

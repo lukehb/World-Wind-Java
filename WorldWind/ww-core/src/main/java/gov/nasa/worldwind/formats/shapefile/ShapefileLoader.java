@@ -26,18 +26,14 @@ import java.util.*;
  * color information in each record's key-value attributes, ShapefileLoader does not attempt to interpret that
  * information. Instead, the World Wind renderable objects created by ShapefileLoader are assigned a random color.
  * Callers can replace or extend this behavior by defining a subclass of ShapefileLoader and overriding the following
- * methods: <ul> <li>{@link #createPointAttributes(gov.nasa.worldwind.formats.shapefile.ShapefileRecord)}</li>
- * <li>{@link #createPolylineAttributes(gov.nasa.worldwind.formats.shapefile.ShapefileRecord)}</li> <li>{@link
- * #createPolygonAttributes(gov.nasa.worldwind.formats.shapefile.ShapefileRecord)}</li></ul>.
+ * methods: <ul> <li>{@link #nextPointAttributes()}</li> <li>{@link #nextPolylineAttributes()}</li> <li>{@link
+ * #nextPolygonAttributes()}</li></ul>.
  *
  * @author dcollins
  * @version $Id$
  */
 public final class ShapefileLoader
 {
-    /** Indicates the maximum number of polygons to place in a layer before creating an additional layer. */
-    protected int numPolygonsPerLayer = 5000;
-    
     protected final Color DEFAULT_POINT_COLOR = Color.RED;
     protected final double DEFAULT_POINT_SCALE = 7.0;
     
@@ -100,47 +96,6 @@ public final class ShapefileLoader
 
         return layer;
     }
-
-    /**
-     * Creates a list of {@link gov.nasa.worldwind.layers.Layer}s containing shapes from a Shapefile.
-     * <p/>
-     * For polygon shapes, the maximum number of polygons to add to a layer can be specified. By default it's 5000. If
-     * there are more polygons in the shapefile than the maximum, new layers are created as needed, with each holding no
-     * more than the maximum. All but the first layer is disabled to avoid bogging down the display trying to render an
-     * excessive number of shapes. The application can enable the layers selectively to maintain performance.
-     * <p/>
-     * The source type may be one of the following: <ul> <li>{@link java.io.InputStream}</li> <li>{@link
-     * java.net.URL}</li> <li>{@link java.io.File}</li> <li>{@link String} containing a valid URL description or a file
-     * or resource name available on the classpath.</li> </ul>
-     *
-     * @param source the source of the Shapefile.
-     *
-     * @return a Layer that renders the Shapefile's contents on the surface of the Globe.
-     *
-     * @throws IllegalArgumentException if the source is null or an empty string, or if the Shapefile's primitive type
-     *                                  is unrecognized.
-     */
-    public List<Layer> createLayersFromSource(Object source)
-    {
-        if (WWUtil.isEmpty(source))
-        {
-            String message = Logging.getMessage("nullValue.SourceIsNull");
-            Logging.logger().severe(message);
-            throw new IllegalArgumentException(message);
-        }
-
-        Shapefile shp = null;
-
-        try
-        {
-            shp = new Shapefile(source);
-            return this.createLayersFromShapefile(shp);
-        }
-        finally
-        {
-            WWIO.closeStream(shp, source.toString());
-        }
-    }
     
     /**
      * Populate a {@link gov.nasa.worldwind.layers.Layer} from a general Shapefile.
@@ -185,8 +140,13 @@ public final class ShapefileLoader
         {
             Logging.logger().warning(Logging.getMessage("generic.UnrecognizedShapeType", shp.getShapeType()));
         }
+        
+        if (shp.getBoundingRectangle() != null)
+        {
+            layer.setValue(AVKey.SECTOR, Sector.fromDegrees(shp.getBoundingRectangle()));
+        }
     }
-
+    
     /**
      * Creates a {@link gov.nasa.worldwind.layers.Layer} from a general Shapefile.
      *
@@ -201,94 +161,6 @@ public final class ShapefileLoader
         Layer layer = new RenderableLayer();
         populateLayerFromShapefile(shp, layer);
         return layer;
-    }
-
-    /**
-     * Creates a list of {@link gov.nasa.worldwind.layers.Layer}s containing shapes from a Shapefile.
-     * <p/>
-     * For polygon shapes, the maximum number of polygons to add to a layer can be specified. By default it's 5000. If
-     * there are more polygons in the shapefile than the maximum, new layers are created as needed, with each holding no
-     * more than the maximum. All but the first layer is disabled to avoid bogging down the display trying to render an
-     * excessive number of shapes. The application can enable the layers selectively to maintain performance.
-     * <p/>
-     *
-     * @param shp the source of the Shapefile.
-     *
-     * @return a Layer that renders the Shapefile's contents on the surface of the Globe.
-     *
-     * @throws IllegalArgumentException if the shapefile is null or an empty string, or if the Shapefile's primitive
-     *                                  type is unrecognized.
-     */
-    public List<Layer> createLayersFromShapefile(Shapefile shp)
-    {
-        if (shp == null)
-        {
-            String message = Logging.getMessage("nullValue.ShapefileIsNull");
-            Logging.logger().severe(message);
-            throw new IllegalArgumentException(message);
-        }
-
-        List<Layer> layers = new ArrayList<Layer>();
-
-        if (Shapefile.isPointType(shp.getShapeType()))
-        {
-            Layer layer = new RenderableLayer();
-            this.addRenderablesForPoints(shp, (RenderableLayer) layer);
-            layers.add(layer);
-        }
-        else if (Shapefile.isMultiPointType(shp.getShapeType()))
-        {
-            Layer layer = new RenderableLayer();
-            this.addRenderablesForMultiPoints(shp, (RenderableLayer) layer);
-            layers.add(layer);
-        }
-        else if (Shapefile.isPolylineType(shp.getShapeType()))
-        {
-            Layer layer = new RenderableLayer();
-            this.addRenderablesForPolylines(shp, (RenderableLayer) layer);
-            layers.add(layer);
-        }
-        else if (Shapefile.isPolygonType(shp.getShapeType()))
-        {
-            this.addRenderablesForPolygons(shp, layers);
-        }
-        else
-        {
-            Logging.logger().warning(Logging.getMessage("generic.UnrecognizedShapeType", shp.getShapeType()));
-        }
-
-        return layers;
-    }
-
-    /**
-     * Indicates the maximum number of polygon renderables to place in a single layer. If this limit is exceeded an
-     * additional layer is added.
-     *
-     * @return the maximum number of polygons to place in a layer.
-     */
-    public int getNumPolygonsPerLayer()
-    {
-        return this.numPolygonsPerLayer;
-    }
-
-    /**
-     * Specifies the maximum number of polygon renderables to place in a single layer. If this limit is exceeded an
-     * additional layer is added.
-     *
-     * @param numPolygonsPerLayer the maximum number of polygons to place in a layer.
-     *
-     * @throws IllegalArgumentException if the number is less than 1.
-     */
-    public void setNumPolygonsPerLayer(int numPolygonsPerLayer)
-    {
-        if (numPolygonsPerLayer < 1)
-        {
-            String message = Logging.getMessage("generic.InvalidSize", numPolygonsPerLayer);
-            Logging.logger().severe(message);
-            throw new IllegalArgumentException(message);
-        }
-
-        this.numPolygonsPerLayer = numPolygonsPerLayer;
     }
     
     /**
@@ -467,7 +339,7 @@ public final class ShapefileLoader
 
     protected void addRenderablesForPoints(Shapefile shp, RenderableLayer layer)
     {
-        PointPlacemarkAttributes attrs = this.createPointAttributes(null);
+        PointPlacemarkAttributes attrs = this.nextPointAttributes();
 
         while (shp.hasNext())
         {
@@ -483,7 +355,7 @@ public final class ShapefileLoader
 
     protected void addRenderablesForMultiPoints(Shapefile shp, RenderableLayer layer)
     {
-        PointPlacemarkAttributes attrs = this.createPointAttributes(null);
+        PointPlacemarkAttributes attrs = this.nextPointAttributes();
 
         while (shp.hasNext())
         {
@@ -524,12 +396,26 @@ public final class ShapefileLoader
             shp.nextRecord();
         }
 
-        ShapeAttributes attrs = this.createPolylineAttributes();
+        ShapeAttributes attrs = this.nextPolylineAttributes();
         layer.addRenderable(this.createPolyline(shp, attrs));
     }
-    
+
     protected void addRenderablesForPolygons(Shapefile shp, RenderableLayer layer)
     {
+        if (this.hasHeight(shp))
+        {
+            this.addRenderablesForExtrudedPolygons(shp, layer);
+        }
+        else
+        {
+            this.addRenderablesForSurfacePolygons(shp, layer);
+        }
+    }
+
+    protected void addRenderablesForSurfacePolygons(Shapefile shp, RenderableLayer layer)
+    {
+        ShapeAttributes attrs = this.nextPolygonAttributes();
+
         int recordNumber = 0;
         while (shp.hasNext())
         {
@@ -541,13 +427,7 @@ public final class ShapefileLoader
                 if (!Shapefile.isPolygonType(record.getShapeType()))
                     continue;
 
-                ShapeAttributes attrs = this.createPolygonAttributes(record);
                 this.createPolygon(record, attrs, layer);
-                
-                if (layer.getNumRenderables() > this.numPolygonsPerLayer)
-                {
-                    break; // We exit to avoid adding too many polygons to layer.
-                }
             }
             catch (Exception e)
             {
@@ -558,46 +438,17 @@ public final class ShapefileLoader
         }
     }
 
-    /**
-     * Creates renderables for all the polygons in the shapefile. Polygon is the only shape that potentially returns a
-     * more than one layer, which it does when the polygons per layer limit is exceeded.
-     *
-     * @param shp    the shapefile to read
-     * @param layers a list in which to place the layers created. May not be null.
-     */
-    protected void addRenderablesForPolygons(Shapefile shp, List<Layer> layers)
+    protected void addRenderablesForExtrudedPolygons(Shapefile shp, RenderableLayer layer)
     {
-        RenderableLayer layer = new RenderableLayer();
-        layers.add(layer);
+        ShapeAttributes attrs = this.nextPolygonAttributes();
+        ShapefileExtrudedPolygons shape = new ShapefileExtrudedPolygons(shp);
 
-        int recordNumber = 0;
-        while (shp.hasNext())
+        for (ShapefileRenderable.Record record : shape)
         {
-            try
-            {
-                ShapefileRecord record = shp.nextRecord();
-                recordNumber = record.getRecordNumber();
-
-                if (!Shapefile.isPolygonType(record.getShapeType()))
-                    continue;
-
-                ShapeAttributes attrs = this.createPolygonAttributes(record);
-                this.createPolygon(record, attrs, layer);
-
-                if (layer.getNumRenderables() > this.numPolygonsPerLayer)
-                {
-                    layer = new RenderableLayer();
-                    layer.setEnabled(false);
-                    layers.add(layer);
-                }
-            }
-            catch (Exception e)
-            {
-                Logging.logger().warning(Logging.getMessage("SHP.ExceptionAttemptingToConvertShapefileRecord",
-                    recordNumber, e));
-                // continue with the remaining records
-            }
+            record.setAttributes(attrs);
         }
+
+        layer.addRenderable(shape);
     }
 
     //**************************************************************//
@@ -716,12 +567,16 @@ public final class ShapefileLoader
         return ShapefileUtils.extractHeightAttribute(record);
     }
 
+    protected boolean hasHeight(Shapefile shapefile)
+    {
+        return ShapefileUtils.hasHeightAttribute(shapefile);
+    }
+
     //**************************************************************//
     //********************  Attribute Construction  ****************//
     //**************************************************************//
 
-    @SuppressWarnings({"UnusedDeclaration"})
-    protected PointPlacemarkAttributes createPointAttributes(ShapefileRecord record)
+    protected PointPlacemarkAttributes nextPointAttributes()
     {
         PointPlacemarkAttributes attrs = new PointPlacemarkAttributes();
         attrs.setUsePointAsDefaultImage(true);
@@ -730,8 +585,7 @@ public final class ShapefileLoader
         return attrs;
     }
 
-    @SuppressWarnings({"UnusedDeclaration"})
-    protected ShapeAttributes createPolylineAttributes()
+    protected ShapeAttributes nextPolylineAttributes()
     {
         ShapeAttributes attrs = new BasicShapeAttributes();
         attrs.setOutlineMaterial(new Material(this.lineColor));
@@ -739,8 +593,7 @@ public final class ShapefileLoader
         return attrs;
     }
 
-    @SuppressWarnings({"UnusedDeclaration"})
-    protected ShapeAttributes createPolygonAttributes(ShapefileRecord record)
+    protected ShapeAttributes nextPolygonAttributes()
     {
         ShapeAttributes attrs = new BasicShapeAttributes();
         attrs.setInteriorMaterial(new Material(this.polygonInteriorColor));

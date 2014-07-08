@@ -20,6 +20,8 @@
               value="gov.nasa.worldwind.globes.Earth"/>
     <Property name="gov.nasa.worldwind.avkey.EarthElevationModelConfigFile"
               value="config/Earth/EarthElevations2.xml"/>
+    <Property name="gov.nasa.worldwind.globes.GeographicProjectionClassName"
+              value="gov.nasa.worldwind.globes.projections.ProjectionEquirectangular"/>
     <Property name="gov.nasa.worldwind.avkey.InitialLatitude" value="38"/>
     <Property name="gov.nasa.worldwind.avkey.InitialAltitude" value="19.07e6"/>
     <Property name="gov.nasa.worldwind.avkey.ViewClassName" value="gov.nasa.worldwind.view.orbit.BasicOrbitView"/>
@@ -72,7 +74,8 @@
     <Property name="gov.nasa.worldwind.avkey.URLConnectTimeout" value="8000"/>
     <Property name="gov.nasa.worldwind.avkey.URLReadTimeout" value="10000"/>
     <Property name="gov.nasa.worldwind.avkey.TextureCacheSize" value="500000000"/>
-    <Property name="gov.nasa.worldwind.avkey.ElevationTileCacheSize" value="10000000"/>
+    <Property name="gov.nasa.worldwind.avkey.ElevationTileCacheSize" value="20000000"/>
+    <Property name="gov.nasa.worldwind.avkey.ElevationExtremesLookupCacheSize" value="20000000"/>
     <Property name="gov.nasa.worldwind.avkey.SectorGeometryCacheSize" value="10000000"/>
     <Property name="gov.nasa.worldwind.avkey.TextureTileCacheSize" value="10000000"/>
     <Property name="gov.nasa.worldwind.avkey.PlacenameLayerCacheSize" value="4000000"/>

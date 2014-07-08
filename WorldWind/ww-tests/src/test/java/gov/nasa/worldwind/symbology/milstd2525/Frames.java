@@ -53,8 +53,6 @@ public class Frames extends ApplicationTemplate
             this.addFrameTypeSymbols(SymbologyConstants.STATUS_PRESENT, layer);
             // Add the symbol layer to the World Wind model.
             this.getWwd().getModel().getLayers().add(layer);
-            // Update the layer panel to display the symbol layer.
-            this.getLayerPanel().update(this.getWwd());
 
             layer = new RenderableLayer();
             layer.setName("Standard Frame Types (Anticipated)");
@@ -62,8 +60,6 @@ public class Frames extends ApplicationTemplate
             this.addFrameTypeSymbols(SymbologyConstants.STATUS_ANTICIPATED, layer);
             // Add the symbol layer to the World Wind model.
             this.getWwd().getModel().getLayers().add(layer);
-            // Update the layer panel to display the symbol layer.
-            this.getLayerPanel().update(this.getWwd());
         }
 
         protected void addFrameTypeSymbols(String status, RenderableLayer layer)

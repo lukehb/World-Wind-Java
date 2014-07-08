@@ -20,7 +20,7 @@
 #define COCKPIT_MIN_TILT (65)
 #define COCKPIT_MAX_TILT (90)
 #define HEADING_SMOOTHING_AMOUNT (0.4)
-#define MIN_RANGE (10000)
+#define MIN_RANGE (1)
 #define MAX_RANGE (6000000)
 #define TRACK_UP_MIN_TILT (0)
 #define TRACK_UP_MAX_TILT (45)
@@ -111,6 +111,9 @@
 
 - (void) startLocationTracking
 {
+    [[NSNotificationCenter defaultCenter] postNotificationName:TAIGA_LOCATION_TRACKING_ENABLED object:[NSNumber
+            numberWithBool:YES]];
+
     if (currentLocation == nil) // Wait to start tracking until we have a location fix.
         return;
 
@@ -120,7 +123,7 @@
     [[_wwv navigator] animateWithDuration:WWNavigatorDurationAutomatic animations:^
     {
         [self doStartLocationTracking];
-    } completion:^(BOOL finished)
+    }                          completion:^(BOOL finished)
     {
         // Disable this controller when its navigator animation is interrupted. The user has performed a navigation
         // gesture, or another object has initiated an animation at the user's request.
@@ -137,6 +140,9 @@
 
 - (void) stopLocationTracking
 {
+    [[NSNotificationCenter defaultCenter] postNotificationName:TAIGA_LOCATION_TRACKING_ENABLED object:[NSNumber
+            numberWithBool:NO]];
+
     [[_wwv navigator] stopAnimations]; // interrupts animations performed by this controller
     trackingLocation = NO;
 }
@@ -158,7 +164,7 @@
         {
             [self doTrackLocation];
         }
-    } completion:^(BOOL finished)
+    }                       completion:^(BOOL finished)
     {
         trackingLocation = NO;
 
@@ -173,11 +179,13 @@
 
 - (void) doStartLocationTracking
 {
+    double currentCourse = [currentLocation course] < 0 ? [[_wwv navigator] heading] : [currentLocation course];
+
     if ([_mode isEqualToString:TAIGA_LOCATION_TRACKING_MODE_COCKPIT])
     {
         WWPosition* eyePosition = [[WWPosition alloc] initWithCLPosition:currentLocation];
         [(WWFirstPersonNavigator*) [_wwv navigator] setEyePosition:eyePosition];
-        [(WWFirstPersonNavigator*) [_wwv navigator] setHeading:[currentLocation course]];
+        [(WWFirstPersonNavigator*) [_wwv navigator] setHeading:currentCourse];
         [(WWFirstPersonNavigator*) [_wwv navigator] setTilt:currentCockpitTilt];
     }
     else if ([_mode isEqualToString:TAIGA_LOCATION_TRACKING_MODE_NORTH_UP])
@@ -193,15 +201,16 @@
         WWLocation* centerLocation = [[WWLocation alloc] initWithCLLocation:currentLocation];
         [(WWLookAtNavigator*) [_wwv navigator] setCenterLocation:centerLocation];
         [(WWLookAtNavigator*) [_wwv navigator] setRange:currentRange];
-        [(WWLookAtNavigator*) [_wwv navigator] setHeading:[currentLocation course]];
+        [(WWLookAtNavigator*) [_wwv navigator] setHeading:currentCourse];
         [(WWLookAtNavigator*) [_wwv navigator] setTilt:currentTrackUpTilt];
     }
 }
 
 - (void) doTrackLocation
 {
+    double currentCourse = [currentLocation course] < 0 ? [[_wwv navigator] heading] : [currentLocation course];
     double smoothedHeading = [WWMath interpolateDegrees1:[[_wwv navigator] heading]
-                                                degrees2:[currentLocation course]
+                                                degrees2:currentCourse
                                                   amount:HEADING_SMOOTHING_AMOUNT];
 
     if ([_mode isEqualToString:TAIGA_LOCATION_TRACKING_MODE_COCKPIT])
@@ -226,8 +235,8 @@
 
 - (void) setupTrackingNavigator
 {
-    id<WWNavigator> oldNavigator = [_wwv navigator];
-    id<WWNavigator> newNavigator = [_mode isEqualToString:TAIGA_LOCATION_TRACKING_MODE_COCKPIT] ?
+    id <WWNavigator> oldNavigator = [_wwv navigator];
+    id <WWNavigator> newNavigator = [_mode isEqualToString:TAIGA_LOCATION_TRACKING_MODE_COCKPIT] ?
             [[WWFirstPersonNavigator alloc] initWithView:_wwv navigatorToMatch:oldNavigator] :
             [[WWLookAtNavigator alloc] initWithView:_wwv navigatorToMatch:oldNavigator];
     [oldNavigator dispose];
@@ -241,7 +250,7 @@
     {
         currentCockpitTilt = WWCLAMP([[_wwv navigator] tilt], COCKPIT_MIN_TILT, COCKPIT_MAX_TILT);
         currentTrackUpTilt = 0;
-        currentRange = WWCLAMP([[(WWFirstPersonNavigator *) [_wwv navigator] eyePosition] altitude], MIN_RANGE, MAX_RANGE);
+        currentRange = [[(WWFirstPersonNavigator*) [_wwv navigator] eyePosition] altitude] * 2;
     }
     else if ([_mode isEqualToString:TAIGA_LOCATION_TRACKING_MODE_NORTH_UP])
     {

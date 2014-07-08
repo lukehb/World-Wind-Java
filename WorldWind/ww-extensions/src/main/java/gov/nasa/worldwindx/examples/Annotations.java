@@ -5,7 +5,6 @@
  */
 package gov.nasa.worldwindx.examples;
 
-import com.jogamp.opengl.util.awt.TextRenderer;
 import gov.nasa.worldwind.*;
 import gov.nasa.worldwind.avlist.AVKey;
 import gov.nasa.worldwind.event.*;
@@ -96,7 +95,7 @@ public class Annotations extends ApplicationTemplate
             this.setupAnnotations();
 
             // Add control panel
-            this.getLayerPanel().add(makeControlPanel(), BorderLayout.SOUTH);
+            this.getControlPanel().add(makeControlPanel(), BorderLayout.SOUTH);
             this.enableControlPanel(false);
 
             // Add a select listener to select or highlight annotations on rollover
@@ -487,7 +486,6 @@ public class Annotations extends ApplicationTemplate
 
             // Add layer to the layer list and update the layer panel
             insertBeforeCompass(this.getWwd(), layer);
-            getLayerPanel().update(getWwd());
         }
 
         public void makeRelativeAnnotations(AnnotationLayer layer)

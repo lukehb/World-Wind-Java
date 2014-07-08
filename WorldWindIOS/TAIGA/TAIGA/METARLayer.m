@@ -17,6 +17,10 @@
 #import "WorldWind/Util/WWRetriever.h"
 #import "WorldWind/WorldWind.h"
 #import "WorldWind/WorldWindView.h"
+#import "AppConstants.h"
+#import "Settings.h"
+
+#define METAR_REFRESH_DATE (@"gov.nasa.worldwind.taiga.metarlayer.refreshdate")
 
 @interface METARLayerRetriever : NSOperation
 @end
@@ -82,7 +86,10 @@
         }
 
         if (metarData == nil || [metarData length] == 0)
+        {
+            layer.refreshInProgress = [[NSNumber alloc] initWithBool:NO];
             return;
+        }
 
         NSXMLParser* docParser = [[NSXMLParser alloc] initWithData:metarData];
         [docParser setDelegate:layer];
@@ -92,11 +99,18 @@
         {
             WWLog(@"METAR data parsing failed");
         }
+        else
+        {
+            [layer setLastUpdate:[[NSDate alloc] init]];
+            [Settings setObject:[layer lastUpdate] forName:METAR_REFRESH_DATE];
+        }
     }
     @catch (NSException* exception)
     {
         WWLogE(@"Exception loading METAR data", exception);
     }
+
+    layer.refreshInProgress = [[NSNumber alloc] initWithBool:NO];
 }
 
 @end
@@ -106,6 +120,7 @@
     NSMutableDictionary* currentPlacemarkDict;
     NSString* currentName;
     NSMutableString* currentString;
+    NSMutableArray* placemarks;
 }
 
 - (METARLayer*) init
@@ -114,10 +129,20 @@
 
     [self setDisplayName:@"METAR Weather"];
 
+    _refreshInProgress = [[NSNumber alloc] initWithBool:NO];
+    _lastUpdate = (NSDate*) [Settings getObjectForName:METAR_REFRESH_DATE];
+
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(handleRefreshNotification:)
-                                                 name:WW_REFRESH
-                                               object:self];
+                                                 name:TAIGA_REFRESH
+                                               object:nil];
+
+    NSTimer* refreshTimer = [NSTimer scheduledTimerWithTimeInterval:1800
+                                                    target:self
+                                                  selector:@selector(handleRefreshTimer:)
+                                                  userInfo:nil
+                                                   repeats:YES];
+    [refreshTimer setTolerance:180];
 
     return self;
 }
@@ -133,6 +158,11 @@
     [super setEnabled:enabled];
 }
 
+- (void) handleRefreshTimer:(NSTimer*)timer
+{
+    [self refreshData];
+}
+
 - (void) refreshData
 {
     [self removeAllRenderables];
@@ -142,12 +172,22 @@
             "/dataserver_current/httpparam?dataSource=metars&requestType=retrieve"
             "&format=xml&stationString=PA*&hoursBeforeNow=1&mostRecentForEachStation=postfilter";
     METARLayerRetriever* retriever = [[METARLayerRetriever alloc] initWithUrl:urlString layer:self];
+
+    @synchronized (_refreshInProgress)
+    {
+        if ([_refreshInProgress boolValue])
+            return;
+
+        _refreshInProgress = [[NSNumber alloc] initWithBool:YES];
+    }
+
     [[WorldWind loadQueue] addOperation:retriever];
 }
 
 - (void) handleRefreshNotification:(NSNotification*)notification
 {
-    if ([[notification name] isEqualToString:WW_REFRESH] && [notification object] == self)
+    if ([[notification name] isEqualToString:TAIGA_REFRESH]
+            && ([notification object] == nil || [notification object] == self))
     {
         [self refreshData];
     }
@@ -221,7 +261,7 @@
 
 - (void) parserDidEndDocument:(NSXMLParser*)parser
 {
-    [[NSNotificationCenter defaultCenter] postNotificationName:WW_REFRESH_COMPLETE object:self];
+    [self performSelectorOnMainThread:@selector(addPlacemarksOnMainThread:) withObject:nil waitUntilDone:NO];
 }
 
 - (void) addCurrentPlacemark
@@ -241,23 +281,38 @@
     if (iconFilePath == nil) // in case something goes wrong
         iconFilePath = [[[NSBundle mainBundle] resourcePath] stringByAppendingPathComponent:@"weather32x32.png"];
     [currentPlacemarkDict setObject:iconFilePath forKey:@"IconFilePath.partial"];
-//
-//    NSString* fullIconFilePath = [MetarIconGenerator createIconFile:currentPlacemarkDict full:YES];
-//    if (fullIconFilePath == nil) // in case something goes wrong
-//        fullIconFilePath = [[[NSBundle mainBundle] resourcePath] stringByAppendingPathComponent:@"weather32x32.png"];
-//    [currentPlacemarkDict setObject:fullIconFilePath forKey:@"IconFilePath.full"];
 
     WWPointPlacemarkAttributes* attrs = [[WWPointPlacemarkAttributes alloc] init];
     [attrs setImagePath:iconFilePath];
     [pointPlacemark setAttributes:attrs];
 
-    [self performSelectorOnMainThread:@selector(addPlacemarkOnMainThread:) withObject:pointPlacemark waitUntilDone:NO];
+    if (placemarks == nil)
+    {
+        placemarks = [[NSMutableArray alloc] init];
+    }
+    [placemarks addObject:pointPlacemark];
 }
 
-- (void) addPlacemarkOnMainThread:(WWPointPlacemark*)placemark
+- (void) addPlacemarksOnMainThread:(id)object
 {
-    [self addRenderable:placemark];
-    [WorldWindView requestRedraw];
+    @try
+    {
+        [self removeAllRenderables];
+
+        [self addRenderables:placemarks];
+
+        placemarks = nil; // placemark list is needed only during parsing
+
+        [[NSNotificationCenter defaultCenter] postNotificationName:TAIGA_REFRESH_COMPLETE object:self];
+
+        // Redraw in case the layer was enabled before all the placemarks were loaded.
+        if ([self enabled])
+            [WorldWindView requestRedraw];
+    }
+    @catch (NSException* exception)
+    {
+        WWLogE(@"Adding METAR data to layer", exception);
+    }
 }
 
 - (WWPosition*) parseCoordinates
@@ -285,7 +340,7 @@
         WWPosition* pos = [placemark position];
         WWVec4* placemarkPoint = [[WWVec4 alloc] init];
         [[dc globe] computePointFromPosition:[pos latitude] longitude:[pos longitude]
-                                                             altitude:[pos altitude] outputPoint:placemarkPoint];
+                                    altitude:[pos altitude] outputPoint:placemarkPoint];
         double d = [placemarkPoint distanceTo3:eyePoint];
 
         double scale;

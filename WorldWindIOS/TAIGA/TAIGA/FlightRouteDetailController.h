@@ -8,8 +8,7 @@
 #import <Foundation/Foundation.h>
 
 @class FlightRoute;
-@class WaypointDatabase;
-@class WaypointFileControl;
+@class WaypointPicker;
 @class BulkRetrieverController;
 @class WorldWindView;
 
@@ -17,7 +16,8 @@
 {
 @protected
     UITableView* flightRouteTable;
-    WaypointFileControl* waypointFileControl;
+    NSMutableArray* propertySectionCells;
+    WaypointPicker* waypointPicker;
     BulkRetrieverController* bulkRetrieverController;
     NSArray* normalConstraints;
     NSArray* editingConstraints;
@@ -25,12 +25,8 @@
 
 @property (nonatomic, readonly, weak) FlightRoute* flightRoute;
 
-@property (nonatomic, readonly, weak) WaypointDatabase* waypointDatabase;
-
 @property (nonatomic, readonly, weak) WorldWindView* wwv;
 
-- (FlightRouteDetailController*) initWithFlightRoute:(FlightRoute*)flightRoute
-                                    waypointDatabase:(WaypointDatabase*)waypointDatabase
-                                                view:(WorldWindView*)wwv;
+- (id) initWithFlightRoute:(FlightRoute*)flightRoute worldWindView:(WorldWindView*)wwv;
 
 @end

@@ -14,6 +14,7 @@ import gov.nasa.worldwind.exception.WWUnrecognizedException;
 import gov.nasa.worldwind.globes.ElevationModel;
 import gov.nasa.worldwind.ogc.OGCCapabilities;
 import gov.nasa.worldwind.ogc.OGCConstants;
+import gov.nasa.worldwind.ogc.wcs.wcs100.WCS100Capabilities;
 import gov.nasa.worldwind.ogc.wms.WMSCapabilities;
 import gov.nasa.worldwind.ogc.wms.WMSLayerCapabilities;
 import gov.nasa.worldwind.util.Logging;
@@ -97,6 +98,11 @@ public class BasicElevationModelFactory extends BasicFactory
         }
 
         return new WMSBasicElevationModel((WMSCapabilities) caps, params);
+    }
+
+    protected Object doCreateFromCapabilities(WCS100Capabilities caps, AVList params)
+    {
+        return new WCSElevationModel(caps, params);
     }
 
     /**
@@ -205,6 +211,10 @@ public class BasicElevationModelFactory extends BasicFactory
         else if (serviceName.equals(OGCConstants.WMS_SERVICE_NAME))
         {
             em = new WMSBasicElevationModel(domElement, params);
+        }
+        else if (serviceName.equals(OGCConstants.WCS_SERVICE_NAME))
+        {
+            em = new WCSElevationModel(domElement, params);
         }
         else if (AVKey.SERVICE_NAME_LOCAL_RASTER_SERVER.equals(serviceName))
         {

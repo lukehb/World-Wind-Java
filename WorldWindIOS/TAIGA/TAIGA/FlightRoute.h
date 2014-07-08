@@ -13,11 +13,8 @@
 @class WWGlobe;
 @class WWPath;
 @class WWPosition;
-@class WWSector;
 @class WWShapeAttributes;
 @protocol WWExtent;
-
-typedef void (^FlightRouteAnimationBlock)(NSDate* timestamp, BOOL* stop);
 
 @interface FlightRoute : NSObject <WWRenderable>
 {
@@ -25,10 +22,11 @@ typedef void (^FlightRouteAnimationBlock)(NSDate* timestamp, BOOL* stop);
     NSMutableArray* waypoints;
     NSMutableArray* waypointPositions;
     NSMutableArray* waypointShapes;
+    NSMutableArray* arrowShapes;
     WWPath* waypointPath;
+    WWShapeAttributes* pathAttrs;
     WWShapeAttributes* shapeAttrs;
     WWPosition* currentPosition;
-    NSMutableArray* animations;
 }
 
 + (NSArray*) flightRouteColors;
@@ -39,16 +37,18 @@ typedef void (^FlightRouteAnimationBlock)(NSDate* timestamp, BOOL* stop);
 /// Indicates whether this flight route should be displayed.
 @property (nonatomic) BOOL enabled;
 
-@property (nonatomic) double altitude;
-
 @property (nonatomic) NSUInteger colorIndex;
+
+@property (nonatomic) double defaultAltitude;
 
 /// A field for application-specific use, typically used to associate application data with the shape.
 @property (nonatomic) id userObject;
 
-- (FlightRoute*) init;
+- (id) initWithDisplayName:(NSString*)displayName colorIndex:(NSUInteger)colorIndex defaultAltitude:(double)defaultAltitude;
 
-- (FlightRoute*) initWithWaypoints:(NSArray*)waypointArray;
+- (id) initWithPropertyList:(NSDictionary*)propertyList;
+
+- (NSDictionary*) asPropertyList;
 
 - (id<WWExtent>) extentOnGlobe:(WWGlobe*)globe;
 
@@ -64,13 +64,7 @@ typedef void (^FlightRouteAnimationBlock)(NSDate* timestamp, BOOL* stop);
 
 - (NSUInteger) indexOfWaypoint:(Waypoint*)waypoint;
 
-- (BOOL) containsWaypoint:(Waypoint*)waypoint;
-
-- (void) addWaypoint:(Waypoint*)waypoint;
-
 - (void) insertWaypoint:(Waypoint*)waypoint atIndex:(NSUInteger)index;
-
-- (void) removeWaypoint:(Waypoint*)waypoint;
 
 - (void) removeWaypointAtIndex:(NSUInteger)index;
 
@@ -78,10 +72,6 @@ typedef void (^FlightRouteAnimationBlock)(NSDate* timestamp, BOOL* stop);
 
 - (void) moveWaypointAtIndex:(NSUInteger)fromIndex toIndex:(NSUInteger)toIndex;
 
-- (void) updateWaypointAtIndex:(NSUInteger)index;
-
-- (BOOL) isWaypointAtIndexHighlighted:(NSUInteger)index;
-
-- (void) highlightWaypointAtIndex:(NSUInteger)index highlighted:(BOOL)highlighted;
+- (void) reverseWaypoints;
 
 @end

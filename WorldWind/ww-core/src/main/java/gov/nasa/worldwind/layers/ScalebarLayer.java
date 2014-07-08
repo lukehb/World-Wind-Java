@@ -5,7 +5,6 @@
  */
 package gov.nasa.worldwind.layers;
 
-import com.jogamp.opengl.util.awt.TextRenderer;
 import gov.nasa.worldwind.avlist.AVKey;
 import gov.nasa.worldwind.geom.*;
 import gov.nasa.worldwind.pick.PickSupport;
@@ -40,7 +39,7 @@ public class ScalebarLayer extends AbstractLayer
     public static final Font DEFAULT_FONT = Font.decode("Arial-PLAIN-12");
     public static final double DEFAULT_TO_VIEWPORT_SCALE = 0.2;
 
-    // Display parameters - TODO: make configurable
+    // Display parameters
     private Dimension size = new Dimension(DEFAULT_WIDTH, DEFAULT_HEIGHT);
     private Color color = DEFAULT_COLOR;
     private int borderWidth = DEFAULT_BORDER_WIDTH;
@@ -50,17 +49,23 @@ public class ScalebarLayer extends AbstractLayer
     private Font defaultFont = DEFAULT_FONT;
     private double toViewportScale = DEFAULT_TO_VIEWPORT_SCALE;
 
-    private PickSupport pickSupport = new PickSupport();
-    private Vec4 locationCenter = null;
-    private Vec4 locationOffset = null;
-    private double pixelSize;
+    protected PickSupport pickSupport = new PickSupport();
+    protected Vec4 locationCenter = null;
+    protected Vec4 locationOffset = null;
+    protected long frameStampForPicking;
+    protected long frameStampForDrawing;
 
-    // Draw it as ordered with an eye distance of 0 so that it shows up in front of most other things.
-    // TODO: Add general support for this common pattern.
-    private OrderedIcon orderedImage = new OrderedIcon();
-
-    private class OrderedIcon implements OrderedRenderable
+    protected class OrderedImage implements OrderedRenderable
     {
+        protected Position referencePosition;
+        protected double pixelSize;
+
+        public OrderedImage(Position referencePosition, double pixelSize)
+        {
+            this.referencePosition = referencePosition;
+            this.pixelSize = pixelSize;
+        }
+
         public double getDistanceFromEye()
         {
             return 0;
@@ -68,12 +73,12 @@ public class ScalebarLayer extends AbstractLayer
 
         public void pick(DrawContext dc, Point pickPoint)
         {
-            ScalebarLayer.this.draw(dc);
+            ScalebarLayer.this.draw(dc, this);
         }
 
         public void render(DrawContext dc)
         {
-            ScalebarLayer.this.draw(dc);
+            ScalebarLayer.this.draw(dc, this);
         }
     }
 
@@ -84,16 +89,6 @@ public class ScalebarLayer extends AbstractLayer
     }
 
     // Public properties
-
-    /**
-     * Get the apparent pixel size in meter at the reference position.
-     *
-     * @return the apparent pixel size in meter at the reference position.
-     */
-    public double getPixelSize()
-    {
-        return this.pixelSize;
-    }
 
     /**
      * Get the scalebar graphic Dimension (in pixels)
@@ -332,18 +327,45 @@ public class ScalebarLayer extends AbstractLayer
     @Override
     public void doRender(DrawContext dc)
     {
-        dc.addOrderedRenderable(this.orderedImage);
+        if (dc.isContinuous2DGlobe() && this.frameStampForDrawing == dc.getFrameTimeStamp())
+            return;
+
+        this.addOrderedImage(dc);
+
+        this.frameStampForDrawing = dc.getFrameTimeStamp();
     }
 
     @Override
     public void doPick(DrawContext dc, Point pickPoint)
     {
-        // Delegate drawing to the ordered renderable list
-        dc.addOrderedRenderable(this.orderedImage);
+        if (dc.isContinuous2DGlobe() && this.frameStampForPicking == dc.getFrameTimeStamp())
+            return;
+
+        this.addOrderedImage(dc);
+
+        this.frameStampForPicking = dc.getFrameTimeStamp();
+    }
+
+    protected void addOrderedImage(DrawContext dc)
+    {
+        // Capture the current reference position and pixel size and create an ordered renderable to defer drawing.
+
+        Position referencePosition = dc.getViewportCenterPosition();
+        dc.addOrderedRenderable(new OrderedImage(referencePosition, this.computePixelSize(dc, referencePosition)));
+    }
+
+    protected double computePixelSize(DrawContext dc, Position referencePosition)
+    {
+        if (referencePosition == null)
+            return -1;
+
+        Vec4 groundTarget = dc.getGlobe().computePointFromPosition(referencePosition);
+        double eyeDistance = dc.getView().getEyePoint().distanceTo3(groundTarget);
+        return dc.getView().computePixelSizeAtDistance(eyeDistance);
     }
 
     // Rendering
-    public void draw(DrawContext dc)
+    public void draw(DrawContext dc, OrderedImage orderedImage)
     {
         GL2 gl = dc.getGL().getGL2(); // GL initialization checks for GL2 compatibility.
 
@@ -375,13 +397,9 @@ public class ScalebarLayer extends AbstractLayer
             gl.glScaled(scale, scale, 1);
 
             // Compute scale size in real world
-            Position referencePosition = dc.getViewportCenterPosition();
-            if (referencePosition != null)
+            if (orderedImage.pixelSize > 0)
             {
-                Vec4 groundTarget = dc.getGlobe().computePointFromPosition(referencePosition);
-                Double distance = dc.getView().getEyePoint().distanceTo3(groundTarget);
-                this.pixelSize = dc.getView().computePixelSizeAtDistance(distance);
-                Double scaleSize = this.pixelSize * width * scale;  // meter
+                Double scaleSize = orderedImage.pixelSize * width * scale;  // meter
                 String unitLabel = "m";
                 if (this.unit.equals(UNIT_METRIC))
                 {
@@ -459,7 +477,7 @@ public class ScalebarLayer extends AbstractLayer
                         Color color = dc.getUniquePickColor();
                         int colorCode = color.getRGB();
                         // Add our object(s) to the pickable list
-                        this.pickSupport.addPickableObject(colorCode, this, referencePosition, false);
+                        this.pickSupport.addPickableObject(colorCode, this, orderedImage.referencePosition, false);
                         gl.glColor3ub((byte) color.getRed(), (byte) color.getGreen(), (byte) color.getBlue());
                         gl.glTranslated((width - divWidth) / 2, 0d, 0d);
                         this.drawRectangle(dc, divWidth, height);

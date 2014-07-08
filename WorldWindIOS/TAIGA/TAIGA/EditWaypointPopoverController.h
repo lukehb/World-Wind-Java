@@ -11,17 +11,14 @@
 @class FlightRoute;
 @class MovingMapViewController;
 @class Waypoint;
-@class MutableWaypoint;
 
-@interface EditWaypointPopoverController : DraggablePopoverController <UITableViewDataSource, UITableViewDelegate, UIPopoverControllerDelegate, UIAlertViewDelegate>
+@interface EditWaypointPopoverController : DraggablePopoverController <UITableViewDataSource, UITableViewDelegate, UIAlertViewDelegate, UINavigationControllerDelegate>
 {
 @protected
     UITableViewController* tableViewController;
     UINavigationController* navigationController;
-    UIBarButtonItem* cancelButtonItem;
     NSMutableArray* tableCells;
     Waypoint* oldWaypoint;
-    MutableWaypoint* newWaypoint;
 }
 
 @property (nonatomic, readonly) FlightRoute* flightRoute;

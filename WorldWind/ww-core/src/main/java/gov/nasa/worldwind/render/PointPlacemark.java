@@ -6,7 +6,6 @@
 
 package gov.nasa.worldwind.render;
 
-import com.jogamp.opengl.util.awt.TextRenderer;
 import gov.nasa.worldwind.*;
 import gov.nasa.worldwind.avlist.AVKey;
 import gov.nasa.worldwind.geom.*;
@@ -85,6 +84,8 @@ public class PointPlacemark extends WWObjectImpl
     protected Object delegateOwner;
     protected boolean clipToHorizon = true;
     protected boolean enableDecluttering = false;
+    protected long frameStampForPicking;
+    protected long frameStampForDrawing;
 
     // Values computed once per frame and reused during the frame as needed.
     protected long frameNumber = -1; // identifies frame used to calculate these values
@@ -530,8 +531,20 @@ public class PointPlacemark extends WWObjectImpl
         // The rest of the code in this method determines whether to queue an ordered renderable for the placemark
         // and its optional line.
 
-        // Re-use values already calculated this frame.
-        if (dc.getFrameTimeStamp() != this.frameNumber)
+        if (dc.isContinuous2DGlobe())
+        {
+            // When rendering multiple globes, we want to add this shape the ordered renderable list only once per
+            // frame. The two "frameStamp" variables are set when the ordered renderable is added (see below), and
+            // checked here to avoid adding the ordered renderable again.
+            if (dc.isPickingMode() && this.frameStampForPicking == dc.getFrameTimeStamp())
+                return;
+
+            if (!dc.isPickingMode() && this.frameStampForDrawing == dc.getFrameTimeStamp())
+                return;
+        }
+
+        // Re-use values already calculated this frame, unless we're rendering potentially multiple globes.
+        if (dc.getFrameTimeStamp() != this.frameNumber || dc.isContinuous2DGlobe())
         {
             this.computePlacemarkPoints(dc);
             if (this.placePoint == null || this.screenPoint == null)
@@ -555,7 +568,17 @@ public class PointPlacemark extends WWObjectImpl
         }
 
         if (this.intersectsFrustum(dc) || this.isDrawLine(dc))
+        {
             dc.addOrderedRenderable(this); // add the image ordered renderable
+
+            if (dc.isContinuous2DGlobe())
+            {
+                if (dc.isPickingMode())
+                    this.frameStampForPicking = this.frameNumber;
+                else
+                    this.frameStampForDrawing = this.frameNumber;
+            }
+        }
 
         if (dc.isPickingMode())
             this.pickLayer = dc.getCurrentLayer();
@@ -1103,7 +1126,8 @@ public class PointPlacemark extends WWObjectImpl
      */
     protected boolean isDrawLine(DrawContext dc)
     {
-        if (!this.isLineEnabled() || this.getAltitudeMode() == WorldWind.CLAMP_TO_GROUND || this.terrainPoint == null)
+        if (!this.isLineEnabled() || dc.is2DGlobe() || this.getAltitudeMode() == WorldWind.CLAMP_TO_GROUND
+            || this.terrainPoint == null)
             return false;
 
         if (dc.isPickingMode())
@@ -1324,11 +1348,11 @@ public class PointPlacemark extends WWObjectImpl
         // based URL to be passed to the BasicWWTexture constructor.
         if (localUrl != null)
         {
-            if (!"file".equals(localUrl.getProtocol()))
-            {
-                Logging.logger().warning(Logging.getMessage("generic.URLProtocolNotFile", localUrl));
-                return null;
-            }
+//            if (!"file".equals(localUrl.getProtocol()))
+//            {
+//                Logging.logger().warning(Logging.getMessage("generic.URLProtocolNotFile", localUrl));
+//                return null;
+//            }
 
             return new BasicWWTexture(localUrl, true);
         }

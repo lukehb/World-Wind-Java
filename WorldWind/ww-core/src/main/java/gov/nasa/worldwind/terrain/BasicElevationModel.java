@@ -9,6 +9,7 @@ import com.jogamp.common.nio.Buffers;
 import gov.nasa.worldwind.*;
 import gov.nasa.worldwind.avlist.*;
 import gov.nasa.worldwind.cache.*;
+import gov.nasa.worldwind.data.*;
 import gov.nasa.worldwind.event.BulkRetrievalListener;
 import gov.nasa.worldwind.exception.WWRuntimeException;
 import gov.nasa.worldwind.geom.*;
@@ -62,6 +63,7 @@ public class BasicElevationModel extends AbstractElevationModel implements BulkR
         new java.util.concurrent.ConcurrentHashMap<TileKey, ElevationTile>();
     protected MemoryCache memoryCache;
     protected int extremesLevel = -1;
+    protected boolean extremesCachingEnabled = true;
     protected BufferWrapper extremes = null;
     protected MemoryCache extremesLookupCache;
     // Model resource properties.
@@ -216,7 +218,7 @@ public class BasicElevationModel extends AbstractElevationModel implements BulkR
         }
         else
         {
-            long size = Configuration.getLongValue(AVKey.ELEVATION_TILE_CACHE_SIZE, 5000000L);
+            long size = Configuration.getLongValue(AVKey.ELEVATION_TILE_CACHE_SIZE, 20000000L);
             MemoryCache mc = new BasicMemoryCache((long) (0.85 * size), size);
             mc.setName("Elevation Tiles");
             WorldWind.getMemoryCacheSet().addCache(cacheName, mc);
@@ -348,7 +350,18 @@ public class BasicElevationModel extends AbstractElevationModel implements BulkR
         return this.levels.getSector().contains(latitude, longitude);
     }
 
-    //**************************************************************//
+    @Override
+    public void setExtremesCachingEnabled(boolean enabled)
+    {
+        this.extremesCachingEnabled = enabled;
+    }
+
+    @Override
+    public boolean isExtremesCachingEnabled()
+    {
+        return this.extremesCachingEnabled;
+    }
+//**************************************************************//
     //********************  Elevation Tile Management  *************//
     //**************************************************************//
 
@@ -527,17 +540,10 @@ public class BasicElevationModel extends AbstractElevationModel implements BulkR
     {
         try
         {
-            ByteBuffer byteBuffer;
-            synchronized (this.fileLock)
-            {
-                byteBuffer = WWIO.readURLContentToBuffer(url);
-            }
-
-            // Setup parameters to instruct BufferWrapper on how to interpret the ByteBuffer.
-            AVList bufferParams = new AVListImpl();
-            bufferParams.setValue(AVKey.DATA_TYPE, this.elevationDataType);
-            bufferParams.setValue(AVKey.BYTE_ORDER, this.elevationDataByteOrder);
-            return BufferWrapper.wrap(byteBuffer, bufferParams);
+            if (url.getPath().endsWith("tif"))
+                return this.makeTiffElevations(url);
+            else
+                return this.makeBilElevations(url);
         }
         catch (java.io.IOException e)
         {
@@ -545,6 +551,101 @@ public class BasicElevationModel extends AbstractElevationModel implements BulkR
                 "ElevationModel.ExceptionReadingElevationFile", url.toString());
             throw e;
         }
+    }
+
+    protected BufferWrapper makeBilElevations(URL url) throws IOException
+    {
+        ByteBuffer byteBuffer;
+        synchronized (this.fileLock)
+        {
+            byteBuffer = WWIO.readURLContentToBuffer(url);
+        }
+
+        // Setup parameters to instruct BufferWrapper on how to interpret the ByteBuffer.
+        AVList bufferParams = new AVListImpl();
+        bufferParams.setValue(AVKey.DATA_TYPE, this.elevationDataType);
+        bufferParams.setValue(AVKey.BYTE_ORDER, this.elevationDataByteOrder);
+        return BufferWrapper.wrap(byteBuffer, bufferParams);
+    }
+
+    protected BufferWrapper makeTiffElevations(URL url) throws IOException
+    {
+        File file = new File(url.getPath());
+
+        // Create a raster reader for the file type.
+        DataRasterReaderFactory readerFactory = (DataRasterReaderFactory) WorldWind.createConfigurationComponent(
+            AVKey.DATA_RASTER_READER_FACTORY_CLASS_NAME);
+        DataRasterReader reader = readerFactory.findReaderFor(file, null);
+        if (reader == null)
+        {
+            String msg = Logging.getMessage("generic.UnknownFileFormatOrMatchingReaderNotFound", file.getPath());
+            Logging.logger().severe(msg);
+            throw new WWRuntimeException(msg);
+        }
+
+        // Read the file into the raster.
+        DataRaster[] rasters;
+        synchronized (this.fileLock)
+        {
+            rasters = reader.read(file, null);
+        }
+
+        if (rasters == null || rasters.length == 0)
+        {
+            String msg = Logging.getMessage("ElevationModel.CannotReadElevations", file.getAbsolutePath());
+            Logging.logger().severe(msg);
+            throw new WWRuntimeException(msg);
+        }
+
+        DataRaster raster = rasters[0];
+
+        // Request a sub-raster that contains the whole file. This step is necessary because only sub-rasters
+        // are reprojected (if necessary); primary rasters are not.
+        int width = raster.getWidth();
+        int height = raster.getHeight();
+
+        // Determine the sector covered by the elevations. This information is in the GeoTIFF file or auxiliary
+        // files associated with the elevations file.
+        final Sector sector = (Sector) raster.getValue(AVKey.SECTOR);
+        if (sector == null)
+        {
+            String msg = Logging.getMessage("DataRaster.MissingMetadata", AVKey.SECTOR);
+            Logging.logger().severe(msg);
+            throw new IllegalStateException(msg);
+        }
+
+        DataRaster subRaster = raster.getSubRaster(width, height, sector, raster);
+
+        // Verify that the sub-raster can create a ByteBuffer, then create one.
+        if (!(subRaster instanceof ByteBufferRaster))
+        {
+            String msg = Logging.getMessage("ElevationModel.CannotCreateElevationBuffer", file.getPath());
+            Logging.logger().severe(msg);
+            throw new WWRuntimeException(msg);
+        }
+        ByteBuffer elevations = ((ByteBufferRaster) subRaster).getByteBuffer();
+
+        // The sub-raster can now be disposed. Disposal won't affect the ByteBuffer.
+        subRaster.dispose();
+
+        // Setup parameters to instruct BufferWrapper on how to interpret the ByteBuffer.
+        AVList bufferParams = new AVListImpl();
+        bufferParams.setValues(raster.copy()); // copies params from avlist
+
+        String dataType = bufferParams.getStringValue(AVKey.DATA_TYPE);
+        if (WWUtil.isEmpty(dataType))
+        {
+            String msg = Logging.getMessage("DataRaster.MissingMetadata", AVKey.DATA_TYPE);
+            Logging.logger().severe(msg);
+            throw new IllegalStateException(msg);
+        }
+
+        BufferWrapper bufferWrapper = BufferWrapper.wrap(elevations, bufferParams);
+
+        // Tne primary raster can now be disposed.
+        raster.dispose();
+
+        return bufferWrapper;
     }
 
     protected static ByteBuffer convertImageToElevations(ByteBuffer buffer, String contentType) throws IOException
@@ -847,6 +948,46 @@ public class BasicElevationModel extends AbstractElevationModel implements BulkR
 
             return super.handleTextContent();
         }
+//
+//        @Override
+//        protected ByteBuffer handleImageContent() throws IOException
+//        {
+//            if (!this.getRetriever().getContentType().contains("tiff"))
+//                return super.handleImageContent();
+//
+//            File tmpFile = WWIO.saveBufferToTempFile(this.getRetriever().getBuffer(), ".tif");
+//
+//            DataRasterReaderFactory readerFactory = (DataRasterReaderFactory) WorldWind.createConfigurationComponent(
+//                AVKey.DATA_RASTER_READER_FACTORY_CLASS_NAME);
+//            DataRasterReader reader = readerFactory.findReaderFor(tmpFile, null);
+//
+//            // Before reading the raster, verify that the file contains elevations.
+//            AVList metadata = reader.readMetadata(tmpFile, null);
+//            if (metadata == null || !AVKey.ELEVATION.equals(metadata.getStringValue(AVKey.PIXEL_FORMAT)))
+//            {
+//                String msg = Logging.getMessage("ElevationModel.SourceNotElevations", tmpFile.getAbsolutePath());
+//                Logging.logger().severe(msg);
+//                throw new IllegalArgumentException(msg);
+//            }
+//
+//            // Read the file into the raster.
+//            DataRaster[] rasters = reader.read(tmpFile, null);
+//            if (rasters == null || rasters.length == 0)
+//            {
+//                String msg = Logging.getMessage("ElevationModel.CannotReadElevations", tmpFile.getAbsolutePath());
+//                Logging.logger().severe(msg);
+//                throw new WWRuntimeException(msg);
+//            }
+//
+//            DataRaster raster = rasters[0];
+//
+//            ByteBuffer byteBuffer =
+//                ((BufferWrapper.ByteBufferWrapper)((BufferWrapperRaster) raster).getBuffer()).getBackingByteBuffer();
+//
+//            WWIO.saveBuffer(byteBuffer, this.getOutputFile());
+//
+//            return byteBuffer;
+//        }
     }
 
     /** Internal class to hold collections of elevation tiles that provide elevations for a specific sector. */
@@ -970,6 +1111,7 @@ public class BasicElevationModel extends AbstractElevationModel implements BulkR
 
         /**
          * Returns the extreme values among all the tiles in this object.
+         *
          * @return the extreme values.
          */
         protected double[] getTileExtremes()
@@ -1363,7 +1505,8 @@ public class BasicElevationModel extends AbstractElevationModel implements BulkR
 
         try
         {
-            double[] extremes = (double[]) this.getExtremesLookupCache().getObject(sector);
+            double[] extremes = this.extremesCachingEnabled
+                ? (double[]) this.getExtremesLookupCache().getObject(sector) : null;
             if (extremes != null)
                 return new double[] {extremes[0], extremes[1]}; // return defensive copy
 
@@ -1372,8 +1515,8 @@ public class BasicElevationModel extends AbstractElevationModel implements BulkR
 
             // Compute the extremes from the extreme-elevations file.
             extremes = this.computeExtremeElevations(sector);
-            if (extremes != null)
-                this.getExtremesLookupCache().add(sector, extremes, 16);
+            if (extremes != null && this.isExtremesCachingEnabled())
+                this.getExtremesLookupCache().add(sector, extremes, 64);
 
             // Return a defensive copy of the array to prevent the caller from modifying the cache contents.
             return extremes != null ? new double[] {extremes[0], extremes[1]} : null;
@@ -1524,9 +1667,7 @@ public class BasicElevationModel extends AbstractElevationModel implements BulkR
 
         if (this.extremesLookupCache == null)
         {
-            // Default cache size holds 1250 min/max pairs. This size was experimentally determined to hold enough
-            // value lookups to prevent cache thrashing.
-            long size = Configuration.getLongValue(AVKey.ELEVATION_EXTREMES_LOOKUP_CACHE_SIZE, 20000L);
+            long size = Configuration.getLongValue(AVKey.ELEVATION_EXTREMES_LOOKUP_CACHE_SIZE, 20000000L);
             this.extremesLookupCache = new BasicMemoryCache((long) (0.85 * size), size);
         }
 
@@ -1741,13 +1882,13 @@ public class BasicElevationModel extends AbstractElevationModel implements BulkR
             {
                 elevations.tiles = tiles;
                 double[] extremes = elevations.getTileExtremes();
-                if (extremes != null)
+                if (extremes != null && this.isExtremesCachingEnabled())
                 {
                     // Cache the newly computed extremes if they're different from the currently cached ones.
                     double[] currentExtremes = (double[]) this.getExtremesLookupCache().getObject(requestedSector);
                     if (currentExtremes == null || currentExtremes[0] != extremes[0]
                         || currentExtremes[1] != extremes[1])
-                        this.getExtremesLookupCache().add(requestedSector, extremes, 16);
+                        this.getExtremesLookupCache().add(requestedSector, extremes, 64);
                 }
             }
         }

@@ -9,15 +9,14 @@
 #import "WorldWind/Render/WWRenderable.h"
 
 @class FlightRoute;
-@class WaypointDatabase;
 @class WorldWindView;
 
-@interface FlightRouteController : UITableViewController <UINavigationControllerDelegate, UIAlertViewDelegate, WWRenderable>
+@interface FlightRouteController : UITableViewController <UINavigationControllerDelegate, WWRenderable>
 {
 @protected
     NSMutableArray* flightRoutes;
     NSUInteger newFlightRouteColorIndex;
-    void (^newFlightRouteCompletionBlock)(FlightRoute* newFlightRoute);
+    BOOL isSavingState;
 }
 
 /// @name Attributes
@@ -28,11 +27,9 @@
 
 @property (nonatomic, readonly) WorldWindView* wwv;
 
-@property (nonatomic, readonly) WaypointDatabase* waypointDatabase;
-
 /// @name Initializing FlightRouteController
 
-- (FlightRouteController*) initWithWorldWindView:(WorldWindView*)wwv waypointDatabase:(WaypointDatabase*)waypointDatabase;
+- (FlightRouteController*) initWithWorldWindView:(WorldWindView*)wwv;
 
 /// @name Managing the Flight Route List
 
@@ -61,9 +58,5 @@
 - (FlightRoute*) presentedFlightRoute;
 
 - (void) presentFlightRouteAtIndex:(NSUInteger)index editing:(BOOL)editing;
-
-/// @name Saving and Restoring Flight Route State
-
-- (void) restoreFlightRouteState;
 
 @end

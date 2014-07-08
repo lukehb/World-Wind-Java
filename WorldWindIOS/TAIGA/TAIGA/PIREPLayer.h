@@ -10,6 +10,9 @@
 
 @interface PIREPLayer : WWRenderableLayer <NSXMLParserDelegate>
 
+@property (atomic) NSNumber* refreshInProgress;
+@property (atomic) NSDate* lastUpdate;
+
 - (PIREPLayer*) init;
 
 @end

@@ -6,87 +6,50 @@
  */
 
 #import "Waypoint.h"
-#import "TAIGA.h"
 #import "UnitsFormatter.h"
-#import "WorldWind/Util/WWUtil.h"
+#import "TAIGA.h"
+#import "AppConstants.h"
 #import "WorldWind/WWLog.h"
+
+static NSSet* WaypointNameAcronyms;
 
 @implementation Waypoint
 
-- (NSString*) key
++ (void) initialize
 {
-    return _key;
-}
-
-- (WaypointType) type
-{
-    return _type;
-}
-
-- (double) latitude
-{
-    return _latitude;
-}
-
-- (double) longitude
-{
-    return _longitude;
-}
-
-- (NSString*) displayName
-{
-    return _displayName;
-}
-
-- (NSString*) iconPath
-{
-    return _iconPath;
-}
-
-- (UIImage*) iconImage
-{
-    return _iconImage;
-}
-
-- (NSDictionary*) properties
-{
-    return _properties;
-}
-
-- (id) initWithKey:(NSString*)key type:(WaypointType)type degreesLatitude:(double)latitude longitude:(double)longitude
-{
-    if (key == nil)
+    static BOOL initialized = NO;
+    if (!initialized)
     {
-        WWLOG_AND_THROW(NSInvalidArgumentException, @"Key is nil")
+        WaypointNameAcronyms = [NSSet setWithObjects:@"AAF", @"AFB", @"AFS", @"AS", @"CGS", @"LRRS", nil];
+        initialized = YES;
     }
+}
 
+- (id) initWithDegreesLatitude:(double)latitude longitude:(double)longitude metersAltitude:(double)altitude
+{
     self = [super init];
 
-    _key = key;
-    _type  = type;
     _latitude = latitude;
     _longitude = longitude;
-    _displayName = [[TAIGA unitsFormatter] formatDegreesLatitude:latitude longitude:longitude];
+    _altitude = altitude;
     _properties = [NSDictionary dictionary];
-
-    switch (_type)
-    {
-    case WaypointTypeAirport:
-        _iconPath = [[NSBundle mainBundle] pathForResource:@"38-airplane" ofType:@"png"];
-        _iconImage = [[UIImage imageWithContentsOfFile:_iconPath] imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
-        break;
-    case WaypointTypeMarker :
-        _iconPath = [[NSBundle mainBundle] pathForResource:@"07-map-marker" ofType:@"png"];
-        _iconImage = [[UIImage imageWithContentsOfFile:_iconPath] imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
-        break;
-    }
 
     return self;
 }
 
-- (id) initWithType:(WaypointType)type degreesLatitude:(double)latitude longitude:(double)longitude
+- (id) initWithWaypoint:(Waypoint*)waypoint metersAltitude:(double)altitude
 {
-    self = [self initWithKey:[WWUtil generateUUID] type:type degreesLatitude:latitude longitude:longitude];
+    if (waypoint == nil)
+    {
+        WWLOG_AND_THROW(NSInvalidArgumentException, @"Waypoint is nil")
+    }
+
+    self = [super init];
+
+    _latitude = waypoint->_latitude;
+    _longitude = waypoint->_longitude;
+    _altitude = altitude;
+    _properties = waypoint->_properties;
 
     return self;
 }
@@ -98,20 +61,11 @@
         WWLOG_AND_THROW(NSInvalidArgumentException, @"Values is nil")
     }
 
-    NSString* id = [values objectForKey:@"ARPT_IDENT"];
-    NSNumber* latDegrees = [values objectForKey:@"WGS_DLAT"];
-    NSNumber* lonDegrees = [values objectForKey:@"WGS_DLONG"];
-    NSString* icao = [values objectForKey:@"ICAO"];
-    NSString* name = [values objectForKey:@"NAME"];
+    self = [super init];
 
-    self = [self initWithKey:id type:WaypointTypeAirport degreesLatitude:[latDegrees doubleValue] longitude:[lonDegrees doubleValue]];
-
-    NSMutableString* displayName = [[NSMutableString alloc] init];
-    [displayName appendString:icao];
-    [displayName appendString:@": "];
-    [displayName appendString:[name capitalizedString]];
-
-    _displayName = displayName;
+    _latitude = [[values objectForKey:@"WGS_DLAT"] doubleValue];
+    _longitude = [[values objectForKey:@"WGS_DLONG"] doubleValue];
+    _altitude = [[values objectForKey:@"ELEV"] doubleValue] / TAIGA_METERS_TO_FEET;
     _properties = values;
 
     return self;
@@ -124,45 +78,84 @@
         WWLOG_AND_THROW(NSInvalidArgumentException, @"Property list is nil")
     }
 
-    NSString* key = [propertyList objectForKey:@"key"];
-    NSNumber* type = [propertyList objectForKey:@"type"];
-    NSNumber* latitude = [propertyList objectForKey:@"latitude"];
-    NSNumber* longitude = [propertyList objectForKey:@"longitude"];
-
-    self = [self initWithKey:key type:(WaypointType) [type intValue] degreesLatitude:[latitude doubleValue] longitude:[longitude doubleValue]];
-
-    _displayName = [propertyList objectForKey:@"displayName"];
+    _latitude = [[propertyList objectForKey:@"latitude"] doubleValue];
+    _longitude = [[propertyList objectForKey:@"longitude"] doubleValue];
+    _altitude = [[propertyList objectForKey:@"altitude"] doubleValue];
     _properties = [propertyList objectForKey:@"properties"];
 
     return self;
 }
 
-- (NSDictionary*) propertyList
+- (NSDictionary*) asPropertyList
 {
     return @{
-        @"key" : _key,
-        @"type" : [NSNumber numberWithInt:_type],
         @"latitude" : [NSNumber numberWithDouble:_latitude],
         @"longitude" : [NSNumber numberWithDouble:_longitude],
-        @"displayName" : _displayName,
-        @"properties" : _properties
+        @"altitude" : [NSNumber numberWithDouble:_altitude],
+        @"properties" : _properties,
     };
 }
 
-- (BOOL) isEqual:(id __unsafe_unretained)anObject // Suppress unnecessary ARC retain/release calls.
+- (NSString*) description
 {
-    if (anObject == nil || [anObject class] != [Waypoint class])
+    if (description != nil)
     {
-        return NO;
+        return description;
     }
 
-    Waypoint* __unsafe_unretained other = (Waypoint*) anObject; // Suppress unnecessary ARC retain/release calls.
-    return [_key isEqualToString:other->_key];
+    if ([_properties count] > 0)
+    {
+        NSMutableString* ms = [[NSMutableString alloc] init];
+        [ms appendString:[_properties objectForKey:@"ICAO"]];
+        [ms appendString:@": "];
+        [self appendWaypointName:[_properties objectForKey:@"NAME"] toString:ms];
+        description = ms;
+        return description;
+    }
+    else
+    {
+        description = [[TAIGA unitsFormatter] formatDegreesLatitude:_latitude longitude:_longitude];
+        return description;
+    }
 }
 
-- (NSUInteger) hash
+- (NSString*) descriptionWithAltitude
 {
-    return [_key hash];
+    if (descriptionWithAltitude != nil)
+    {
+        return descriptionWithAltitude;
+    }
+
+    if ([_properties count] > 0)
+    {
+        NSMutableString* ms = [[NSMutableString alloc] init];
+        [ms appendString:[_properties objectForKey:@"ICAO"]];
+        [ms appendString:@": "];
+        [self appendWaypointName:[_properties objectForKey:@"NAME"] toString:ms];
+        [ms appendString:@"  "];
+        [ms appendString:[[TAIGA unitsFormatter] formatMetersAltitude:_altitude] ];
+        descriptionWithAltitude = ms;
+        return descriptionWithAltitude;
+    }
+    else
+    {
+        descriptionWithAltitude = [[TAIGA unitsFormatter] formatDegreesLatitude:_latitude longitude:_longitude metersAltitude:_altitude];
+        return descriptionWithAltitude;
+    }
+}
+
+- (void) appendWaypointName:(NSString*)nameString toString:(NSMutableString*)outString
+{
+    NSUInteger index = 0;
+    for (NSString* str in [nameString componentsSeparatedByString:@" "])
+    {
+        if (index++ > 0)
+        {
+            [outString appendString:@" "];
+        }
+
+        [outString appendString:[WaypointNameAcronyms containsObject:str] ? str : [str capitalizedString]];
+    }
 }
 
 @end

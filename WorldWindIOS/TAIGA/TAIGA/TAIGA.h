@@ -16,4 +16,8 @@
 
 + (UnitsFormatter*) unitsFormatter;
 
++ (NSArray*) waypoints;
+
++ (void) setWaypoints:(NSArray*)waypoints;
+
 @end

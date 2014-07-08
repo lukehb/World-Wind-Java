@@ -17,14 +17,14 @@
 - (FAASectionalsLayer*) init
 {
     NSString* layerName = @"FAAchart";
-    NSString* serviceAddress = @"http://worldwind20.arc.nasa.gov/faachart";
+    NSString* serviceAddress = @"http://worldwind25.arc.nasa.gov/wms";
 
     NSString* cacheDir = [NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES) objectAtIndex:0];
     NSString* cachePath = [cacheDir stringByAppendingPathComponent:@"FAASectionals"];
 
     // dateline, and WW doesn't have a way to specify that, or a way to specify more than one region.
-    self = [super initWithSector:[[WWSector alloc] initWithDegreesMinLatitude:51 maxLatitude:71.4
-                                                                 minLongitude:-180 maxLongitude:-130]
+    self = [super initWithSector:[[WWSector alloc] initWithDegreesMinLatitude:35 maxLatitude:71.4
+                                                                 minLongitude:-180 maxLongitude:-118]
                   levelZeroDelta:[[WWLocation alloc] initWithDegreesLatitude:45 longitude:45]
                        numLevels:9
             retrievalImageFormat:@"image/png"

@@ -8,15 +8,14 @@ package gov.nasa.worldwind.terrain;
 
 import gov.nasa.worldwind.*;
 import gov.nasa.worldwind.cache.*;
-import gov.nasa.worldwind.exception.WWRuntimeException;
+import gov.nasa.worldwind.exception.*;
 import gov.nasa.worldwind.geom.*;
 import gov.nasa.worldwind.globes.Globe;
 import gov.nasa.worldwind.render.SurfaceQuad;
-import gov.nasa.worldwind.util.*;
+import gov.nasa.worldwind.util.Logging;
 
-import java.awt.*;
 import java.util.*;
-import java.util.List;
+import java.util.concurrent.*;
 
 /**
  * Provides operations on the best available terrain. Operations such as line/terrain intersection and surface point
@@ -78,7 +77,7 @@ public class HighResolutionTerrain extends WWObjectImpl implements Terrain
     }
 
     protected static final int DEFAULT_DENSITY = 3;
-    protected static final long DEFAULT_CACHE_CAPACITY = (long) 20e6; // about 34,000 RenderInfos at a density of 20
+    protected static final long DEFAULT_CACHE_CAPACITY = (long) 200e6;
 
     // User-specified fields.
     protected Globe globe;
@@ -94,7 +93,6 @@ public class HighResolutionTerrain extends WWObjectImpl implements Terrain
     protected int numRows;
     protected int numCols;
     protected MemoryCache geometryCache;
-    protected MemoryCache tileCache;
     protected ThreadLocal<Long> startTime = new ThreadLocal<Long>();
 
     /**
@@ -155,7 +153,6 @@ public class HighResolutionTerrain extends WWObjectImpl implements Terrain
 //                System.out.printf("CACHE CLEAN capacity %d, used %d, num entries %d\n", cap, cs, no);
 //            }
 //        });
-        this.tileCache = new BasicMemoryCache((long) (0.85 * 20e6), (long) 20e6);
     }
 
     /**
@@ -419,6 +416,70 @@ public class HighResolutionTerrain extends WWObjectImpl implements Terrain
         return this.intersect(new Position(pA, altitudeA), new Position(pB, altitudeB));
     }
 
+    /** Defines an interface for returning computed intersections. */
+    public interface IntersectionCallback
+    {
+        /**
+         * Called with the computed intersections for a line. This method is called only for lines along which
+         * intersections occur.
+         *
+         * @param pA            The line's start point.
+         * @param pB            The line's end point.
+         * @param intersections An array of intersections.
+         */
+        void intersection(Position pA, Position pB, Intersection[] intersections);
+
+        /**
+         * Called if an exception occurs during intersection testing.
+         * @param exception the exception thrown.
+         */
+        void exception(Exception exception);
+    }
+
+    /**
+     * Intersects a specified list of geographic two-position lines with the terrain.
+     *
+     * @param positions The positions to intersect, with the line segments formed by each pair of positions, e.g. the
+     *                  first line in formed by positions[0] and positions[1], the second by positions[2] and
+     *                  positions[3], etc.
+     * @param callback  An object to call in order to return the computed intersections.
+     *
+     * @throws InterruptedException
+     */
+    public void intersect(List<Position> positions, final IntersectionCallback callback) throws InterruptedException
+    {
+        ExecutorService service = Executors.newFixedThreadPool(10);
+
+        for (int i = 0; i < positions.size(); i += 2)
+        {
+            final Position pA = positions.get(i);
+            final Position pB = positions.get(i + 1);
+
+            service.submit(new Runnable()
+            {
+                @Override
+                public void run()
+                {
+                    try
+                    {
+                        Intersection[] intersections = intersect(pA, pB);
+                        if (intersections != null)
+                        {
+                            callback.intersection(pA, pB, intersections);
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        callback.exception(e);
+                    }
+                }
+            });
+        }
+
+        service.shutdown();
+        service.awaitTermination(100, TimeUnit.DAYS); // wait indefinitely for all threads to complete
+    }
+
     /**
      * Cause the tiles used by subsequent intersection calculations to be cached so that they are available immediately
      * to those subsequent calculations.
@@ -442,17 +503,24 @@ public class HighResolutionTerrain extends WWObjectImpl implements Terrain
             throw new IllegalArgumentException(msg);
         }
 
+        Line line = this.makeLineFromPositions(pA, pB);
+        if (line == null)
+            return;
+
         try
         {
             this.startTime.set(System.currentTimeMillis());
 
-            List<RectTile> tiles = this.getIntersectingTiles(pA, pB);
+            List<RectTile> tiles = this.getIntersectingTiles(pA, pB, line);
             if (tiles == null)
                 return;
 
             for (RectTile tile : tiles)
             {
-                this.makeVerts(tile);
+                if (tile.ri == null)
+                {
+                    this.makeVerts(tile);
+                }
             }
         }
         finally
@@ -502,9 +570,13 @@ public class HighResolutionTerrain extends WWObjectImpl implements Terrain
         }
     }
 
-    public List<Sector> getIntersectionTiles(Position pA, Position pB)
+    public List<Sector> getIntersectionTiles(Position pA, Position pB) throws InterruptedException
     {
-        List<RectTile> tiles = this.getIntersectingTiles(pA, pB);
+        Line line = this.makeLineFromPositions(pA, pB);
+        if (line == null)
+            return null;
+
+        List<RectTile> tiles = this.getIntersectingTiles(pA, pB, line);
         if (tiles == null || tiles.size() == 0)
             return null;
 
@@ -517,29 +589,6 @@ public class HighResolutionTerrain extends WWObjectImpl implements Terrain
 
         return sectors;
     }
-//
-//    public IntBuffer getIntersectingTilesGeometry(Position pA, Position pB, List<FloatBuffer> vertices,
-//        List<Vec4> refCenters) throws InterruptedException
-//    {
-//        List<RectTile> tiles = this.getIntersectingTiles(pA, pB);
-//        if (tiles == null || tiles.size() == 0)
-//            return null;
-//
-//        for (RectTile tile : tiles)
-//        {
-//            this.makeVerts(tile);
-//            if (tile.ri == null)
-//            {
-//                System.out.println("NOT CACHED " + tile.sector);
-//                return null;
-//            }
-//
-//            vertices.add(Buffers.newDirectFloatBuffer(tile.ri.vertices.length).put(tile.ri.vertices));
-//            refCenters.add(tile.ri.referenceCenter);
-//        }
-//
-//        return Buffers.newDirectIntBuffer(this.indices.length).put(this.indices);
-//    }
 
     /** Computes the row and column dimensions of the tile array. */
     protected void computeDimensions()
@@ -554,8 +603,6 @@ public class HighResolutionTerrain extends WWObjectImpl implements Terrain
 
         if (this.geometryCache != null)
             this.geometryCache.clear();
-        if (this.tileCache != null)
-            this.tileCache.clear();
     }
 
     /**
@@ -608,16 +655,9 @@ public class HighResolutionTerrain extends WWObjectImpl implements Terrain
      */
     protected RectTile createTile(Sector tileSector)
     {
-        RectTile tile = (RectTile) this.tileCache.getObject(tileSector);
-        if (tile != null)
-            return tile;
-
         Extent extent = Sector.computeBoundingBox(this.globe, this.verticalExaggeration, tileSector);
 
-        tile = new RectTile(extent, this.density, tileSector);
-        this.tileCache.add(tileSector, tile, 32);
-
-        return tile;
+        return new RectTile(extent, this.density, tileSector);
     }
 
     /**
@@ -656,17 +696,7 @@ public class HighResolutionTerrain extends WWObjectImpl implements Terrain
         return (int) (s * (double) (this.numCols - 1));
     }
 
-    /**
-     * Computes intersections of a line with the terrain.
-     *
-     * @param pA the line's first position.
-     * @param pB the line's second position.
-     *
-     * @return an array of intersections, or null if no intersections occur.
-     *
-     * @throws InterruptedException if the operation is interrupted.
-     */
-    protected Intersection[] doIntersect(Position pA, Position pB) throws InterruptedException
+    protected Line makeLineFromPositions(Position pA, Position pB) throws InterruptedException
     {
         if (pA == null || pB == null)
         {
@@ -674,10 +704,6 @@ public class HighResolutionTerrain extends WWObjectImpl implements Terrain
             Logging.logger().severe(msg);
             throw new IllegalArgumentException(msg);
         }
-
-        List<RectTile> tiles = this.getIntersectingTiles(pA, pB);
-        if (tiles == null)
-            return null;
 
         RectTile tileA = this.getContainingTile(pA.getLatitude(), pA.getLongitude());
         RectTile tileB = this.getContainingTile(pB.getLatitude(), pB.getLongitude());
@@ -693,17 +719,35 @@ public class HighResolutionTerrain extends WWObjectImpl implements Terrain
             && pA.getAltitude() == pB.getAltitude())
             return null;
 
-        Line line = new Line(ptA, ptB.subtract3(ptA));
+        return new Line(ptA, ptB.subtract3(ptA));
+    }
+
+    /**
+     * Computes intersections of a line with the terrain.
+     *
+     * @param pA the line's first position.
+     * @param pB the line's second position.
+     *
+     * @return an array of intersections, or null if no intersections occur.
+     *
+     * @throws InterruptedException if the operation is interrupted.
+     */
+    protected Intersection[] doIntersect(Position pA, Position pB) throws InterruptedException
+    {
+        Line line = this.makeLineFromPositions(pA, pB);
+        if (line == null)
+            return null;
+
+        List<RectTile> tiles = this.getIntersectingTiles(pA, pB, line);
+        if (tiles == null)
+            return null;
 
         Intersection[] hits;
         ArrayList<Intersection> list = new ArrayList<Intersection>();
         for (RectTile tile : tiles)
         {
-            if (tile.extent.intersects(line))
-            {
-                if ((hits = this.intersect(tile, line)) != null)
-                    list.addAll(Arrays.asList(hits));
-            }
+            if ((hits = this.intersect(tile, line)) != null)
+                list.addAll(Arrays.asList(hits));
         }
 
         if (list.size() == 0)
@@ -738,51 +782,6 @@ public class HighResolutionTerrain extends WWObjectImpl implements Terrain
         return hits;
     }
 
-    /**
-     * Determines and creates the terrain tiles intersected by a specified line.
-     *
-     * @param pA the line's first position.
-     * @param pB the line's second position.
-     *
-     * @return a list of tiles that likely intersect the line. Some returned tiles may not intersect the line but will
-     *         only be near it.
-     */
-    protected List<RectTile> getIntersectingTiles(LatLon pA, LatLon pB)
-    {
-        int rowA = this.computeRow(this.sector, pA.getLatitude());
-        int colA = this.computeColumn(this.sector, pA.getLongitude());
-        int rowB = this.computeRow(this.sector, pB.getLatitude());
-        int colB = this.computeColumn(this.sector, pB.getLongitude());
-
-        List<Point> cells = WWMath.bresenham(colA, rowA, colB, rowB);
-        if (cells == null || cells.size() == 0)
-            return null;
-
-        List<RectTile> tiles = new ArrayList<RectTile>(3 * cells.size());
-        for (Point cell : cells)
-        {
-            RectTile centerCell = this.createTile(cell.y, cell.x);
-
-            RectTile upperCell = this.createTile(cell.y + 1, cell.x);
-            RectTile lowerCell = this.createTile(cell.y - 1, cell.x);
-            RectTile leftCell = this.createTile(cell.y, cell.x - 1);
-            RectTile rightCell = this.createTile(cell.y, cell.x + 1);
-
-            if (centerCell != null)
-                tiles.add(centerCell);
-            if (upperCell != null)
-                tiles.add(upperCell);
-            if (lowerCell != null)
-                tiles.add(lowerCell);
-            if (leftCell != null)
-                tiles.add(leftCell);
-            if (rightCell != null)
-                tiles.add(rightCell);
-        }
-
-        return tiles.size() > 0 ? tiles : null;
-    }
-
     protected List<RectTile> getIntersectingTiles(Sector sector)
     {
         int rowA = this.computeRow(this.sector, sector.getMinLatitude());
@@ -805,6 +804,91 @@ public class HighResolutionTerrain extends WWObjectImpl implements Terrain
     }
 
     /**
+     * Determines and creates the terrain tiles intersected by a specified line.
+     *
+     * @param pA   the line's first position.
+     * @param pB   the line's second position.
+     * @param line the line to intersect
+     *
+     * @return a list of tiles that likely intersect the line. Some returned tiles may not intersect the line but will
+     *         only be near it.
+     */
+    protected List<RectTile> getIntersectingTiles(Position pA, Position pB, Line line)
+    {
+        // Turn off elevation min/max caching in the elevation model because searching for the intersecting tiles
+        // generates a lot of elevation min/max request that often overflows the elevation model's cache.
+        boolean oldCachingMode = this.getGlobe().getElevationModel().isExtremesCachingEnabled();
+        this.getGlobe().getElevationModel().setExtremesCachingEnabled(false);
+
+        try
+        {
+            int rowA = this.computeRow(this.sector, pA.getLatitude());
+            int colA = this.computeColumn(this.sector, pA.getLongitude());
+            int rowB = this.computeRow(this.sector, pB.getLatitude());
+            int colB = this.computeColumn(this.sector, pB.getLongitude());
+
+            if (rowB < rowA)
+            {
+                int temp = rowA;
+                rowA = rowB;
+                rowB = temp;
+            }
+
+            if (colB < colA)
+            {
+                int temp = colA;
+                colA = colB;
+                colB = temp;
+            }
+
+            List<RectTile> tiles = new ArrayList<RectTile>();
+
+            this.doGetIntersectingTiles(rowA, colA, rowB, colB, line, tiles);
+
+            return tiles.size() > 0 ? tiles : null;
+        }
+        finally
+        {
+            this.getGlobe().getElevationModel().setExtremesCachingEnabled(oldCachingMode);
+        }
+    }
+
+    protected void doGetIntersectingTiles(int r0, int c0, int r1, int c1, Line line, List<RectTile> tiles)
+    {
+        double minLat = this.sector.getMinLatitude().degrees + r0 * this.latTileSize;
+        double maxLat = this.sector.getMinLatitude().degrees + (r1 + 1) * this.latTileSize;
+        double minLon = this.sector.getMinLongitude().degrees + c0 * this.lonTileSize;
+        double maxLon = this.sector.getMinLongitude().degrees + (c1 + 1) * this.lonTileSize;
+
+        Extent extent = Sector.computeBoundingBox(this.globe, this.verticalExaggeration,
+            Sector.fromDegrees(minLat, maxLat, minLon, maxLon));
+
+        if (!extent.intersects(line))
+            return;
+
+        int m = c1 - c0 + 1;
+        int n = r1 - r0 + 1;
+
+        if (m == 1 && n == 1)
+        {
+            tiles.add(this.createTile(r0, c0));
+            return;
+        }
+
+        // Subdivide the tile and recursively test for intersection with the line. Order is SW, SE, NW, NE. When there
+        // is only one column, the SE subdivision is identical to the SW one and need not be tested. When there is
+        // only one row, the NW subdivision is identical to the SW one and need not be tested. In either case (one
+        // column or 1 row) the NE subdivision need not be tested.
+        this.doGetIntersectingTiles(r0, c0, r0 + Math.max(0, n / 2 - 1), c0 + Math.max(0, m / 2 - 1), line, tiles); // SW
+        if (m != 1)
+            this.doGetIntersectingTiles(r0, c0 + m / 2, r0 + Math.max(0, n / 2 - 1), c1, line, tiles); // SE
+        if (n != 1)
+            this.doGetIntersectingTiles(r0 + n / 2, c0, r1, c0 + Math.max(0, m / 2 - 1), line, tiles); // NW
+        if (!(m == 1 || n == 1))
+            this.doGetIntersectingTiles(r0 + n / 2, c0 + m / 2, r1, c1, line, tiles); // NE
+    }
+
+    /**
      * Computes a terrain tile's vertices of draws them from the cache.
      *
      * @param tile the tile to compute vertices for
@@ -819,9 +903,6 @@ public class HighResolutionTerrain extends WWObjectImpl implements Terrain
         tile.ri = (RenderInfo) this.geometryCache.getObject(tile.sector);
         if (tile.ri != null)
             return;
-//
-//        System.out.println(
-//            "CACHE MISS " + this.geometryCache.getUsedCapacity() + ", " + this.geometryCache.getNumObjects());
 
         tile.ri = this.buildVerts(tile);
         if (tile.ri != null)
@@ -863,8 +944,11 @@ public class HighResolutionTerrain extends WWObjectImpl implements Terrain
 
         // In general, the best attainable resolution varies over the elevation model, so determine the best
         // attainable ^for this tile^ and use that as the convergence criteria.
-        double localTargetResolution =
-            Math.max(this.globe.getElevationModel().getBestResolution(tile.sector), this.targetResolution);
+        double[] localTargetResolution = this.getGlobe().getElevationModel().getBestResolutions(sector);
+        for (int i = 0; i < localTargetResolution.length; i++)
+        {
+            localTargetResolution[i] = Math.max(localTargetResolution[i], this.targetResolution);
+        }
         this.getElevations(tile.sector, latlons, localTargetResolution, elevations);
 
         LatLon centroid = tile.sector.getCentroid();
@@ -907,18 +991,18 @@ public class HighResolutionTerrain extends WWObjectImpl implements Terrain
             new Position(maxElevationLocation, maxElevation));
     }
 
-    protected double getElevations(Sector sector, List<LatLon> latlons, double targetResolution, double[] elevations)
+    protected void getElevations(Sector sector, List<LatLon> latlons, double[] targetResolution, double[] elevations)
         throws InterruptedException
     {
-        double actualResolution = Double.MAX_VALUE;
-        while (actualResolution > targetResolution)
+        double[] actualResolution = new double[targetResolution.length];
+        for (int i = 0; i < targetResolution.length; i++)
+        {
+            actualResolution[i] = Double.MAX_VALUE;
+        }
+        while (!this.resolutionsMeetCriteria(actualResolution, targetResolution))
         {
             actualResolution = this.globe.getElevations(sector, latlons, targetResolution, elevations);
-            // Uncomment the two lines below if you want to watch the resolution converge
-//            System.out.printf("Target resolution = %s, Actual resolution = %s\n",
-//                Double.toString(targetResolution), Double.toString(actualResolution));
-
-            if (actualResolution <= targetResolution)
+            if (resolutionsMeetCriteria(actualResolution, targetResolution))
                 break;
 
             // Give the system a chance to retrieve data from the disk cache or the server. Also catches interrupts
@@ -929,11 +1013,21 @@ public class HighResolutionTerrain extends WWObjectImpl implements Terrain
             if (this.startTime.get() != null && timeout != null)
             {
                 if (System.currentTimeMillis() - this.startTime.get() > timeout)
-                    throw new WWRuntimeException("Terrain convergence timed out");
+                    throw new WWTimeoutException("Terrain convergence timed out");
             }
         }
+    }
 
-        return actualResolution;
+    protected boolean resolutionsMeetCriteria(double[] actualResolution, double[] targetResolution)
+    {
+        for (int i = 0; i < actualResolution.length; i++)
+        {
+            if (actualResolution[i] > targetResolution[i])
+                return false;
+
+        }
+
+        return true;
     }
 
     /**

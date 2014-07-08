@@ -2177,7 +2177,17 @@ public class MeasureTool extends AVListImpl implements Disposable
 
         this.annotation.setText(displayString);
 
-        this.annotation.setPosition(pos);
+        if (this.annotation instanceof GlobeAnnotation)
+        {
+            GlobeAnnotation globeAnnotation = (GlobeAnnotation)this.annotation;
+            globeAnnotation.setPosition(pos);
+        }
+        else if (this.annotation instanceof ScreenAnnotation)
+        {
+            ScreenAnnotation screenAnnotation = (ScreenAnnotation)this.annotation;
+            screenAnnotation.setPosition(pos);
+        }
+        
         this.annotation.getAttributes().setVisible(true);
     }
 

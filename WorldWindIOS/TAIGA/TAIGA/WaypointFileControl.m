@@ -6,9 +6,9 @@
  */
 
 #import "WaypointFileControl.h"
-#import "WaypointFile.h"
+#import "WaypointDatabase.h"
 #import "Waypoint.h"
-#import "WaypointCell.h"
+#import "UITableViewCell+TAIGAAdditions.h"
 
 @implementation WaypointFileControl
 
@@ -22,10 +22,10 @@
 
     _target = target;
     _action = action;
-    waypoints = nil;
+    waypoints = [[NSMutableArray alloc] init];
 
     waypointSearchBar = [[UISearchBar alloc] initWithFrame:CGRectMake(0, 0, 1, 1)];
-    [waypointSearchBar setPlaceholder:@"Search or enter an FAA code"];
+    [waypointSearchBar setPlaceholder:@"Search or enter an ICAO code"];
     [waypointSearchBar setDelegate:self];
     [self addSubview:waypointSearchBar];
 
@@ -46,15 +46,15 @@
                                                                  options:0 metrics:nil views:viewsDictionary]];
     [self addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:|[waypointTable]|"
                                                                  options:0 metrics:nil views:viewsDictionary]];
-    [self addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"V:|[waypointSearchBar(44)]-[waypointTable]|"
+    [self addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"V:|[waypointSearchBar(44)][waypointTable]|"
                                                                  options:0 metrics:nil views:viewsDictionary]];
 
     return self;
 }
 
-- (void) setWaypointFile:(WaypointFile*)waypointFile
+- (void) setWaypointDatabase:(WaypointDatabase*)waypointDatabase
 {
-    _waypointFile = waypointFile;
+    _waypointDatabase = waypointDatabase;
 
     [self filterWaypoints];
     [waypointTable reloadData];
@@ -62,16 +62,22 @@
 
 - (void) filterWaypoints
 {
+    [waypoints removeAllObjects];
+    [waypoints addObjectsFromArray:[_waypointDatabase waypoints]];
+    [waypoints filterUsingPredicate:[NSPredicate predicateWithFormat:@"type != %d", (int) WaypointTypeMarker]];
+
     NSString* searchText = [waypointSearchBar text];
-    if ([searchText length] == 0)
-    {
-        waypoints = [_waypointFile waypoints];
-    }
-    else
+    if ([searchText length] > 0)
     {
         NSString* wildSearchText = [NSString stringWithFormat:@"*%@*", searchText];
-        waypoints = [_waypointFile waypointsMatchingText:wildSearchText];
+        NSPredicate* predicate = [NSPredicate predicateWithFormat:@"displayName LIKE[cd] %@ ", wildSearchText];
+        [waypoints filterUsingPredicate:predicate];
     }
+
+    [waypoints sortUsingComparator:^(id waypointA, id waypointB)
+    {
+        return [[waypointA displayName] compare:[waypointB displayName]];
+    }];
 
     [waypointTable reloadData];
 }
@@ -135,10 +141,10 @@
 - (UITableViewCell*) tableView:(UITableView*)tableView cellForRowAtIndexPath:(NSIndexPath*)indexPath
 {
     static NSString* cellIdentifier = @"cell";
-    WaypointCell* cell = [tableView dequeueReusableCellWithIdentifier:cellIdentifier];
+    UITableViewCell* cell = [tableView dequeueReusableCellWithIdentifier:cellIdentifier];
     if (cell == nil)
     {
-        cell = [[WaypointCell alloc] initWithReuseIdentifier:cellIdentifier];
+        cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:cellIdentifier];
     }
 
     Waypoint* waypoint = [waypoints objectAtIndex:(NSUInteger) [indexPath row]];

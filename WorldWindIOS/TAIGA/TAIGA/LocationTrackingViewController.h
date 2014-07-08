@@ -15,12 +15,11 @@
 {
 @protected
     // Location tracking properties.
-    BOOL trackLocation;
+    BOOL trackingLocation;
     CLLocation* currentLocation;
-    WWPosition* forecastPosition;
-    WWPosition* smoothedPosition;
-    double currentHeading;
-    double smoothedHeading;
+    double currentCockpitTilt;
+    double currentTrackUpTilt;
+    double currentRange;
     // View properties
     UIImage* enabledImage;
     UIImage* disabledImage;

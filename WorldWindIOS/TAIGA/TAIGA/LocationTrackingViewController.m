@@ -10,14 +10,20 @@
 #import "AppConstants.h"
 #import "WorldWind/Geometry/WWLocation.h"
 #import "WorldWind/Geometry/WWPosition.h"
-#import "WorldWind/Navigate/WWNavigator.h"
-#import "WorldWind/Render/WWSceneController.h"
+#import "WorldWind/Navigate/WWFirstPersonNavigator.h"
+#import "WorldWind/Navigate/WWLookAtNavigator.h"
 #import "WorldWind/Util/WWMath.h"
 #import "WorldWind/WorldWindView.h"
 
-#define LOCATION_SMOOTHING_AMOUNT (0.8)
+#define BUTTON_VIEW_TAG (1)
+#define COCKPIT_DEFAULT_TILT (70)
+#define COCKPIT_MIN_TILT (65)
+#define COCKPIT_MAX_TILT (90)
 #define HEADING_SMOOTHING_AMOUNT (0.4)
-#define VIEW_TAG_BUTTON 1
+#define MIN_RANGE (10000)
+#define MAX_RANGE (6000000)
+#define TRACK_UP_MIN_TILT (0)
+#define TRACK_UP_MAX_TILT (45)
 
 @implementation LocationTrackingViewController
 
@@ -27,6 +33,8 @@
 
     _mode = [Settings getObjectForName:TAIGA_LOCATION_TRACKING_MODE defaultValue:TAIGA_DEFAULT_LOCATION_TRACKING_MODE];
     _wwv = wwv;
+
+    [self setupTrackingNavigator];
 
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(locationTrackingModeDidChange:)
                                                  name:TAIGA_SETTING_CHANGED object:TAIGA_LOCATION_TRACKING_MODE];
@@ -46,12 +54,10 @@
         return;
 
     _enabled = enabled;
-    forecastPosition = nil;
-    smoothedPosition = nil;
-    smoothedHeading = DBL_MAX;
 
     if (_enabled)
     {
+        [self captureTrackingNavigatorState];
         [self startLocationTracking];
     }
     else
@@ -69,30 +75,34 @@
 - (void) locationTrackingModeDidChange:(NSNotification*)notification
 {
     _mode = [Settings getObjectForName:TAIGA_LOCATION_TRACKING_MODE];
-    currentHeading = [_mode isEqualToString:TAIGA_LOCATION_TRACKING_MODE_TRACK_UP] ? [currentLocation course] : 0;
+    [self setupTrackingNavigator]; // Setup a new navigator according ot the location tracking mode.
+
+    if (_enabled)
+    {
+        [self startLocationTracking]; // Restart location tracking with the new navigator.
+    }
 }
 
 - (void) aircraftPositionDidChange:(NSNotification*)notification
 {
-    CLLocation* oldLocation = currentLocation;
-    CLLocation* newLocation = [notification object];
-    currentLocation = newLocation;
-    currentHeading = [_mode isEqualToString:TAIGA_LOCATION_TRACKING_MODE_TRACK_UP] ? [newLocation course] : 0;
+    currentLocation = [notification object];
 
-    if (_enabled && oldLocation == nil) // we have a location fix, start or restart location tracking
+    if (_enabled && !trackingLocation)
     {
-        [self startLocationTracking];
+        [self startLocationTracking]; // We have been waiting for an initial location fix to start location tracking.
     }
 }
 
 - (void) simulationWillBegin:(NSNotification*)notification
 {
+    currentLocation = nil; // Forget the current actual location.
     [self suspendLocationTracking]; // Suspend location tracking until we have a simulated location fix.
 }
 
 - (void) simulationWillEnd:(NSNotification*)notification
 {
-    [self suspendLocationTracking]; // Suspend location tracking when we have an actual location fix.
+    currentLocation = nil; // Forget the current simulated location.
+    [self suspendLocationTracking]; // Suspend location tracking until we have an actual location fix.
 }
 
 //--------------------------------------------------------------------------------------------------------------------//
@@ -106,14 +116,10 @@
 
     // Animate the navigator to the most recent location. During this animation the location continues to update, but
     // this makes no additional changes to the navigator until the animation completes.
+    trackingLocation = YES;
     [[_wwv navigator] animateWithDuration:WWNavigatorDurationAutomatic animations:^
     {
-        WWLocation* location = [[WWLocation alloc] initWithCLLocation:currentLocation];
-        double radius = 10000 + [currentLocation altitude];
-        [[_wwv navigator] setHeading:currentHeading];
-        [[_wwv navigator] setTilt:0];
-        [[_wwv navigator] setRoll:0];
-        [[_wwv navigator] setCenterLocation:location radius:radius];
+        [self doStartLocationTracking];
     } completion:^(BOOL finished)
     {
         // Disable this controller when its navigator animation is interrupted. The user has performed a navigation
@@ -132,42 +138,30 @@
 - (void) stopLocationTracking
 {
     [[_wwv navigator] stopAnimations]; // interrupts animations performed by this controller
+    trackingLocation = NO;
 }
 
 - (void) suspendLocationTracking
 {
-    trackLocation = NO;
-    currentLocation = nil;
-    forecastPosition = nil;
-    smoothedPosition = nil;
-    currentHeading = 0;
-    smoothedHeading = DBL_MAX;
+    trackingLocation = NO;
 }
 
 - (void) trackLocation
 {
-    trackLocation = YES;
     // Animate the navigator to the current position until the animation is interrupted either by this controller
     // changing modes, another object initiating an animation, or by the user performing a navigation gesture.
     [[_wwv navigator] animateWithBlock:^(NSDate* timestamp, BOOL* stop)
     {
         // Stop animating when this controller is disabled or location tracking has been suspended.
-        *stop = ![self enabled] || !trackLocation;
-        if (*stop)
-            return;
-
-        // Forecast the current location from the most recent location, then smooth the forecast location. Forecasting
-        // and smoothing in a display link enables generation of intermediate locations at sub-second intervals between
-        // Core Location's 1-2 second updates and eliminates jarring navigator changes.
-        [self forecastCurrentLocationWithDate:timestamp];
-        [self smoothForecastLocationWithAmount:LOCATION_SMOOTHING_AMOUNT];
-        [[_wwv navigator] setCenterLocation:smoothedPosition];
-        // Smooth the current location to eliminate jarring navigator changes when the current heading changes or when
-        // the location tracking mode changes.
-        [self smoothCurrentHeadingWithAmount:HEADING_SMOOTHING_AMOUNT];
-        [[_wwv navigator] setHeading:smoothedHeading];
+        *stop = !_enabled || !trackingLocation;
+        if (!*stop)
+        {
+            [self doTrackLocation];
+        }
     } completion:^(BOOL finished)
     {
+        trackingLocation = NO;
+
         // Disable this controller when its navigator animation is interrupted. The user has performed a navigation
         // gesture, or another object has initiated an animation at the user's request.
         if (!finished)
@@ -177,40 +171,90 @@
     }];
 }
 
-- (void) forecastCurrentLocationWithDate:(NSDate*)date
+- (void) doStartLocationTracking
 {
-    if (forecastPosition == nil)
+    if ([_mode isEqualToString:TAIGA_LOCATION_TRACKING_MODE_COCKPIT])
     {
-        forecastPosition = [[WWPosition alloc] initWithZeroPosition];
+        WWPosition* eyePosition = [[WWPosition alloc] initWithCLPosition:currentLocation];
+        [(WWFirstPersonNavigator*) [_wwv navigator] setEyePosition:eyePosition];
+        [(WWFirstPersonNavigator*) [_wwv navigator] setHeading:[currentLocation course]];
+        [(WWFirstPersonNavigator*) [_wwv navigator] setTilt:currentCockpitTilt];
     }
-
-    WWGlobe* globe = [[_wwv sceneController] globe];
-    [WWPosition forecastPosition:currentLocation forDate:date onGlobe:globe outputPosition:forecastPosition];
+    else if ([_mode isEqualToString:TAIGA_LOCATION_TRACKING_MODE_NORTH_UP])
+    {
+        WWLocation* centerLocation = [[WWLocation alloc] initWithCLLocation:currentLocation];
+        [(WWLookAtNavigator*) [_wwv navigator] setCenterLocation:centerLocation];
+        [(WWLookAtNavigator*) [_wwv navigator] setRange:currentRange];
+        [(WWLookAtNavigator*) [_wwv navigator] setHeading:0];
+        [(WWLookAtNavigator*) [_wwv navigator] setTilt:0];
+    }
+    else if ([_mode isEqualToString:TAIGA_LOCATION_TRACKING_MODE_TRACK_UP])
+    {
+        WWLocation* centerLocation = [[WWLocation alloc] initWithCLLocation:currentLocation];
+        [(WWLookAtNavigator*) [_wwv navigator] setCenterLocation:centerLocation];
+        [(WWLookAtNavigator*) [_wwv navigator] setRange:currentRange];
+        [(WWLookAtNavigator*) [_wwv navigator] setHeading:[currentLocation course]];
+        [(WWLookAtNavigator*) [_wwv navigator] setTilt:currentTrackUpTilt];
+    }
 }
 
-- (void) smoothForecastLocationWithAmount:(double)amount
+- (void) doTrackLocation
 {
-    if (smoothedPosition == nil)
-    {
-        smoothedPosition = [[WWPosition alloc] initWithPosition:forecastPosition];
-        return;
-    }
+    double smoothedHeading = [WWMath interpolateDegrees1:[[_wwv navigator] heading]
+                                                degrees2:[currentLocation course]
+                                                  amount:HEADING_SMOOTHING_AMOUNT];
 
-    [WWPosition greatCircleInterpolate:smoothedPosition
-                           endLocation:forecastPosition
-                                amount:amount
-                        outputLocation:smoothedPosition]; // Input position can be reused to store the output.
+    if ([_mode isEqualToString:TAIGA_LOCATION_TRACKING_MODE_COCKPIT])
+    {
+        WWPosition* eyePosition = [[WWPosition alloc] initWithCLPosition:currentLocation];
+        [(WWFirstPersonNavigator*) [_wwv navigator] setEyePosition:eyePosition];
+        [(WWFirstPersonNavigator*) [_wwv navigator] setHeading:smoothedHeading];
+    }
+    else if ([_mode isEqualToString:TAIGA_LOCATION_TRACKING_MODE_NORTH_UP])
+    {
+        WWLocation* centerLocation = [[WWLocation alloc] initWithCLLocation:currentLocation];
+        [[_wwv navigator] setCenterLocation:centerLocation];
+        [[_wwv navigator] setHeading:0];
+    }
+    else if ([_mode isEqualToString:TAIGA_LOCATION_TRACKING_MODE_TRACK_UP])
+    {
+        WWLocation* centerLocation = [[WWLocation alloc] initWithCLLocation:currentLocation];
+        [[_wwv navigator] setCenterLocation:centerLocation];
+        [[_wwv navigator] setHeading:smoothedHeading];
+    }
 }
 
-- (void) smoothCurrentHeadingWithAmount:(double)amount
+- (void) setupTrackingNavigator
 {
-    if (smoothedHeading == DBL_MAX)
-    {
-        smoothedHeading = currentHeading;
-        return;
-    }
+    id<WWNavigator> oldNavigator = [_wwv navigator];
+    id<WWNavigator> newNavigator = [_mode isEqualToString:TAIGA_LOCATION_TRACKING_MODE_COCKPIT] ?
+            [[WWFirstPersonNavigator alloc] initWithView:_wwv navigatorToMatch:oldNavigator] :
+            [[WWLookAtNavigator alloc] initWithView:_wwv navigatorToMatch:oldNavigator];
+    [oldNavigator dispose];
+    [_wwv setNavigator:newNavigator];
+    [WorldWindView requestRedraw];
+}
 
-    smoothedHeading = [WWMath interpolateDegrees1:smoothedHeading degrees2:currentHeading amount:amount];
+- (void) captureTrackingNavigatorState
+{
+    if ([_mode isEqualToString:TAIGA_LOCATION_TRACKING_MODE_COCKPIT])
+    {
+        currentCockpitTilt = WWCLAMP([[_wwv navigator] tilt], COCKPIT_MIN_TILT, COCKPIT_MAX_TILT);
+        currentTrackUpTilt = 0;
+        currentRange = WWCLAMP([[(WWFirstPersonNavigator *) [_wwv navigator] eyePosition] altitude], MIN_RANGE, MAX_RANGE);
+    }
+    else if ([_mode isEqualToString:TAIGA_LOCATION_TRACKING_MODE_NORTH_UP])
+    {
+        currentCockpitTilt = COCKPIT_DEFAULT_TILT;
+        currentTrackUpTilt = 0;
+        currentRange = WWCLAMP([(WWLookAtNavigator*) [_wwv navigator] range], MIN_RANGE, MAX_RANGE);
+    }
+    else if ([_mode isEqualToString:TAIGA_LOCATION_TRACKING_MODE_TRACK_UP])
+    {
+        currentCockpitTilt = COCKPIT_DEFAULT_TILT;
+        currentTrackUpTilt = WWCLAMP([[_wwv navigator] tilt], TRACK_UP_MIN_TILT, TRACK_UP_MAX_TILT);
+        currentRange = WWCLAMP([(WWLookAtNavigator*) [_wwv navigator] range], MIN_RANGE, MAX_RANGE);
+    }
 }
 
 //--------------------------------------------------------------------------------------------------------------------//
@@ -239,7 +283,7 @@
             imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
     UIImage* buttonImage = _enabled ? enabledImage : disabledImage;
     UIButton* button = [[UIButton alloc] init];
-    [button setTag:VIEW_TAG_BUTTON];
+    [button setTag:BUTTON_VIEW_TAG];
     [button setContentEdgeInsets:UIEdgeInsetsMake(10, 10, 10, 10)];
     [button setImage:buttonImage forState:UIControlStateNormal];
     [button addTarget:self action:@selector(buttonTapped) forControlEvents:UIControlEventTouchUpInside];
@@ -260,7 +304,7 @@
 - (void) updateView
 {
     UIImage* buttonImage = _enabled ? enabledImage : disabledImage;
-    [(UIButton*) [[self view] viewWithTag:VIEW_TAG_BUTTON] setImage:buttonImage forState:UIControlStateNormal];
+    [(UIButton*) [[self view] viewWithTag:BUTTON_VIEW_TAG] setImage:buttonImage forState:UIControlStateNormal];
 }
 
 - (void) buttonTapped

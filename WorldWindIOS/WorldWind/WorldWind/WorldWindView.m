@@ -6,9 +6,13 @@
  */
 
 #import "WorldWind/WorldWindView.h"
+#import "WorldWind/Geometry/WWPosition.h"
+#import "WorldWind/Geometry/WWVec4.h"
+#import "WorldWind/Navigate/WWNavigatorState.h"
 #import "WorldWind/Navigate/WWLookAtNavigator.h"
 #import "WorldWind/Pick/WWPickedObjectList.h"
 #import "WorldWind/Render/WWSceneController.h"
+#import "WorldWind/Terrain/WWGlobe.h"
 #import "WorldWind/Util/WWFrameStatistics.h"
 #import "WorldWind/WorldWindConstants.h"
 #import "WorldWind/WorldWindViewDelegate.h"
@@ -179,7 +183,7 @@
     // OpenGL render buffer resolution. Note that the scene controller catches and logs rendering exceptions, so we
     // don't do it here.
     [_sceneController setFrameStatistics:_frameStatistics];
-    [_sceneController setNavigatorState:[[self navigator] currentState]];
+    [_sceneController setNavigatorState:[_navigator currentState]];
     [_sceneController render:_viewport];
 
     // Request that Core Animation display the renderbuffer currently bound to GL_RENDERBUFFER. This assumes that the
@@ -230,9 +234,54 @@
     [EAGLContext setCurrentContext:_context];
     glBindFramebuffer(GL_FRAMEBUFFER, _pickingFrameBuffer);
 
-    [_sceneController setNavigatorState:[[self navigator] currentState]];
+    [_sceneController setNavigatorState:[_navigator currentState]];
 
-    return [_sceneController pick:[self viewport] pickPoint:pickPoint];
+    return [_sceneController pick:_viewport pickPoint:pickPoint];
+}
+
+- (WWPickedObjectList*) pickTerrain:(CGPoint)pickPoint
+{
+    [EAGLContext setCurrentContext:_context];
+    glBindFramebuffer(GL_FRAMEBUFFER, _pickingFrameBuffer);
+
+    [_sceneController setNavigatorState:[_navigator currentState]];
+
+    return [_sceneController pickTerrain:_viewport pickPoint:pickPoint];
+}
+
+- (BOOL) convertPosition:(WWPosition*)position toPoint:(CGPoint*)point
+{
+    if (position == nil)
+    {
+        WWLOG_AND_THROW(NSInvalidArgumentException, @"Position is nil")
+    }
+
+    if (point == nil)
+    {
+        WWLOG_AND_THROW(NSInvalidArgumentException, @"Point is nil")
+    }
+
+    // Transform the geographic position to model coordinates.
+    WWVec4* modelPoint = [[WWVec4 alloc] init];
+    [[_sceneController globe] computePointFromPosition:[position latitude] longitude:[position longitude]
+                                              altitude:[position altitude] outputPoint:modelPoint];
+
+    // Transform the model coordinate point to OpenGL screen coordinates.
+    WWVec4* screenPoint = [[WWVec4 alloc] init];
+    if (![[_sceneController navigatorState] project:modelPoint result:screenPoint])
+    {
+        return NO; // Position is clipped by the frustum's near plane or the far plane.
+    }
+
+    // Test the screen coordinate point against the view frustum.
+    if (!CGRectContainsPoint(_viewport, CGPointMake((CGFloat) [screenPoint x], (CGFloat) [screenPoint y])))
+    {
+        return NO; // Position is offscreen.
+    }
+
+    // Transform the OpenGL screen coordinate point to UIKit coordinates.
+    *point = [[_sceneController navigatorState] convertPointToView:screenPoint];
+    return YES;
 }
 
 - (void) addDelegate:(id <WorldWindViewDelegate>)delegate

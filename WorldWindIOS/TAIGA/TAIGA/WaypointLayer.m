@@ -7,7 +7,7 @@
 
 #import "WaypointLayer.h"
 #import "Waypoint.h"
-#import "WaypointFile.h"
+#import "WaypointDatabase.h"
 #import "WorldWind/Geometry/WWPosition.h"
 #import "WorldWind/Geometry/WWVec4.h"
 #import "WorldWind/Navigate/WWNavigatorState.h"
@@ -34,11 +34,11 @@
     return self;
 }
 
-- (void) setWaypoints:(WaypointFile*)waypointFile
+- (void) setWaypointDatabase:(WaypointDatabase*)waypointDatabase
 {
-    if (waypointFile == nil)
+    if (waypointDatabase == nil)
     {
-        WWLOG_AND_THROW(NSInvalidArgumentException, @"Waypoint file is nil")
+        WWLOG_AND_THROW(NSInvalidArgumentException, @"Waypoint database is nil")
     }
 
     [self removeAllRenderables];
@@ -47,14 +47,15 @@
     [attrs setImagePath:[[NSBundle mainBundle] pathForResource:@"airport@small" ofType:@"png"]];
     [attrs setImageOffset:[[WWOffset alloc] initWithFractionX:0.5 y:0.5]];
 
-    for (Waypoint* waypoint in [waypointFile waypoints])
+    for (Waypoint* waypoint in [waypointDatabase waypoints])
     {
         if ([waypoint type] != WaypointTypeAirport)
             continue;
 
-        WWPosition* pos = [[WWPosition alloc] initWithLocation:[waypoint location] altitude:0];
+        WWPosition* pos = [[WWPosition alloc] initWithDegreesLatitude:[waypoint latitude] longitude:[waypoint longitude] altitude:0];
         WWPointPlacemark* placemark = [[WWPointPlacemark alloc] initWithPosition:pos];
         [placemark setUserObject:waypoint];
+        [placemark setPickDelegate:waypoint]; // make the waypoint the picked object
         [placemark setDisplayName:[waypoint displayName]];
         [placemark setAltitudeMode:WW_ALTITUDE_MODE_CLAMP_TO_GROUND];
         [placemark setAttributes:attrs];
@@ -96,19 +97,19 @@
         for (WWPointPlacemark* placemark in [self renderables])
         {
             Waypoint* waypoint = [placemark userObject];
-            NSString* displayName = [waypoint displayName];
+            NSString* text = [[waypoint properties] objectForKey:@"ICAO"];
             NSDictionary* textAttrs = fontAttrs;
-            CGSize textSize = [displayName sizeWithAttributes:textAttrs];
+            CGSize textSize = [text sizeWithAttributes:textAttrs];
 
             if (textSize.width > 36)
             {
                 textAttrs = smallFontAttrs;
-                textSize = [displayName sizeWithAttributes:textAttrs];
+                textSize = [text sizeWithAttributes:textAttrs];
             }
 
             CGContextClearRect(gc, CGRectMake(0, 0, templateSize.width, templateSize.height));
             [templateImage drawAtPoint:CGPointMake(0, 0)];
-            [displayName drawAtPoint:CGPointMake((templateSize.width - textSize.width) / 2, (templateSize.height - textSize.height) / 2)
+            [text drawAtPoint:CGPointMake((templateSize.width - textSize.width) / 2, (templateSize.height - textSize.height) / 2)
                withAttributes:textAttrs];
 
             UIImage* highlightImage = UIGraphicsGetImageFromCurrentImageContext();

@@ -6,20 +6,20 @@
  */
 
 #import "AltitudePicker.h"
+#import "UnitsFormatter.h"
+#import "TAIGA.h"
 
 @implementation AltitudePicker
 
 - (AltitudePicker*) initWithFrame:(CGRect)frame
 {
     self = [super initWithFrame:frame];
+    [self setBackgroundColor:[UIColor whiteColor]];
 
     _minimumAltitude = 0;
     _maximumAltitude = 100000;
     _altitudeInterval = 1000;
     _altitude = 0;
-    _formatter = [[NSNumberFormatter alloc] init];
-    [_formatter setNumberStyle:NSNumberFormatterDecimalStyle];
-    [_formatter setPositiveSuffix:@"m"];
 
     picker = [[UIPickerView alloc] initWithFrame:frame];
     [picker setDataSource:self];
@@ -54,22 +54,26 @@
     [self selectAltitude:_altitude animated:YES];
 }
 
-- (void) setFormatter:(NSNumberFormatter*)formatter
-{
-    _formatter = formatter;
-    [picker reloadAllComponents];
-}
-
 - (double) altitudeForRow:(NSInteger)row
 {
     return _minimumAltitude + _altitudeInterval * row;
 }
 
+- (NSInteger) rowForAltitude:(double)altitude
+{
+    return (NSInteger) round((altitude - _minimumAltitude) / _altitudeInterval); // round to the nearest row
+}
+
 - (void) selectAltitude:(double)altitude animated:(BOOL)animated
 {
-    NSInteger row = (NSInteger) ((altitude - _minimumAltitude) / _altitudeInterval);
+    NSInteger row = [self rowForAltitude:altitude];
     NSInteger numRows = [self pickerView:picker numberOfRowsInComponent:0];
-    if (row >= numRows)
+
+    if (row < 0)
+    {
+        row = 0;
+    }
+    else if (row > numRows - 1)
     {
         row = numRows - 1;
     }
@@ -99,7 +103,7 @@
 {
     double altitude = [self altitudeForRow:row];
 
-    return [_formatter stringFromNumber:[NSNumber numberWithDouble:altitude]];
+    return [[TAIGA unitsFormatter] formatMetersAltitude:altitude];
 }
 
 - (void) pickerView:(UIPickerView *)pickerView didSelectRow:(NSInteger)row inComponent:(NSInteger)component

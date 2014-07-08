@@ -17,6 +17,8 @@
 @class WWShapeAttributes;
 @protocol WWExtent;
 
+typedef void (^FlightRouteAnimationBlock)(NSDate* timestamp, BOOL* stop);
+
 @interface FlightRoute : NSObject <WWRenderable>
 {
 @protected
@@ -26,6 +28,7 @@
     WWPath* waypointPath;
     WWShapeAttributes* shapeAttrs;
     WWPosition* currentPosition;
+    NSMutableArray* animations;
 }
 
 + (NSArray*) flightRouteColors;
@@ -59,6 +62,10 @@
 
 - (Waypoint*) waypointAtIndex:(NSUInteger)index;
 
+- (NSUInteger) indexOfWaypoint:(Waypoint*)waypoint;
+
+- (BOOL) containsWaypoint:(Waypoint*)waypoint;
+
 - (void) addWaypoint:(Waypoint*)waypoint;
 
 - (void) insertWaypoint:(Waypoint*)waypoint atIndex:(NSUInteger)index;
@@ -67,6 +74,14 @@
 
 - (void) removeWaypointAtIndex:(NSUInteger)index;
 
+- (void) replaceWaypointAtIndex:(NSUInteger)index withWaypoint:(Waypoint*)newWaypoint;
+
 - (void) moveWaypointAtIndex:(NSUInteger)fromIndex toIndex:(NSUInteger)toIndex;
+
+- (void) updateWaypointAtIndex:(NSUInteger)index;
+
+- (BOOL) isWaypointAtIndexHighlighted:(NSUInteger)index;
+
+- (void) highlightWaypointAtIndex:(NSUInteger)index highlighted:(BOOL)highlighted;
 
 @end

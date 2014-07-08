@@ -260,7 +260,7 @@
 - (WWTile*) createTile:(WWSector*)sector level:(WWLevel*)level row:(int)row column:(int)column
 {
     NSString* imagePath = [NSString stringWithFormat:@"%@/%d/%d/%d_%d.%@",
-                                                     _cachePath, [level levelNumber], row, row, column, @"raw"];
+                                                     _cachePath, [level levelNumber], row, row, column, @"bil"];
 
     return [[WWElevationTile alloc] initWithSector:sector level:level row:row column:column imagePath:imagePath
                                              cache:imageCache];
@@ -669,17 +669,29 @@
     NSString* retrievalStatus = [avList valueForKey:WW_RETRIEVAL_STATUS];
     NSString* imagePath = [avList valueForKey:WW_FILE_PATH];
     NSNumber* responseCode = [avList valueForKey:WW_RESPONSE_CODE];
-    NSURL* url = [avList objectForKey:WW_URL];
+
+    if ([retrievalStatus isEqualToString:WW_CANCELED] || [retrievalStatus isEqualToString:WW_FAILED])
+    {
+        @synchronized (currentRetrievals)
+        {
+            [currentRetrievals removeObject:imagePath];
+        }
+        return;
+    }
 
     // Check the response code.
     if (responseCode == nil || [responseCode intValue] != 200)
     {
+        NSURL* url = [avList objectForKey:WW_URL];
         WWLog(@"Unexpected response code %@ retrieving %@",
         responseCode != nil ? [responseCode stringValue] : @"(no response code)", [url absoluteString]);
 
         [absentResources markResourceAbsent:imagePath];
         [[NSFileManager defaultManager] removeItemAtPath:imagePath error:nil];
-        [currentRetrievals removeObject:imagePath];
+        @synchronized (currentRetrievals)
+        {
+            [currentRetrievals removeObject:imagePath];
+        }
         return;
     }
 
@@ -693,12 +705,16 @@
         NSString* msg = [[NSString alloc] initWithContentsOfFile:imagePath
                                                         encoding:NSUTF8StringEncoding
                                                            error:&error];
+        NSURL* url = [avList objectForKey:WW_URL];
         WWLog(@"Unexpeted mime type %@ for request %@: %@",
         mimeType != nil ? mimeType : @"(no mime type in response)", [url absoluteString], error == nil ? msg : @"");
 
         [absentResources markResourceAbsent:imagePath];
         [[NSFileManager defaultManager] removeItemAtPath:imagePath error:nil];
-        [currentRetrievals removeObject:imagePath];
+        @synchronized (currentRetrievals)
+        {
+            [currentRetrievals removeObject:imagePath];
+        }
         return;
     }
 

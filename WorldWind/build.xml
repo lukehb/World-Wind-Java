@@ -120,7 +120,7 @@
                 <pathelement location="${java.home}/lib/plugin.jar"/>
             </classpath>
             <link href="http://download.oracle.com/javase/6/docs/api/"/>
-            <link href="http://jogamp.org/deployment/v2.1.0/javadoc/jogl/javadoc/"/>
+            <link href="http://jogamp.org/deployment/v2.1.5/javadoc/jogl/javadoc/"/>
         </javadoc>
     </target>
 
@@ -170,14 +170,17 @@
             description="Builds the World Wind extensions JAR file 'ww-extensions.jar'.">
         <jar jarfile="${worldwind.extensions.dir}/${worldwind.extensions.jarfile}">
             <!-- Add the World Wind extensions Jar file's dependencies to the class path, and specify the Permissions
-                 attribute. The Permissions attribute is ignored for locally launched applications, but is required for
-                 signed Web Start Applications and Applets starting in Java 7 update 45. This property must match the
-                 setting specified in the JNLP file or Applet used to launch the application. See
-                 http://docs.oracle.com/javase/7/docs/technotes/guides/jweb/manifest.html#permissions -->
+                 attribute and the Caller-Allowable-Codebase attribute. The Permissions attribute is ignored for locally
+                 launched applications, but is required for signed Web Start Applications and Applets starting in Java 7
+                 update 45. This property must match the setting specified in the JNLP file or Applet used to launch the
+                 application. The Caller-Allowable-Codebase attribute is required for Java Applets to enable JavaScript
+                 to Java communication, and defines the domains on which this communication is enabled. See
+                 http://docs.oracle.com/javase/8/docs/technotes/guides/jweb/security/manifest.html -->
             <manifest>
-                <attribute name="Permissions" value="all-permissions"/>
                 <attribute name="Class-Path" value="${worldwind.core.dir}/${worldwind.core.jarfile}"/>
                 <attribute name="Main-Class" value="${worldwind.extensions.jarfile.mainclass}"/>
+                <attribute name="Permissions" value="all-permissions"/>
+                <attribute name="Caller-Allowable-Codebase" value="worldwind.arc.nasa.gov worldwindserver.net goworldwind.org"/>
             </manifest>
             <!-- Include class files for the World Wind extensions package gov.nasa.worldwindx. -->
             <fileset dir="${worldwind.extensions.dir}/${classes.dir}">

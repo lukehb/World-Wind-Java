@@ -7,12 +7,12 @@
 
 #import <Foundation/Foundation.h>
 
-@class WaypointFile;
+@class WaypointDatabase;
 
 @interface WaypointFileControl : UIView<UISearchBarDelegate, UITableViewDataSource, UITableViewDelegate>
 {
 @protected
-    NSArray* waypoints;
+    NSMutableArray* waypoints;
     UISearchBar* waypointSearchBar;
     UITableView* waypointTable;
 }
@@ -21,7 +21,7 @@
 
 @property (nonatomic, readonly) SEL action;
 
-@property (nonatomic) WaypointFile* waypointFile;
+@property (nonatomic) WaypointDatabase* waypointDatabase;
 
 - (WaypointFileControl*) initWithFrame:(CGRect)frame target:(id)target action:(SEL)action;
 

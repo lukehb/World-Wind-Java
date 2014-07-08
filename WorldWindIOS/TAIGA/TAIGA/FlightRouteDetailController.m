@@ -8,17 +8,26 @@
 #import "FlightRouteDetailController.h"
 #import "FlightRoute.h"
 #import "Waypoint.h"
-#import "WaypointCell.h"
+#import "WaypointDatabase.h"
 #import "WaypointFileControl.h"
 #import "AltitudePicker.h"
 #import "ColorPicker.h"
-#import "WorldWind/Util/WWColor.h"
-#import "WorldWindView.h"
 #import "BulkRetrieverController.h"
-#import "WaypointFile.h"
-#import "WWSector.h"
 #import "AppConstants.h"
-#import "WWLocation.h"
+#import "TAIGA.h"
+#import "UnitsFormatter.h"
+#import "UITableViewCell+TAIGAAdditions.h"
+#import "WorldWind/Geometry/WWExtent.h"
+#import "WorldWind/Geometry/WWLocation.h"
+#import "WorldWind/Geometry/WWPosition.h"
+#import "WorldWind/Geometry/WWSector.h"
+#import "WorldWind/Geometry/WWVec4.h"
+#import "WorldWind/Navigate/WWNavigator.h"
+#import "WorldWind/Render/WWSceneController.h"
+#import "WorldWind/Terrain/WWGlobe.h"
+#import "WorldWind/Util/WWMath.h"
+#import "WorldWind/Util/WWColor.h"
+#import "WorldWind/WorldWindView.h"
 
 #define EDIT_ANIMATION_DURATION (0.3)
 #define SECTION_PROPERTIES (0)
@@ -34,8 +43,8 @@
 //--------------------------------------------------------------------------------------------------------------------//
 
 - (FlightRouteDetailController*) initWithFlightRoute:(FlightRoute*)flightRoute
-                                        waypointFile:(WaypointFile*)waypointFile
-                                                view:(WorldWindView*)wwv;
+                                    waypointDatabase:(WaypointDatabase*)waypointDatabase
+                                                view:(WorldWindView*)wwv
 {
     self = [super initWithNibName:nil bundle:nil];
 
@@ -43,12 +52,17 @@
     [[self navigationItem] setRightBarButtonItem:[self editButtonItem]];
 
     _flightRoute = flightRoute;
-    _waypointFile = waypointFile;
+    _waypointDatabase = waypointDatabase;
     _wwv = wwv;
-    altitudeFormatter = [[NSNumberFormatter alloc] init];
-    [altitudeFormatter setNumberStyle:NSNumberFormatterDecimalStyle];
-    [altitudeFormatter setMultiplier:@TAIGA_METERS_TO_FEET];
-    [altitudeFormatter setPositiveSuffix:@"ft MSL"];
+
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(handleFlightRouteWaypointInserted:)
+                                                 name:TAIGA_FLIGHT_ROUTE_WAYPOINT_INSERTED object:_flightRoute];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(handleFlightRouteWaypointRemoved:)
+                                                 name:TAIGA_FLIGHT_ROUTE_WAYPOINT_REMOVED object:_flightRoute];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(handleFlightRouteWaypointReplaced:)
+                                                 name:TAIGA_FLIGHT_ROUTE_WAYPOINT_REPLACED object:_flightRoute];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(handleFlightRouteWaypointUpdated:)
+                                                 name:TAIGA_FLIGHT_ROUTE_WAYPOINT_UPDATED object:_flightRoute];
 
     return self;
 }
@@ -63,6 +77,51 @@
 {
     [flightRouteTable flashScrollIndicators];
     [waypointFileControl flashScrollIndicators];
+}
+
+//--------------------------------------------------------------------------------------------------------------------//
+//-- Flight Route Notifications --//
+//--------------------------------------------------------------------------------------------------------------------//
+
+- (void) handleFlightRouteWaypointInserted:(NSNotification*)notification
+{
+    // Make the flight route table view match the change in the model, using UIKit animations to display the change.
+    // The waypoint index indicates the row index that has been inserted.
+    NSUInteger index = [[[notification userInfo] objectForKey:TAIGA_FLIGHT_ROUTE_WAYPOINT_INDEX] unsignedIntegerValue];
+    NSIndexPath* indexPath = [NSIndexPath indexPathForRow:index inSection:SECTION_WAYPOINTS];
+    NSArray* indexPathArray = [NSArray arrayWithObject:indexPath];
+    [flightRouteTable insertRowsAtIndexPaths:indexPathArray withRowAnimation:UITableViewRowAnimationFade];
+    [flightRouteTable scrollToRowAtIndexPath:indexPath atScrollPosition:UITableViewScrollPositionNone animated:YES];
+}
+
+- (void) handleFlightRouteWaypointRemoved:(NSNotification*)notification
+{
+    // Make the flight route table view match the change in the model, using UIKit animations to display the change.
+    // The waypoint index indicates the row index that has been removed.
+    NSUInteger index = [[[notification userInfo] objectForKey:TAIGA_FLIGHT_ROUTE_WAYPOINT_INDEX] unsignedIntegerValue];
+    NSIndexPath* indexPath = [NSIndexPath indexPathForRow:index inSection:SECTION_WAYPOINTS];
+    NSArray* indexPathArray = [NSArray arrayWithObject:indexPath];
+    [flightRouteTable deleteRowsAtIndexPaths:indexPathArray withRowAnimation:UITableViewRowAnimationAutomatic];
+}
+
+- (void) handleFlightRouteWaypointReplaced:(NSNotification*)notification
+{
+    // Make the flight route table view match the change in the model, using UIKit animations to display the change.
+    // The waypoint index indicates the row index that has been replaced.
+    NSUInteger index = [[[notification userInfo] objectForKey:TAIGA_FLIGHT_ROUTE_WAYPOINT_INDEX] unsignedIntegerValue];
+    NSIndexPath* indexPath = [NSIndexPath indexPathForRow:index inSection:SECTION_WAYPOINTS];
+    NSArray* indexPathArray = [NSArray arrayWithObject:indexPath];
+    [flightRouteTable reloadRowsAtIndexPaths:indexPathArray withRowAnimation:UITableViewRowAnimationAutomatic];
+}
+
+- (void) handleFlightRouteWaypointUpdated:(NSNotification*)notification
+{
+    // Make the flight route table view match the change in the model, using UIKit animations to display the change.
+    // The waypoint index indicates the row index that has been replaced.
+    NSUInteger index = [[[notification userInfo] objectForKey:TAIGA_FLIGHT_ROUTE_WAYPOINT_INDEX] unsignedIntegerValue];
+    NSIndexPath* indexPath = [NSIndexPath indexPathForRow:index inSection:SECTION_WAYPOINTS];
+    NSArray* indexPathArray = [NSArray arrayWithObject:indexPath];
+    [flightRouteTable reloadRowsAtIndexPaths:indexPathArray withRowAnimation:UITableViewRowAnimationNone];
 }
 
 //--------------------------------------------------------------------------------------------------------------------//
@@ -82,7 +141,7 @@
     [view addSubview:flightRouteTable];
 
     waypointFileControl = [[WaypointFileControl alloc] initWithFrame:CGRectMake(0, 0, 1, 1) target:self action:@selector(didChooseWaypoint:)];
-    [waypointFileControl setWaypointFile:_waypointFile];
+    [waypointFileControl setWaypointDatabase:_waypointDatabase];
     [view addSubview:waypointFileControl];
 
     [self layout];
@@ -102,9 +161,9 @@
                                                                  options:0 metrics:nil views:viewsDictionary]];
     [view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:|[waypointFileControl]|"
                                                                  options:0 metrics:nil views:viewsDictionary]];
-    normalConstraints = [NSLayoutConstraint constraintsWithVisualFormat:@"V:|[flightRouteTable(==view)]-[waypointFileControl(>=160)]"
+    normalConstraints = [NSLayoutConstraint constraintsWithVisualFormat:@"V:|[flightRouteTable(==view)][waypointFileControl(==176)]"
                                                                 options:0 metrics:nil views:viewsDictionary];
-    editingConstraints = [NSLayoutConstraint constraintsWithVisualFormat:@"V:|[flightRouteTable(<=320)]-[waypointFileControl(>=160)]|"
+    editingConstraints = [NSLayoutConstraint constraintsWithVisualFormat:@"V:|[flightRouteTable][waypointFileControl(==176)]|"
                                                                  options:0 metrics:nil views:viewsDictionary];
     [view addConstraints:normalConstraints];
 }
@@ -114,6 +173,7 @@
     UIView* view = [self view];
     [view removeConstraints:editing ? normalConstraints : editingConstraints];
     [view addConstraints:editing ? editingConstraints : normalConstraints];
+    [view layoutIfNeeded];
 }
 
 - (void) setEditing:(BOOL)editing animated:(BOOL)animated
@@ -128,8 +188,7 @@
                             options:UIViewAnimationOptionBeginFromCurrentState // Animate scroll views from their current state.
                          animations:^
                          {
-                             [self layoutForEditing:editing];
-                             [[self view] layoutIfNeeded]; // Force layout to capture constraint frame changes in the animation block.
+                             [self layoutForEditing:editing]; // Force layout to capture constraint frame changes in the animation block.
                          }
                          completion:^(BOOL finished)
                          {
@@ -138,8 +197,7 @@
     }
     else
     {
-        [self layoutForEditing:editing];
-        [[self view] layoutIfNeeded]; // Force layout to capture constraint frame changes now.
+        [self layoutForEditing:editing]; // Force layout to capture constraint frame changes now.
         [self flashScrollIndicators];
     }
 
@@ -187,6 +245,19 @@
     }
 }
 
+- (CGFloat) tableView:(UITableView*)tableView heightForHeaderInSection:(NSInteger)section
+{
+    switch (section)
+    {
+        case SECTION_PROPERTIES:
+            return CGFLOAT_MIN;
+        case SECTION_WAYPOINTS:
+            return 15;
+        default:
+            return UITableViewAutomaticDimension;
+    }
+}
+
 - (UITableViewCell*) tableView:(UITableView*)tableView cellForRowAtIndexPath:(NSIndexPath*)indexPath
 {
     switch ([indexPath section])
@@ -223,7 +294,7 @@
     {
         double altitude = [_flightRoute altitude];
         [[cell textLabel] setText:@"Altitude"];
-        [[cell detailTextLabel] setText:[altitudeFormatter stringFromNumber:[NSNumber numberWithDouble:altitude]]];
+        [[cell detailTextLabel] setText:[[TAIGA unitsFormatter] formatMetersAltitude:altitude]];
         [[cell detailTextLabel] setTextColor:detailTextColor]; // show altitude detail text in the default color
     }
     else if ([indexPath row] == ROW_DOWNLOAD)
@@ -238,10 +309,10 @@
 - (UITableViewCell*) tableView:(UITableView*)tableView cellForWaypoint:(NSIndexPath*)indexPath
 {
     static NSString* waypointCellId = @"waypointCellId";
-    WaypointCell* cell = [tableView dequeueReusableCellWithIdentifier:waypointCellId];
+    UITableViewCell* cell = [tableView dequeueReusableCellWithIdentifier:waypointCellId];
     if (cell == nil)
     {
-        cell = [[WaypointCell alloc] initWithReuseIdentifier:waypointCellId];
+        cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:waypointCellId];
     }
 
     Waypoint* waypoint = [_flightRoute waypointAtIndex:(NSUInteger) [indexPath row]];
@@ -274,7 +345,6 @@
         [picker setMaximumAltitude:6096]; // 100,000ft maximum
         [picker setAltitudeInterval:152.4]; // 500ft interval
         [picker setAltitude:[_flightRoute altitude]];
-        [picker setFormatter:altitudeFormatter];
 
         UIViewController* viewController = [[UIViewController alloc] init];
         [viewController setView:picker];
@@ -296,8 +366,9 @@
         else if ([_flightRoute waypointCount] == 1)
         {
             Waypoint* waypoint = [_flightRoute waypointAtIndex:0];
-            WWSector* sector = [[WWSector alloc] initWithLocations:[[NSArray alloc] initWithObjects:[waypoint location], nil]];
-            [bulkRetrieverController setSectors:[[NSArray alloc] initWithObjects:sector, nil]];
+            WWLocation* location = [[WWLocation alloc] initWithDegreesLatitude:[waypoint latitude] longitude:[waypoint longitude]];
+            WWSector* sector = [[WWSector alloc] initWithLocations:@[location]];
+            [bulkRetrieverController setSectors:@[sector]];
         }
         else
         {
@@ -307,7 +378,9 @@
             NSMutableArray* locations = [[NSMutableArray alloc] initWithCapacity:2];
             for (NSUInteger i = 0; i < [_flightRoute waypointCount]; i++)
             {
-                [locations addObject:[[_flightRoute waypointAtIndex:i] location]];
+                Waypoint* waypoint = [_flightRoute waypointAtIndex:i];
+                WWLocation* location = [[WWLocation alloc] initWithDegreesLatitude:[waypoint latitude] longitude:[waypoint longitude]];
+                [locations addObject:location];
             }
 //
 //            // The below is an approximation of the full state of Alaska. I'm leaving it here so that we can do
@@ -318,8 +391,7 @@
 //            [locations addObject:[[WWLocation alloc] initWithDegreesLatitude:71.1 longitude:-129.5]];
 //            [locations addObject:[[WWLocation alloc] initWithDegreesLatitude:71.1 longitude:-169.2]];
 
-            [bulkRetrieverController setSectors:[[NSArray alloc] initWithObjects:[[WWSector alloc]
-                    initWithLocations:locations], nil]];
+            [bulkRetrieverController setSectors:@[[[WWSector alloc] initWithLocations:locations]]];
         }
 //        else
 //        {
@@ -391,11 +463,13 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
 {
     if ([indexPath section] == SECTION_WAYPOINTS && editingStyle == UITableViewCellEditingStyleDelete)
     {
-        // Modify the model before the modifying the view.
-        [_flightRoute removeWaypointAtIndex:(NSUInteger) [indexPath row]];
-        // Make the flight route table view match the change in the model, using UIKit animations to display the change.
-        NSArray* indexPaths = [NSArray arrayWithObject:indexPath];
-        [tableView deleteRowsAtIndexPaths:indexPaths withRowAnimation:UITableViewRowAnimationAutomatic];
+        // Remove the waypoint at the editing index from the flight route model. The waypoint table is updated in
+        // response to a notification posted by the flight route.
+        NSUInteger index = (NSUInteger) [indexPath row];
+        [_flightRoute removeWaypointAtIndex:index];
+
+        // Navigate to the the flight route in the WorldWindView.
+        [self navigateToFlightRoute:_flightRoute];
     }
 }
 
@@ -403,11 +477,15 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
 moveRowAtIndexPath:(NSIndexPath*)sourceIndexPath
        toIndexPath:(NSIndexPath*)destinationIndexPath
 {
-    if ([sourceIndexPath section] == SECTION_WAYPOINTS
-            && [destinationIndexPath section] == SECTION_WAYPOINTS)
+    if ([sourceIndexPath section] == SECTION_WAYPOINTS && [destinationIndexPath section] == SECTION_WAYPOINTS)
     {
-        [_flightRoute moveWaypointAtIndex:(NSUInteger) [sourceIndexPath row]
-                                  toIndex:(NSUInteger) [destinationIndexPath row]];
+        // Update the flight route model to match the change in the waypoint table.
+        NSUInteger srcIndex = (NSUInteger) [sourceIndexPath row];
+        NSUInteger dstIndex = (NSUInteger) [destinationIndexPath row];
+        [_flightRoute moveWaypointAtIndex:srcIndex toIndex:dstIndex];
+
+        // Navigate to the the flight route in the WorldWindView.
+        [self navigateToFlightRoute:_flightRoute];
     }
 }
 
@@ -429,17 +507,60 @@ moveRowAtIndexPath:(NSIndexPath*)sourceIndexPath
 
 - (void) didChooseWaypoint:(Waypoint*)waypoint
 {
-    // Modify the model before the modifying the view. Get the waypoint to insert from the waypoint table, then
-    // append it to the flight route model.
+    // Append the waypoint to the flight route model. The waypoint table is updated in response to a notification
+    // posted by the flight route.
     NSUInteger index = [_flightRoute waypointCount];
     [_flightRoute insertWaypoint:waypoint atIndex:index];
 
-    // Make the flight route table view match the change in the model, using UIKit animations to display the change.
-    // The index path's row indicates the row index that has been inserted.
-    NSIndexPath* indexPath = [NSIndexPath indexPathForRow:index inSection:SECTION_WAYPOINTS];
-    NSArray* indexPathArray = [NSArray arrayWithObject:indexPath];
-    [flightRouteTable insertRowsAtIndexPaths:indexPathArray withRowAnimation:UITableViewRowAnimationFade];
-    [flightRouteTable scrollToRowAtIndexPath:indexPath atScrollPosition:UITableViewScrollPositionNone animated:YES];
+    // Navigate to the the flight route in the WorldWindView.
+    [self navigateToFlightRoute:_flightRoute];
+}
+
+//--------------------------------------------------------------------------------------------------------------------//
+//-- WorldWindView Interface --//
+//--------------------------------------------------------------------------------------------------------------------//
+
+- (void) navigateToFlightRoute:(FlightRoute*)flightRoute
+{
+    WWGlobe* globe = [[_wwv sceneController] globe];
+    id<WWExtent> extent = [flightRoute extentOnGlobe:globe];
+
+    if (extent == nil)
+        return; // empty flight route; nothing to navigate to
+
+    // Compute the center and radius of a region that bounds the flight path's waypoints. If the flight route contains
+    // only a single unique waypoint we use default radius of 100km. This sphere defines the region that will be shown
+    // in the left half of the WorldWindView's viewport.
+    WWPosition* center = [[WWPosition alloc] initWithZeroPosition];
+    WWVec4* centerPoint = [extent center];
+    [globe computePositionFromPoint:[centerPoint x] y:[centerPoint y] z:[centerPoint z] outputPosition:center];
+    double globeRadius = MAX([globe equatorialRadius], [globe polarRadius]);
+    double radiusMeters = [extent radius] > 0 ? [extent radius] : 100000;
+    double radiusDegrees = DEGREES(radiusMeters / globeRadius);
+
+    // Compute the scale that we'll apply to the region's radius in order to make it fit in the left half of the
+    // WorldWindView's viewport. The navigator will fit the radius we provide into the smaller of the two viewport
+    // dimensions. When the device is in portrait mode, the radius is fit to the viewport width, so the visible region's
+    // radius must be twice the actual region's radius. When the device is in landscape mode, the radius is fit to the
+    // viewport height, so the visible region's radius must be scaled based on the relative size of the viewport width
+    // and height.
+    id<WWNavigator> navigator = [_wwv navigator];
+    CGRect viewport = [_wwv viewport];
+    CGFloat viewportWidth = CGRectGetWidth(viewport);
+    CGFloat viewportHeight = CGRectGetHeight(viewport);
+    double radiusScale = viewportWidth < viewportHeight ? 2 : (viewportWidth < 2 * viewportHeight ? 2 * viewportHeight / viewportWidth : 1);
+
+    // Navigate to the center and radius of the a region that places the flight route's bounding sector in the left half
+    // of the WorldWindView's viewport. This region has its center at the eastern edge of the flight route relative to
+    // the navigator's current heading, and has its radius scaled such that the flight route fits in half of the
+    // viewport width.
+    WWLocation* lookAtCenter = [[WWLocation alloc] initWithZeroLocation];
+    [WWLocation greatCircleLocation:center azimuth:[navigator heading] + 90 distance:radiusDegrees outputLocation:lookAtCenter];
+    double lookAtRadius = radiusMeters * radiusScale;
+    [navigator animateWithDuration:WWNavigatorDurationAutomatic animations:^
+    {
+        [navigator setCenterLocation:lookAtCenter radius:lookAtRadius];
+    }];
 }
 
 @end

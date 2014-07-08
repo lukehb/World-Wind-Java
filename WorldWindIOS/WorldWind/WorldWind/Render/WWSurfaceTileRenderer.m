@@ -17,7 +17,6 @@
 #import "WorldWind/Terrain/WWTessellator.h"
 #import "WorldWind/Util/WWFrameStatistics.h"
 #import "WorldWind/Util/WWMath.h"
-#import "WorldWind/Util/WWUtil.h"
 #import "WorldWind/WWLog.h"
 
 @implementation WWSurfaceTileRenderer
@@ -26,9 +25,8 @@
 {
     self = [super init];
 
-    programKey = [WWUtil generateUUID];
-    tileCoordMatrix = [[WWMatrix alloc] initWithIdentity];
-    textureMatrix = [[WWMatrix alloc] initWithIdentity];
+    texMaskMatrix = [[WWMatrix alloc] initWithIdentity];
+    texSamplerMatrix = [[WWMatrix alloc] initWithIdentity];
 
     return self;
 }
@@ -124,7 +122,7 @@
             {
                 for (id <WWSurfaceTile> __unsafe_unretained surfaceTile in surfaceTiles)
                 {
-                    if ([[surfaceTile sector] intersects:terrainTileSector] && [surfaceTile bind:dc])
+                    if ([[surfaceTile sector] overlaps:terrainTileSector] && [surfaceTile bind:dc])
                     {
                         [self applyTileState:dc terrainTile:terrainTile surfaceTile:surfaceTile];
                         [tess render:dc tile:terrainTile];
@@ -151,7 +149,7 @@
     [dc bindProgramForKey:[WWSurfaceTileRendererProgram programKey] class:[WWSurfaceTileRendererProgram class]];
 
     WWSurfaceTileRendererProgram* __unsafe_unretained program = (WWSurfaceTileRendererProgram*) [dc currentProgram];
-    [program loadTextureUnit:GL_TEXTURE0];
+    [program loadTexSampler:GL_TEXTURE0];
     [program loadOpacity:opacity];
 }
 
@@ -177,16 +175,17 @@
     double sTrans = -([surfaceSector minLongitudeRadians] - [terrainSector minLongitudeRadians]) / terrainDeltaLon;
     double tTrans = -([surfaceSector minLatitudeRadians] - [terrainSector minLatitudeRadians]) / terrainDeltaLat;
 
-    [tileCoordMatrix set:sScale m01:0 m02:0 m03:sScale * sTrans
+    [texMaskMatrix set:sScale m01:0 m02:0 m03:sScale * sTrans
             m10:0 m11:tScale m12:0 m13:tScale * tTrans
             m20:0 m21:0 m22:1 m23:0
             m30:0 m31:0 m32:0 m33:1];
-    [program loadTileCoordMatrix:tileCoordMatrix];
 
-    [textureMatrix setToUnitYFlip];
-    [surfaceTile applyInternalTransform:dc matrix:textureMatrix];
-    [textureMatrix multiplyMatrix:tileCoordMatrix];
-    [program loadTextureMatrix:textureMatrix];
+    [texSamplerMatrix setToUnitYFlip];
+    [surfaceTile applyInternalTransform:dc matrix:texSamplerMatrix];
+    [texSamplerMatrix multiplyMatrix:texMaskMatrix];
+
+    [program loadTexSamplerMatrix:texSamplerMatrix];
+    [program loadTexMaskMatrix:texMaskMatrix];
 }
 
 @end

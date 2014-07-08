@@ -19,29 +19,25 @@
 #import "ButtonWithImageAndText.h"
 #import "METARLayer.h"
 #import "WWPointPlacemark.h"
-#import "WWNavigatorState.h"
 #import "WWPosition.h"
-#import "WWGlobe.h"
-#import "WWVec4.h"
 #import "METARDataViewController.h"
 #import "WWPickedObject.h"
 #import "WWPickedObjectList.h"
 #import "PIREPLayer.h"
 #import "PIREPDataViewController.h"
 #import "WWNavigator.h"
-#import "FAAChartsAlaskaLayer.h"
 #import "CompassLayer.h"
 #import "ScaleBarView.h"
-#import "PositionReadoutController.h"
 #import "ChartViewController.h"
 #import "WWUtil.h"
 #import "ChartsTableController.h"
 #import "WeatherCamLayer.h"
 #import "WeatherCamViewController.h"
-#import "WaypointFile.h"
+#import "Waypoint.h"
+#import "WaypointDatabase.h"
 #import "WaypointLayer.h"
 #import "FlightRoute.h"
-#import "FlightRouteListController.h"
+#import "FlightRouteController.h"
 #import "SimulationViewController.h"
 #import "TerrainProfileView.h"
 #import "ViewSelectionController.h"
@@ -49,62 +45,69 @@
 #import "AircraftLayer.h"
 #import "TerrainAltitudeLayer.h"
 #import "LocationTrackingViewController.h"
+#import "WWDAFIFLayer.h"
+#import "WWBingLayer.h"
+#import "AddWaypointPopoverController.h"
+#import "EditWaypointPopoverController.h"
+#import "UIPopoverController+TAIGAAdditions.h"
+#import "FAASectionalsLayer.h"
 
 @implementation MovingMapViewController
 {
     CGRect myFrame;
-    NSArray* normalConstraints;
-    NSArray* splitViewConstraints;
+    NSArray* showSplitViewConstraints;
+    NSArray* hideSplitViewConstraints;
+    NSArray* showRouteViewConstraints;
+    NSArray* hideRouteViewConstraints;
     NSArray* showSimulationViewConstraints;
     NSArray* hideSimulationViewConstraints;
     NSArray* showTerrainProfileConstraints;
     NSArray* hideTerrainProfileConstraints;
-    BOOL isSplitView;
+    BOOL isShowSplitView;
+    BOOL isShowRouteView;
 
     UIToolbar* topToolBar;
     UIBarButtonItem* connectivityButton;
     UIBarButtonItem* overlaysButton;
-    UIBarButtonItem* splitViewButton;
     UIBarButtonItem* quickViewsButton;
-    UIBarButtonItem* routePlanningButton;
+    UIBarButtonItem* splitViewButton;
+    UIBarButtonItem* routeViewButton;
+
     LocationTrackingViewController* locationTrackingViewController;
     ScaleBarView* scaleBarView;
+    LayerListController* layerListController;
+    UIPopoverController* layerListPopoverController;
+    ViewSelectionController* viewSelectionController;
+    UIPopoverController* viewSelectionPopoverController;
     ChartsTableController* chartsListController;
     ChartViewController* chartViewController;
     UINavigationController* chartListNavController;
+    FlightRouteController* routeViewController;
+    UINavigationController* routeViewNavController;
+    SimulationViewController* simulationViewController;
+    TerrainProfileView* terrainProfileView;
+    TerrainProfileController* terrainProfileController;
 
-    LayerListController* layerListController;
-    UIPopoverController* layerListPopoverController;
-
-    FAAChartsAlaskaLayer* faaChartsLayer;
+    WaypointLayer* waypointLayer;
+    AircraftLayer* aircraftLayer;
+    WWRenderableLayer* flightRouteLayer;
+    FAASectionalsLayer* faaChartsLayer;
     TerrainAltitudeLayer* terrainAltitudeLayer;
     METARLayer* metarLayer;
     PIREPLayer* pirepLayer;
     WeatherCamLayer* weatherCamLayer;
     CompassLayer* compassLayer;
+    WWDAFIFLayer* dafifLayer;
 
     UITapGestureRecognizer* tapGestureRecognizer;
-
     METARDataViewController* metarDataViewController;
     UIPopoverController* metarDataPopoverController;
     PIREPDataViewController* pirepDataViewController;
     UIPopoverController* pirepDataPopoverController;
-    PositionReadoutController* positionReadoutViewController;
-    UIPopoverController* positionReadoutPopoverController;
     WeatherCamViewController* weatherCamViewController;
     UIPopoverController* weatherCamPopoverController;
-
-    WaypointFile* waypointFile;
-    WaypointLayer* waypointLayer;
-    AircraftLayer* aircraftLayer;
-    WWRenderableLayer* flightRouteLayer;
-    FlightRouteListController* flightRouteController;
-    UIPopoverController* flightRoutePopoverController;
-    SimulationViewController* simulationViewController;
-    TerrainProfileView* terrainProfileView;
-    TerrainProfileController* terrainProfileController;
-    ViewSelectionController* viewSelectionController;
-    UIPopoverController* viewSelectionPopoverController;
+    AddWaypointPopoverController* addWaypointPopoverController;
+    EditWaypointPopoverController* editWaypointPopoverController;
 }
 
 - (id) initWithFrame:(CGRect)frame
@@ -113,21 +116,75 @@
 
     myFrame = frame;
 
+    _waypointDatabase = [[WaypointDatabase alloc] init];
+
     metarDataViewController = [[METARDataViewController alloc] init];
     pirepDataViewController = [[PIREPDataViewController alloc] init];
-    positionReadoutViewController = [[PositionReadoutController alloc] init];
     weatherCamViewController = [[WeatherCamViewController alloc] init];
-
-    //[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(showCurrentPositionNotification:)
-    //                                             name:TAIGA_CURRENT_AIRCRAFT_POSITION object:nil];
 
     return self;
 }
 
-- (void) showCurrentPositionNotification:(NSNotification*)notification
+- (NSUInteger) flightRouteCount
 {
-    //CLLocation* ap = [notification object];
-    //NSLog(@"%f, %f, %f, %f", [ap coordinate].latitude, [ap coordinate].longitude, ap.altitude, ap.course);
+    return [routeViewController flightRouteCount];
+}
+
+- (FlightRoute*) flightRouteAtIndex:(NSUInteger)index
+{
+    return [routeViewController flightRouteAtIndex:index];
+}
+
+- (NSUInteger) indexOfFlightRoute:(FlightRoute*)flightRoute
+{
+    return [routeViewController indexOfFlightRoute:flightRoute];
+}
+
+- (void) insertFlightRoute:(FlightRoute*)flightRoute atIndex:(NSUInteger)index
+{
+    [routeViewController insertFlightRoute:flightRoute atIndex:index];
+}
+
+- (void) newFlightRoute:(void (^)(FlightRoute* newFlightRoute))completionBlock
+{
+    [routeViewController newFlightRoute:completionBlock];
+}
+
+- (FlightRoute*) presentedFlightRoute
+{
+    if (isShowRouteView)
+    {
+        return [routeViewController presentedFlightRoute];
+    }
+
+    return nil;
+}
+
+- (void) presentFlightRouteAtIndex:(NSUInteger)index editing:(BOOL)editing
+{
+    // Make the flight route visible on the map.
+    FlightRoute* flightRoute = [self flightRouteAtIndex:index];
+    [flightRoute setEnabled:YES];
+    [flightRouteLayer setEnabled:YES];
+
+    // Make the flight route visible on the route view controller.
+    [routeViewController presentFlightRouteAtIndex:index editing:editing];
+
+    if (!isShowRouteView)
+    {
+        [self transitionRouteView];
+    }
+}
+
+- (void) loadWaypoints
+{
+    [_waypointDatabase addWaypointsFromTable:@"http://worldwindserver.net/taiga/dafif/ARPT2_ALASKA.TXT"
+                             completionBlock:^
+                             {
+                                 [routeViewController restoreFlightRouteState];
+                                 [waypointLayer setWaypointDatabase:_waypointDatabase];
+                                 [WorldWindView requestRedraw];
+                             }];
 }
 
 - (void) loadView
@@ -140,6 +197,7 @@
     [self createWorldWindView];
     [self createTopToolbar];
     [self createChartsController];
+    [self createRouteViewController];
     [self createSimulationController];
     [self createTerrainProfile];
     [self createLocationTrackingController];
@@ -155,26 +213,34 @@
     [topToolBar setTranslatesAutoresizingMaskIntoConstraints:NO];
     [_wwv setTranslatesAutoresizingMaskIntoConstraints:NO];
     [[chartListNavController view] setTranslatesAutoresizingMaskIntoConstraints:NO];
+    [[routeViewNavController view] setTranslatesAutoresizingMaskIntoConstraints:NO];
     [[simulationViewController view] setTranslatesAutoresizingMaskIntoConstraints:NO];
     [terrainProfileView setTranslatesAutoresizingMaskIntoConstraints:NO];
     [[locationTrackingViewController view] setTranslatesAutoresizingMaskIntoConstraints:NO];
 
     UIView* view = [self view];
-    UIView* chartView = [chartListNavController view];
+    UIView* splitView = [chartListNavController view];
+    UIView* routeView = [routeViewNavController view];
     UIView* simulationView = [simulationViewController view];
     UIView* locationTrackingView = [locationTrackingViewController view];
-    NSDictionary* viewsDictionary = NSDictionaryOfVariableBindings(view, _wwv, chartView, topToolBar, scaleBarView,
+    NSDictionary* viewsDictionary = NSDictionaryOfVariableBindings(_wwv, splitView, routeView, topToolBar, scaleBarView,
     simulationView, terrainProfileView, locationTrackingView);
 
     [view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:|[topToolBar]|"
                                                                  options:0 metrics:nil views:viewsDictionary]];
-    [view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"V:|[topToolBar(==80)][_wwv(>=400)]|"
+    [view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:|[_wwv]|"
                                                                  options:0 metrics:nil views:viewsDictionary]];
-    [view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"V:|[topToolBar(==80)][chartView(>=400)]|"
+    [view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:|[simulationView]|"
                                                                  options:0 metrics:nil views:viewsDictionary]];
-    [view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:|[simulationView(==_wwv)]"
+    [view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:|[terrainProfileView]|"
                                                                  options:0 metrics:nil views:viewsDictionary]];
-    [view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:|[terrainProfileView(==_wwv)]"
+    [view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"V:|[topToolBar(==80)]"
+                                                                 options:0 metrics:nil views:viewsDictionary]];
+    [view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"V:|[topToolBar][_wwv]|"
+                                                                 options:0 metrics:nil views:viewsDictionary]];
+    [view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"V:|[topToolBar][splitView]|"
+                                                                 options:0 metrics:nil views:viewsDictionary]];
+    [view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"V:|[topToolBar][routeView]|"
                                                                  options:0 metrics:nil views:viewsDictionary]];
     [view addConstraint:[NSLayoutConstraint constraintWithItem:locationTrackingView attribute:NSLayoutAttributeLeft
                                                      relatedBy:NSLayoutRelationEqual
@@ -183,14 +249,21 @@
                                                      relatedBy:NSLayoutRelationEqual
                                                         toItem:_wwv attribute:NSLayoutAttributeTop multiplier:1 constant:20]];
 
-    normalConstraints = [NSLayoutConstraint constraintsWithVisualFormat:@"H:|[_wwv(==view)][chartView(==0)]|"
-                                                                options:0 metrics:nil views:viewsDictionary];
-    splitViewConstraints = [NSLayoutConstraint constraintsWithVisualFormat:@"H:|[_wwv(>=400)][chartView(==350)]|"
-                                                                   options:0 metrics:nil views:viewsDictionary];
-    isSplitView = [Settings getBoolForName:@"gov.nasa.worldwind.taiga.splitview.enabled" defaultValue:NO];
-    [view addConstraints:isSplitView ? splitViewConstraints : normalConstraints];
-    if (isSplitView)
+    showSplitViewConstraints = [NSLayoutConstraint constraintsWithVisualFormat:@"H:[splitView(==350)]|"
+                                                                       options:0 metrics:nil views:viewsDictionary];
+    hideSplitViewConstraints = [NSLayoutConstraint constraintsWithVisualFormat:@"H:[_wwv][splitView(==350)]"
+                                                                       options:0 metrics:nil views:viewsDictionary];
+    isShowSplitView = [Settings getBoolForName:@"gov.nasa.worldwind.taiga.splitview.enabled" defaultValue:NO];
+    [view addConstraints:isShowSplitView ? showSplitViewConstraints : hideSplitViewConstraints];
+    if (isShowSplitView)
         [self loadMostRecentlyUsedChart];
+
+    showRouteViewConstraints = [NSLayoutConstraint constraintsWithVisualFormat:@"H:[routeView(==350)]|"
+                                                                       options:0 metrics:nil views:viewsDictionary];
+    hideRouteViewConstraints = [NSLayoutConstraint constraintsWithVisualFormat:@"H:[_wwv][routeView(==350)]"
+                                                                       options:0 metrics:nil views:viewsDictionary];
+    isShowRouteView = [Settings getBoolForName:@"gov.nasa.worldwind.taiga.routeview.enabled" defaultValue:NO];
+    [view addConstraints:isShowRouteView ? showRouteViewConstraints : hideRouteViewConstraints];
 
     showSimulationViewConstraints = [NSLayoutConstraint constraintsWithVisualFormat:@"V:[simulationView(80)]|"
                                                                             options:0 metrics:nil views:viewsDictionary];
@@ -223,29 +296,6 @@
     [chartsListController selectChart:chartFileName chartName:chartName];
 }
 
-- (void) loadWaypoints
-{
-    NSString* airportsPath = @"http://worldwindserver.net/taiga/dafif/ARPT2_ALASKA.TXT";
-    NSString* waypointsPath = @"http://worldwindserver.net/taiga/dafif/WPT2_ALASKA.TXT";
-
-    waypointFile = [[WaypointFile alloc] init];
-    [waypointFile loadWaypointLocations:@[airportsPath, waypointsPath]
-                          finishedBlock:^(WaypointFile* retrievedWaypointFile)
-                          {
-                              [self waypointsDidLoad];
-                          }];
-}
-
-- (void) waypointsDidLoad
-{
-    [waypointLayer setWaypoints:waypointFile];
-    flightRouteController = [[FlightRouteListController alloc] initWithWorldWindView:_wwv
-                                                                    flightRouteLayer:flightRouteLayer
-                                                                        waypointFile:waypointFile];
-    [routePlanningButton setEnabled:YES];
-    [WorldWindView requestRedraw];
-}
-
 - (void) viewDidLoad
 {
     [super viewDidLoad];
@@ -254,16 +304,12 @@
 
     WWLayerList* layers = [[_wwv sceneController] layers];
 
-    WWLayer* layer = [[WWBMNGLandsatCombinedLayer alloc] init];
-    [[layer userTags] setObject:@"" forKey:TAIGA_HIDDEN_LAYER];
-    [layers addLayer:layer];
-
-    aircraftLayer = [[AircraftLayer alloc] init];
-    [[aircraftLayer userTags] setObject:@"" forKey:TAIGA_HIDDEN_LAYER];
-    [layers addLayer:aircraftLayer];
-
     flightRouteLayer = [[WWRenderableLayer alloc] init];
-    [[flightRouteLayer userTags] setObject:@"" forKey:TAIGA_HIDDEN_LAYER];
+    [flightRouteLayer addRenderable:routeViewController]; // the flight route controller draws its flight routes on the map
+    [flightRouteLayer setDisplayName:@"Routes"];
+    [flightRouteLayer setEnabled:[Settings getBoolForName:
+            [[NSString alloc] initWithFormat:@"gov.nasa.worldwind.taiga.layer.enabled.%@",
+                                             [flightRouteLayer displayName]] defaultValue:YES]];
     [layers addLayer:flightRouteLayer];
 
     waypointLayer = [[WaypointLayer alloc] init];
@@ -272,10 +318,30 @@
             [[NSString alloc] initWithFormat:@"gov.nasa.worldwind.taiga.layer.enabled.%@", [waypointLayer displayName]] defaultValue:NO]];
     [layers addLayer:waypointLayer];
 
-    faaChartsLayer = [[FAAChartsAlaskaLayer alloc] init];
-    [faaChartsLayer setEnabled:[Settings                                                                               getBoolForName:
-            [[NSString alloc] initWithFormat:@"gov.nasa.worldwind.taiga.layer.enabled.%@", [faaChartsLayer displayName]] defaultValue:YES]];
+    aircraftLayer = [[AircraftLayer alloc] init];
+    [[aircraftLayer userTags] setObject:@"" forKey:TAIGA_HIDDEN_LAYER];
+    [layers addLayer:aircraftLayer];
+
+    WWLayer* layer = [[WWBMNGLandsatCombinedLayer alloc] init];
+    [[layer userTags] setObject:@"" forKey:TAIGA_HIDDEN_LAYER];
+    [layers addLayer:layer];
+
+    layer = [[WWBingLayer alloc] init];
+    [layer setEnabled:[Settings                                         getBoolForName:
+            [[NSString alloc] initWithFormat:@"gov.nasa.worldwind.taiga.layer.enabled.%@",
+                                             [layer displayName]] defaultValue:YES]];
+    [layers addLayer:layer];
+
+    faaChartsLayer = [[FAASectionalsLayer alloc] init];
+    [faaChartsLayer setEnabled:[Settings                                 getBoolForName:
+            [[NSString alloc] initWithFormat:@"gov.nasa.worldwind.taiga.layer.enabled.%@",
+                                             [faaChartsLayer displayName]] defaultValue:NO]];
     [[[_wwv sceneController] layers] addLayer:faaChartsLayer];
+
+    dafifLayer = [[WWDAFIFLayer alloc] init];
+    [dafifLayer setEnabled:[Settings                                                                               getBoolForName:
+            [[NSString alloc] initWithFormat:@"gov.nasa.worldwind.taiga.layer.enabled.%@", [dafifLayer displayName]] defaultValue:YES]];
+    [[[_wwv sceneController] layers] addLayer:dafifLayer];
 
     [self createTerrainAltitudeLayer];
     [terrainAltitudeLayer setEnabled:[Settings                                                                               getBoolForName:
@@ -348,10 +414,24 @@
     [self.view addSubview:_wwv];
 }
 
+- (void) navigationController:(UINavigationController*)navigationController
+       willShowViewController:(UIViewController*)viewController
+                     animated:(BOOL)animated
+{
+    UIViewController* rootViewController = [[navigationController viewControllers] firstObject];
+    if (viewController != rootViewController)
+    {
+        [[viewController view] setAlpha:[[rootViewController view] alpha]];
+    }
+}
+
 - (void) createChartsController
 {
     chartsListController = [[ChartsTableController alloc] initWithParent:self];
+    [[chartsListController view] setAlpha:0.95]; // Make the chart list view semi-transparent.
+
     chartListNavController = [[UINavigationController alloc] initWithRootViewController:chartsListController];
+    [chartListNavController setDelegate:self]; // Propagate the root view alpha to views pushed on the navigation stack.
     [self.view addSubview:[chartListNavController view]];
 }
 
@@ -382,6 +462,16 @@
 - (void) pushChart
 {
     [((UINavigationController*) [chartsListController parentViewController]) pushViewController:chartViewController animated:YES];
+}
+
+- (void) createRouteViewController
+{
+    routeViewController = [[FlightRouteController alloc] initWithWorldWindView:_wwv waypointDatabase:_waypointDatabase];
+    [[routeViewController view] setAlpha:0.95]; // Make the flight route view semi-transparent.
+
+    routeViewNavController = [[UINavigationController alloc] initWithRootViewController:routeViewController];
+    [routeViewNavController setDelegate:self]; // Propagate the root view alpha to views pushed on the navigation stack.
+    [self.view addSubview:[routeViewNavController view]];
 }
 
 - (void) createTerrainProfile
@@ -492,7 +582,7 @@
             [self.view removeConstraints:showSimulationViewConstraints];
             [self.view addConstraints:hideSimulationViewConstraints];
             [self.view layoutIfNeeded]; // Force layout to capture constraint frame changes in the animation block.
-        } completion:^(BOOL finished)
+        }                completion:^(BOOL finished)
         {
             [simulationViewController setFlightRoute:nil];
 
@@ -554,13 +644,6 @@
     [((ButtonWithImageAndText*) [overlaysButton customView]) setTextColor:color];
     [((ButtonWithImageAndText*) [overlaysButton customView]) setFontSize:15];
 
-    splitViewButton = [[UIBarButtonItem alloc] initWithCustomView:[[ButtonWithImageAndText alloc]
-            initWithImageName:@"362-2up" text:@"Split View" size:size target:self action:@selector
-            (handleSplitViewButton)]];
-    color = [[UIColor alloc] initWithRed:1.0 green:242. / 255. blue:183. / 255. alpha:1.0];
-    [((ButtonWithImageAndText*) [splitViewButton customView]) setTextColor:color];
-    [((ButtonWithImageAndText*) [splitViewButton customView]) setFontSize:15];
-
     quickViewsButton = [[UIBarButtonItem alloc] initWithCustomView:[[ButtonWithImageAndText alloc]
             initWithImageName:@"309-thumbtack" text:@"Views" size:size target:self action:@selector
             (handleViewsButton)]];
@@ -568,13 +651,19 @@
     [((ButtonWithImageAndText*) [quickViewsButton customView]) setTextColor:color];
     [((ButtonWithImageAndText*) [quickViewsButton customView]) setFontSize:15];
 
-    routePlanningButton = [[UIBarButtonItem alloc] initWithCustomView:[[ButtonWithImageAndText alloc]
-            initWithImageName:@"122-stats" text:@"Flight Planning" size:size target:self action:@selector
-            (handleRoutePlanningButton)]];
+    splitViewButton = [[UIBarButtonItem alloc] initWithCustomView:[[ButtonWithImageAndText alloc]
+            initWithImageName:@"362-2up" text:@"Split View" size:size target:self action:@selector
+            (handleSplitViewButton)]];
     color = [[UIColor alloc] initWithRed:1.0 green:242. / 255. blue:183. / 255. alpha:1.0];
-    [((ButtonWithImageAndText*) [routePlanningButton customView]) setTextColor:color];
-    [((ButtonWithImageAndText*) [routePlanningButton customView]) setFontSize:15];
-    [routePlanningButton setEnabled:NO]; // flight planning button is enabled after waypoints load
+    [((ButtonWithImageAndText*) [splitViewButton customView]) setTextColor:color];
+    [((ButtonWithImageAndText*) [splitViewButton customView]) setFontSize:15];
+
+    routeViewButton = [[UIBarButtonItem alloc] initWithCustomView:[[ButtonWithImageAndText alloc]
+            initWithImageName:@"122-stats" text:@"Flight Planning" size:size target:self action:@selector
+            (handleRouteViewButton)]];
+    color = [[UIColor alloc] initWithRed:1.0 green:242. / 255. blue:183. / 255. alpha:1.0];
+    [((ButtonWithImageAndText*) [routeViewButton customView]) setTextColor:color];
+    [((ButtonWithImageAndText*) [routeViewButton customView]) setFontSize:15];
 
     UIBarButtonItem* flexibleSpace = [[UIBarButtonItem alloc]
             initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil];
@@ -585,11 +674,11 @@
             flexibleSpace,
             overlaysButton,
             flexibleSpace,
-            splitViewButton,
-            flexibleSpace,
             quickViewsButton,
             flexibleSpace,
-            routePlanningButton,
+            splitViewButton,
+            flexibleSpace,
+            routeViewButton,
             flexibleSpace,
             connectivityButton,
             nil]];
@@ -613,11 +702,6 @@
     float opacity = [Settings getFloatForName:TAIGA_SHADED_ELEVATION_OPACITY defaultValue:0.3];
     [terrainAltitudeLayer setOpacity:opacity];
     [Settings setFloat:opacity forName:TAIGA_SHADED_ELEVATION_OPACITY];
-}
-
-- (void) handleButtonTap
-{
-    NSLog(@"BUTTON TAPPED");
 }
 
 //- (void) handleFlightPathsButton
@@ -649,58 +733,6 @@
     }
 }
 
-- (void) handleRoutePlanningButton
-{
-    if (flightRoutePopoverController == nil)
-    {
-        UINavigationController* navController = [[UINavigationController alloc]
-                initWithRootViewController:flightRouteController];
-        [navController setDelegate:flightRouteController];
-        flightRoutePopoverController = [[UIPopoverController alloc] initWithContentViewController:navController];
-    }
-
-    if ([flightRoutePopoverController isPopoverVisible])
-    {
-        [flightRoutePopoverController dismissPopoverAnimated:YES];
-    }
-    else
-    {
-        [flightRoutePopoverController presentPopoverFromBarButtonItem:routePlanningButton
-                                             permittedArrowDirections:UIPopoverArrowDirectionAny animated:YES];
-    }
-}
-
-- (void) handleSplitViewButton
-{
-    isSplitView = !isSplitView;
-
-    [[self view] layoutIfNeeded]; // Ensure all pending layout operations have completed.
-
-    [UIView animateWithDuration:0.3
-                          delay:0.0
-                        options:UIViewAnimationOptionBeginFromCurrentState // Animate scroll views from their current state.
-                     animations:^
-                     {
-                         [self transitionSplitView];
-                         [[self view] layoutIfNeeded]; // Force layout to capture constraint frame changes in the animation block.
-                     }
-                     completion:nil];
-
-    if (!isSplitView)
-    {
-        [[NSUserDefaults standardUserDefaults] setObject:@"" forKey:@"gov.nasa.worldwind.taiga.splitview.chartpath"];
-        [[NSUserDefaults standardUserDefaults] setObject:@"" forKey:@"gov.nasa.worldwind.taiga.splitview.chartname"];
-    }
-    [Settings setBool:isSplitView forName:@"gov.nasa.worldwind.taiga.splitview.enabled"];
-}
-
-- (void) transitionSplitView
-{
-    UIView* view = [self view];
-    [view removeConstraints:isSplitView ? normalConstraints : splitViewConstraints];
-    [view addConstraints:isSplitView ? splitViewConstraints : normalConstraints];
-}
-
 - (void) handleViewsButton
 {
     if (viewSelectionPopoverController == nil)
@@ -718,8 +750,79 @@
     else
     {
         [viewSelectionPopoverController presentPopoverFromBarButtonItem:quickViewsButton
-                                             permittedArrowDirections:UIPopoverArrowDirectionAny animated:YES];
+                                               permittedArrowDirections:UIPopoverArrowDirectionAny animated:YES];
     }
+}
+
+- (void) handleSplitViewButton
+{
+    if (isShowRouteView) // Hide the route view if it's currently shown.
+    {
+        [self transitionRouteView];
+    }
+
+    [self transitionSplitView];
+}
+
+- (void) transitionSplitView
+{
+    isShowSplitView = !isShowSplitView;
+
+    UIView* view = [self view];
+    UIView* splitView = [chartListNavController view];
+    [view bringSubviewToFront:splitView];
+    [view layoutIfNeeded]; // Ensure all pending layout operations have completed.
+
+    [UIView animateWithDuration:0.3
+                          delay:0.0
+                        options:UIViewAnimationOptionBeginFromCurrentState // Animate scroll views from their current state.
+                     animations:^
+                     {
+                         [view removeConstraints:isShowSplitView ? hideSplitViewConstraints : showSplitViewConstraints];
+                         [view addConstraints:isShowSplitView ? showSplitViewConstraints : hideSplitViewConstraints];
+                         [view layoutIfNeeded]; // Force layout to capture constraint frame changes in the animation block.
+                     }
+                     completion:NULL];
+
+    if (!isShowSplitView)
+    {
+        [[NSUserDefaults standardUserDefaults] setObject:@"" forKey:@"gov.nasa.worldwind.taiga.splitview.chartpath"];
+        [[NSUserDefaults standardUserDefaults] setObject:@"" forKey:@"gov.nasa.worldwind.taiga.splitview.chartname"];
+    }
+    [Settings setBool:isShowSplitView forName:@"gov.nasa.worldwind.taiga.splitview.enabled"];
+}
+
+- (void) handleRouteViewButton
+{
+    if (isShowSplitView) // Hide the split view if it's currently shown.
+    {
+        [self transitionSplitView];
+    }
+
+    [self transitionRouteView];
+}
+
+- (void) transitionRouteView
+{
+    isShowRouteView = !isShowRouteView;
+
+    UIView* view = [self view];
+    UIView* routeView = [routeViewNavController view];
+    [view bringSubviewToFront:routeView];
+    [view layoutIfNeeded]; // Ensure all pending layout operations have completed.
+
+    [UIView animateWithDuration:0.3
+                          delay:0.0
+                        options:UIViewAnimationOptionBeginFromCurrentState // Animate scroll views from their current state.
+                     animations:^
+                     {
+                         [view removeConstraints:isShowRouteView ? hideRouteViewConstraints : showRouteViewConstraints];
+                         [view addConstraints:isShowRouteView ? showRouteViewConstraints : hideRouteViewConstraints];
+                         [view layoutIfNeeded]; // Force layout to capture constraint frame changes in the animation block.
+                     }
+                     completion:NULL];
+
+    [Settings setBool:isShowRouteView forName:@"gov.nasa.worldwind.taiga.routeview.enabled"];
 }
 
 - (void) handleTap:(UITapGestureRecognizer*)recognizer
@@ -728,12 +831,11 @@
     {
         CGPoint tapPoint = [recognizer locationInView:_wwv];
         WWPickedObjectList* pickedObjects = [_wwv pick:tapPoint];
-
         WWPickedObject* topObject = [pickedObjects topPickedObject];
 
         if (topObject.isTerrain)
         {
-            [self showPositionReadout:topObject];
+            [self showAddWaypointAtPickPosition:topObject];
         }
         else if ([[topObject userObject] isKindOfClass:[WWPointPlacemark class]])
         {
@@ -748,51 +850,51 @@
                     [self showWeatherCam:pm];
             }
         }
-        else if ([[topObject userObject] isKindOfClass:[FlightRoute class]])
+        else if ([[topObject userObject] isKindOfClass:[Waypoint class]])
         {
-            [self selectFlightRoute:[topObject userObject]];
+            [self showAddWaypoint:topObject];
+        }
+        else if ([[[topObject parentLayer] displayName] isEqualToString:@"Routes"])
+        {
+            if ([[topObject userObject] objectForKey:@"waypointIndex"] != nil)
+            {
+                [self showEditWaypoint:topObject];
+            }
+            else
+            {
+                [self selectFlightRoute:topObject];
+            }
         }
     }
 }
 
-- (void) showPositionReadout:(WWPickedObject*)po
+- (void) showAddWaypoint:(WWPickedObject*)po
 {
-    WWPosition* position = [po position];
-    WWVec4* cartesianPoint = [[WWVec4 alloc] init];
-    WWVec4* screenPoint = [[WWVec4 alloc] init];
+    Waypoint* waypoint = [po userObject];
+    addWaypointPopoverController = [[AddWaypointPopoverController alloc] initWithWaypoint:waypoint mapViewController:self];
+    [addWaypointPopoverController presentPopoverFromPosition:[po position] inView:_wwv
+                                permittedArrowDirections:UIPopoverArrowDirectionDown animated:YES];
+}
 
-    [[[_wwv sceneController] globe] computePointFromPosition:[position latitude] longitude:[position longitude]
-                                                    altitude:[position altitude] outputPoint:cartesianPoint];
-    [[[_wwv sceneController] navigatorState] project:cartesianPoint result:screenPoint];
+- (void) showAddWaypointAtPickPosition:(WWPickedObject*)po
+{
+    WWPosition* pos = [po position];
+    addWaypointPopoverController = [[AddWaypointPopoverController alloc] initWithPosition:pos mapViewController:self];
+    [addWaypointPopoverController presentPopoverFromPosition:[po position] inView:_wwv
+                                    permittedArrowDirections:UIPopoverArrowDirectionDown animated:YES];
+}
 
-    CGPoint uiPoint = [[[_wwv sceneController] navigatorState] convertPointToView:screenPoint];
-    CGRect rect = CGRectMake(uiPoint.x, uiPoint.y, 1, 1);
-
-    [positionReadoutViewController setPosition:position];
-
-    if (positionReadoutPopoverController == nil)
-        positionReadoutPopoverController = [[UIPopoverController alloc]
-                initWithContentViewController:positionReadoutViewController];
-    [positionReadoutPopoverController presentPopoverFromRect:rect inView:_wwv
-                                    permittedArrowDirections:UIPopoverArrowDirectionAny animated:YES];
+- (void) showEditWaypoint:(WWPickedObject*)po
+{
+    FlightRoute* flightRoute = [[po userObject] objectForKey:@"flightRoute"];
+    NSUInteger waypointIndex = [[[po userObject] objectForKey:@"waypointIndex"] unsignedIntegerValue];
+    editWaypointPopoverController = [[EditWaypointPopoverController alloc] initWithFlightRoute:flightRoute waypointIndex:waypointIndex mapViewController:self];
+    [editWaypointPopoverController presentPopoverFromPosition:[po position] inView:_wwv
+                                         permittedArrowDirections:UIPopoverArrowDirectionDown animated:YES];
 }
 
 - (void) showMETARData:(WWPointPlacemark*)pm
 {
-    // Compute a screen position that corresponds with the placemarks' position, then show data popover at
-    // that screen position.
-
-    WWPosition* pmPos = [pm position];
-    WWVec4* pmPoint = [[WWVec4 alloc] init];
-    WWVec4* screenPoint = [[WWVec4 alloc] init];
-
-    [[[_wwv sceneController] globe] computePointFromPosition:[pmPos latitude] longitude:[pmPos longitude]
-                                                    altitude:[pmPos altitude] outputPoint:pmPoint];
-    [[[_wwv sceneController] navigatorState] project:pmPoint result:screenPoint];
-
-    CGPoint uiPoint = [[[_wwv sceneController] navigatorState] convertPointToView:screenPoint];
-    CGRect rect = CGRectMake(uiPoint.x, uiPoint.y, 1, 1);
-
     // Give the controller the placemark's dictionary.
     [metarDataViewController setEntries:[pm userObject]];
 
@@ -802,27 +904,13 @@
 
     if (metarDataPopoverController == nil)
         metarDataPopoverController = [[UIPopoverController alloc] initWithContentViewController:metarDataViewController];
-    [metarDataPopoverController presentPopoverFromRect:rect inView:_wwv
-                              permittedArrowDirections:UIPopoverArrowDirectionAny animated:YES];
+    [metarDataPopoverController presentPopoverFromPosition:[pm position] inView:_wwv
+                                  permittedArrowDirections:UIPopoverArrowDirectionAny animated:YES];
     [metarDataViewController flashScrollIndicator];
 }
 
 - (void) showPIREPData:(WWPointPlacemark*)pm
 {
-    // Compute a screen position that corresponds with the placemarks' position, then show data popover at
-    // that screen position.
-
-    WWPosition* pmPos = [pm position];
-    WWVec4* pmPoint = [[WWVec4 alloc] init];
-    WWVec4* screenPoint = [[WWVec4 alloc] init];
-
-    [[[_wwv sceneController] globe] computePointFromPosition:[pmPos latitude] longitude:[pmPos longitude]
-                                                    altitude:[pmPos altitude] outputPoint:pmPoint];
-    [[[_wwv sceneController] navigatorState] project:pmPoint result:screenPoint];
-
-    CGPoint uiPoint = [[[_wwv sceneController] navigatorState] convertPointToView:screenPoint];
-    CGRect rect = CGRectMake(uiPoint.x, uiPoint.y, 1, 1);
-
     // Give the controller the placemark's dictionary.
     [pirepDataViewController setEntries:[pm userObject]];
 
@@ -832,38 +920,25 @@
 
     if (pirepDataPopoverController == nil)
         pirepDataPopoverController = [[UIPopoverController alloc] initWithContentViewController:pirepDataViewController];
-    [pirepDataPopoverController presentPopoverFromRect:rect inView:_wwv
-                              permittedArrowDirections:UIPopoverArrowDirectionAny animated:YES];
+    [pirepDataPopoverController presentPopoverFromPosition:[pm position] inView:_wwv
+                                  permittedArrowDirections:UIPopoverArrowDirectionAny animated:YES];
     [pirepDataViewController flashScrollIndicator];
 }
 
 - (void) showWeatherCam:(WWPointPlacemark*)pm
 {
-    // Compute a screen position that corresponds with the placemarks' position, then show data popover at
-    // that screen position.
-
-    WWPosition* pmPos = [pm position];
-    WWVec4* pmPoint = [[WWVec4 alloc] init];
-    WWVec4* screenPoint = [[WWVec4 alloc] init];
-
-    [[[_wwv sceneController] globe] computePointFromPosition:[pmPos latitude] longitude:[pmPos longitude]
-                                                    altitude:[pmPos altitude] outputPoint:pmPoint];
-    [[[_wwv sceneController] navigatorState] project:pmPoint result:screenPoint];
-
-    CGPoint uiPoint = [[[_wwv sceneController] navigatorState] convertPointToView:screenPoint];
-    CGRect rect = CGRectMake(uiPoint.x, uiPoint.y, 1, 1);
-
     // Give the controller the placemark's dictionary.
     [weatherCamViewController setSiteInfo:[pm userObject]];
 
     if (weatherCamPopoverController == nil)
         weatherCamPopoverController = [[UIPopoverController alloc] initWithContentViewController:weatherCamViewController];
-    [weatherCamPopoverController presentPopoverFromRect:rect inView:_wwv
-                               permittedArrowDirections:0 animated:YES];
+    [weatherCamPopoverController presentPopoverFromPosition:[pm position] inView:_wwv
+                                   permittedArrowDirections:0 animated:YES];
 }
 
-- (void) selectFlightRoute:(FlightRoute*)flightRoute
+- (void) selectFlightRoute:(WWPickedObject*)po
 {
+    FlightRoute* flightRoute = [[po userObject] objectForKey:@"flightRoute"];
     [self presentSimulationControllerWithFlightRoute:flightRoute];
 }
 

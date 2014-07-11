@@ -1,9 +1,8 @@
-/*
- * Copyright (C) 2012 United States Government as represented by the Administrator of the
- * National Aeronautics and Space Administration.
+/**
+ * Copyright (C) 2014, United States Government as represented by the
+ * Administrator of the National Aeronautics and Space Administration,
  * All Rights Reserved.
  */
-
 package gov.nasa.worldwind.render.markers;
 
 import gov.nasa.worldwind.Disposable;

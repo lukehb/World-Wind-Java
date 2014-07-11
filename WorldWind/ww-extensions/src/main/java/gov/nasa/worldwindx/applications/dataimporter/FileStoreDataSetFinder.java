@@ -1,9 +1,8 @@
-/*
- * Copyright (C) 2013 United States Government as represented by the Administrator of the
- * National Aeronautics and Space Administration.
+/**
+ * Copyright (C) 2014, United States Government as represented by the
+ * Administrator of the National Aeronautics and Space Administration,
  * All Rights Reserved.
  */
-
 package gov.nasa.worldwindx.applications.dataimporter;
 
 import gov.nasa.worldwind.cache.FileStore;

@@ -1,9 +1,8 @@
-/*
- * Copyright (C) 2012 United States Government as represented by the Administrator of the
- * National Aeronautics and Space Administration.
+/**
+ * Copyright (C) 2014, United States Government as represented by the
+ * Administrator of the National Aeronautics and Space Administration,
  * All Rights Reserved.
  */
-
 /*
 Performance statistics for:
 MacBook Pro (Windows 7)  -   2.8 Ghz  -  4 GB RAM  -  Intel Core i7 CPU  -  Nvidia GeForce GT 330

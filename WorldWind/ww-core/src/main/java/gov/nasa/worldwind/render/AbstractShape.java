@@ -34,8 +34,8 @@ import java.io.*;
  * @version $Id$
  */
 public abstract class AbstractShape extends WWObjectImpl
-    implements Highlightable, OrderedRenderable, Movable, ExtentHolder, GeographicExtent, Exportable, Restorable,
-    PreRenderable
+    implements Highlightable, OrderedRenderable, Movable, Movable2, ExtentHolder, GeographicExtent, Exportable,
+    Restorable, PreRenderable, Attributable
 {
     /** The default interior color. */
     protected static final Material DEFAULT_INTERIOR_MATERIAL = Material.LIGHT_GRAY;
@@ -73,7 +73,7 @@ public abstract class AbstractShape extends WWObjectImpl
      * @param terrain the {@link Terrain} to use when computing the shape's geometry.
      *
      * @return a list of intersections identifying where the line intersects the shape, or null if the line does not
-     *         intersect the shape.
+     * intersect the shape.
      *
      * @throws InterruptedException if the operation is interrupted.
      * @see Terrain
@@ -107,8 +107,8 @@ public abstract class AbstractShape extends WWObjectImpl
      * @param dc the current draw context.
      *
      * @return true if the ordered renderable state was successfully computed, otherwise false, in which case the
-     *         current pick or render pass is terminated for this shape. Subclasses should return false if it is not
-     *         possible to create the ordered renderable state.
+     * current pick or render pass is terminated for this shape. Subclasses should return false if it is not possible to
+     * create the ordered renderable state.
      *
      * @see #pick(DrawContext, java.awt.Point)
      * @see #render(DrawContext)
@@ -336,11 +336,30 @@ public abstract class AbstractShape extends WWObjectImpl
         this.initialize();
     }
 
+    protected AbstractShape(AbstractShape source)
+    {
+        this.normalAttrs = new BasicShapeAttributes(source.normalAttrs);
+        this.highlightAttrs = new BasicShapeAttributes(source.highlightAttrs);
+        this.highlighted = source.highlighted;
+        this.visible = source.visible;
+        this.altitudeMode = source.altitudeMode;
+        this.enableBatchRendering = source.enableBatchRendering;
+        this.enableBatchPicking = source.enableBatchPicking;
+        this.enableDepthOffset = source.enableDepthOffset;
+        this.outlinePickWidth = source.outlinePickWidth;
+        this.sector = source.sector;
+        this.referencePosition = source.referencePosition;
+        this.delegateOwner = source.delegateOwner;
+
+        this.initialize();
+    }
+
     /** Invalidates computed values. Called when this shape's contents or certain attributes change. */
     protected void reset()
     {
         this.shapeDataCache.removeAllEntries();
         this.sector = null;
+        this.surfaceShape = null;
     }
 
     /**
@@ -640,7 +659,7 @@ public abstract class AbstractShape extends WWObjectImpl
      * rendering.
      *
      * @return the Cartesian coordinates corresponding to this shape's reference position, or null if the point has not
-     *         been computed.
+     * been computed.
      */
     public Vec4 getReferencePoint()
     {
@@ -1012,7 +1031,7 @@ public abstract class AbstractShape extends WWObjectImpl
      * it's often not necessary as well, and can be disabled.
      *
      * @return true if the terrain dependent geometry is updated as the eye distance changes, otherwise false. The
-     *         default is true.
+     * default is true.
      */
     public boolean isViewDistanceExpiration()
     {
@@ -1161,6 +1180,8 @@ public abstract class AbstractShape extends WWObjectImpl
      */
     protected void doDrawOrderedRenderable(DrawContext dc, PickSupport pickCandidates)
     {
+        this.currentData = (AbstractShapeData) this.shapeDataCache.getEntry(dc.getGlobe());
+
         GL2 gl = dc.getGL().getGL2(); // GL initialization checks for GL2 compatibility.
 
         dc.getView().setReferenceCenter(dc, this.getCurrentData().getReferencePoint());
@@ -1216,7 +1237,7 @@ public abstract class AbstractShape extends WWObjectImpl
      *                 GL_TRANSFORM_BIT</code>.
      *
      * @return the stack handler used to set the OpenGL state. Callers should use this to set additional state,
-     *         especially state indicated in the attribute mask argument.
+     * especially state indicated in the attribute mask argument.
      */
     protected OGLStackHandler beginDrawing(DrawContext dc, int attrMask)
     {
@@ -1439,6 +1460,29 @@ public abstract class AbstractShape extends WWObjectImpl
     }
 
     /**
+     * Computes a model-coordinate point from a position, applying this shape's altitude mode, and using
+     * <code>CLAMP_TO_GROUND</code> if the current globe is 2D.
+     *
+     * @param dc       the current draw context.
+     * @param terrain  the terrain to compute a point relative to the globe's surface.
+     * @param position the position to compute a point for.
+     *
+     * @return the model-coordinate point corresponding to the position and this shape's shape type.
+     */
+    protected Vec4 computePoint(DrawContext dc, Terrain terrain, Position position)
+    {
+        if (this.getAltitudeMode() == WorldWind.CLAMP_TO_GROUND || dc.is2DGlobe())
+            return terrain.getSurfacePoint(position.getLatitude(), position.getLongitude(), 0d);
+        else if (this.getAltitudeMode() == WorldWind.RELATIVE_TO_GROUND)
+            return terrain.getSurfacePoint(position);
+
+        // Raise the shape to accommodate vertical exaggeration applied to the terrain.
+        double height = position.getElevation() * terrain.getVerticalExaggeration();
+
+        return terrain.getGlobe().computePointFromPosition(position, height);
+    }
+
+    /**
      * Computes this shape's approximate extent from its positions.
      *
      * @param globe                the globe to use to compute the extent.
@@ -1446,7 +1490,7 @@ public abstract class AbstractShape extends WWObjectImpl
      * @param positions            the positions to compute the extent for.
      *
      * @return the extent, or null if an extent cannot be computed. Null is returned if either <code>globe</code> or
-     *         <code>positions</code> is null.
+     * <code>positions</code> is null.
      */
     protected Extent computeExtentFromPositions(Globe globe, double verticalExaggeration,
         Iterable<? extends LatLon> positions)
@@ -1491,7 +1535,7 @@ public abstract class AbstractShape extends WWObjectImpl
      * @param dc the current draw context.
      *
      * @return an array containing the coordinate vertex buffer ID in the first position and the index vertex buffer ID
-     *         in the second position.
+     * in the second position.
      */
     protected int[] getVboIds(DrawContext dc)
     {
@@ -1554,6 +1598,12 @@ public abstract class AbstractShape extends WWObjectImpl
             return;
 
         this.moveTo(refPos.add(delta));
+    }
+
+    @Override
+    public void moveTo(Globe globe, Position position)
+    {
+        this.moveTo(position); // TODO: Update all implementers of this method to use the Movable2 interface
     }
 
     public String isExportFormatSupported(String mimeType)
@@ -1647,7 +1697,7 @@ public abstract class AbstractShape extends WWObjectImpl
 
         xmlWriter.writeStartElement("Placemark");
 
-        String property = (String) getValue(AVKey.DISPLAY_NAME);
+        String property = getStringValue(AVKey.DISPLAY_NAME);
         if (property != null)
         {
             xmlWriter.writeStartElement("name");

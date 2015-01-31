@@ -6,6 +6,7 @@
 package gov.nasa.worldwind.render;
 
 import gov.nasa.worldwind.geom.*;
+import gov.nasa.worldwind.globes.Globe2D;
 import gov.nasa.worldwind.terrain.SectorGeometryList;
 import gov.nasa.worldwind.util.*;
 
@@ -98,6 +99,13 @@ public class DeclutteringTextRenderer
             if (!text.isVisible())
                 continue;
 
+            if (dc.is2DGlobe())
+            {
+                Sector limits = ((Globe2D)dc.getGlobe()).getProjection().getProjectionLimits();
+                if (limits != null && !limits.contains(text.getPosition()))
+                    continue;
+            }
+
             Angle lat = text.getPosition().getLatitude();
             Angle lon = text.getPosition().getLongitude();
 
@@ -110,7 +118,7 @@ public class DeclutteringTextRenderer
                 continue;
 
             double eyeDistance = dc.getView().getEyePoint().distanceTo3(textPoint);
-            if (eyeDistance > horizon)
+            if (!dc.is2DGlobe() && eyeDistance > horizon)
                 continue;
 
             if (!frustumInModelCoords.contains(textPoint))

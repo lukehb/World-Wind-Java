@@ -24,6 +24,8 @@
 #import "WeatherCamLayer.h"
 #import "DAFIFLayer.h"
 #import "WaypointLayer.h"
+#import "AircraftTrackLayer.h"
+#import "AircraftTrackDetailController.h"
 
 @implementation LayerListController
 
@@ -34,7 +36,7 @@
     _wwv = wwv;
 
     [[self navigationItem] setTitle:@"Overlays"];
-    [self setPreferredContentSize:CGSizeMake(320, 450)];
+    [self setPreferredContentSize:CGSizeMake(320, 500)];
 
     // Set up to handle layer list changes.
     [[NSNotificationCenter defaultCenter] addObserver:self
@@ -60,12 +62,6 @@
 - (void) flashScrollIndicator
 {
     [[self tableView] performSelector:@selector(flashScrollIndicators) withObject:nil afterDelay:0];
-}
-
-- (void) navigationController:(UINavigationController*)navigationController willShowViewController:(UIViewController*)viewController animated:(BOOL)animated
-{
-    // This keeps all the nested popover controllers the same size as this top-level controller.
-    viewController.preferredContentSize = navigationController.topViewController.view.frame.size;
 }
 
 - (NSInteger) numberOfSectionsInTableView:(UITableView*)tableView
@@ -190,6 +186,12 @@
         TerrainAltitudeDetailController* detailController =
                 [[TerrainAltitudeDetailController alloc] initWithLayer:(WWElevationShadingLayer*) layer];
 
+        [((UINavigationController*) [self parentViewController]) pushViewController:detailController animated:YES];
+    }
+    else if ([layer isKindOfClass:[AircraftTrackLayer class]])
+    {
+        AircraftTrackDetailController* detailController =
+                [[AircraftTrackDetailController alloc] initWithLayer:(AircraftTrackLayer*) layer];
         [((UINavigationController*) [self parentViewController]) pushViewController:detailController animated:YES];
     }
 }

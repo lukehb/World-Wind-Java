@@ -98,6 +98,7 @@ public class FlatGlobe extends EllipsoidalGlobe implements Globe2D
                 return false;
             if (Double.compare(that.verticalExaggeration, verticalExaggeration) != 0)
                 return false;
+            //noinspection RedundantIfStatement
             if (projection != null ? !projection.equals(that.projection)
                 : that.projection != null)
                 return false;
@@ -131,32 +132,6 @@ public class FlatGlobe extends EllipsoidalGlobe implements Globe2D
     public GlobeStateKey getGlobeStateKey()
     {
         return new FlatStateKey(this);
-    }
-
-    @Override
-    public double getRadiusAt(Angle latitude, Angle longitude)
-    {
-        // TODO: Find a more accurate workaround than getMaximumRadius()
-        if (latitude == null || longitude == null)
-        {
-            String msg = Logging.getMessage("nullValue.AngleIsNull");
-            Logging.logger().severe(msg);
-            throw new IllegalArgumentException(msg);
-        }
-        return getMaximumRadius();
-    }
-
-    @Override
-    public double getRadiusAt(LatLon latLon)
-    {
-        // TODO: Find a more accurate workaround then getMaximumRadius()
-        if (latLon == null)
-        {
-            String msg = Logging.getMessage("nullValue.LatLonIsNull");
-            Logging.logger().severe(msg);
-            throw new IllegalArgumentException(msg);
-        }
-        return getMaximumRadius();
     }
 
     /**
@@ -208,8 +183,6 @@ public class FlatGlobe extends EllipsoidalGlobe implements Globe2D
         }
 
         this.projection = projection;
-
-        this.setTessellator(null);
     }
 
     /**
@@ -217,7 +190,7 @@ public class FlatGlobe extends EllipsoidalGlobe implements Globe2D
      *
      * @return The active projection.
      *
-     * @see #setProjection(GeographicProjection
+     * @see #setProjection
      */
     public GeographicProjection getProjection()
     {
@@ -348,7 +321,6 @@ public class FlatGlobe extends EllipsoidalGlobe implements Globe2D
     @Override
     public Vec4 computeNorthPointingTangentAtLocation(Angle latitude, Angle longitude)
     {
-        // Flat World Note: return constant (OK)
         if (latitude == null || longitude == null)
         {
             String message = Logging.getMessage("nullValue.LatitudeOrLongitudeIsNull");
@@ -356,7 +328,7 @@ public class FlatGlobe extends EllipsoidalGlobe implements Globe2D
             throw new IllegalArgumentException(message);
         }
 
-        return Vec4.UNIT_Y;
+        return this.projection.northPointingTangent(this, latitude, longitude);
     }
 
     @Override
@@ -369,22 +341,16 @@ public class FlatGlobe extends EllipsoidalGlobe implements Globe2D
             throw new IllegalArgumentException(message);
         }
 
-        Vec4 point = this.geodeticToCartesian(latitude, longitude, metersElevation);
-        return Matrix.fromTranslation(point);
-    }
+        // Compute the origin as the cartesian coordinate at (latitude, longitude, metersElevation).
+        Vec4 origin = this.geodeticToCartesian(latitude, longitude, metersElevation);
 
-    @Override
-    public Matrix computeSurfaceOrientationAtPosition(Position position)
-    {
-        if (position == null)
-        {
-            String message = Logging.getMessage("nullValue.PositionIsNull");
-            Logging.logger().severe(message);
-            throw new IllegalArgumentException(message);
-        }
+        // Compute the the local xyz coordinate axes at (latitude, longitude, metersElevation) as follows:
+        Vec4 z = this.computeSurfaceNormalAtLocation(latitude, longitude);
+        Vec4 y = this.computeNorthPointingTangentAtLocation(latitude, longitude);
+        Vec4 x = y.cross3(z); // east pointing tangent
+        Vec4[] axes = {x, y, z};
 
-        return this.computeSurfaceOrientationAtPosition(position.getLatitude(), position.getLongitude(),
-            position.getElevation());
+        return Matrix.fromLocalOrientation(origin, axes);
     }
 
     @Override
@@ -428,6 +394,12 @@ public class FlatGlobe extends EllipsoidalGlobe implements Globe2D
 
         return this.projection.geographicToCartesian(this, latitude, longitude, metersElevation,
             this.offsetVector);
+    }
+
+    @Override
+    protected void geodeticToCartesian(Sector sector, int numLat, int numLon, double[] metersElevation, Vec4[] out)
+    {
+        this.projection.geographicToCartesian(this, sector, numLat, numLon, metersElevation, this.offsetVector, out);
     }
 
     @Override

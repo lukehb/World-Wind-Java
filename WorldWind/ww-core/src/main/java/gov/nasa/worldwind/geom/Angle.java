@@ -7,8 +7,7 @@ package gov.nasa.worldwind.geom;
 
 import gov.nasa.worldwind.util.Logging;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.regex.*;
 
 /**
  * Represents a geometric angle. Instances of <code>Angle</code> are immutable. An angle can be obtained through the
@@ -443,6 +442,11 @@ public class Angle implements Comparable<Angle>
         return Angle.fromRadians(Math.asin(sine));
     }
 
+    public static double arctanh(double radians)
+    {
+        return 0.5 * Math.log((1 + radians) / (1 - radians));
+    }
+
     /**
      * Obtains the cosine of this angle.
      *
@@ -546,6 +550,34 @@ public class Angle implements Comparable<Angle>
     }
 
     /**
+     * Limits a specified angle to be within a specified minimum and maximum.
+     * <p/>
+     * The returned angle is undefined if min > max. Otherwise, this method's return value is equivalent to the
+     * following:
+     * <p/>
+     * <ul> <li>min - If value < min</li> <li>max - If value > max</li> <li>value - If min <= value <= max</li> </ul>
+     *
+     * @param value The angle to clamp.
+     * @param min   The minimum angle to clamp to.
+     * @param max   The maximum angle to clamp to.
+     *
+     * @return The clamped angle.
+     *
+     * @throws IllegalArgumentException if any argument is null.
+     */
+    public static Angle clamp(Angle value, Angle min, Angle max)
+    {
+        if (value == null || min == null || max == null)
+        {
+            String message = Logging.getMessage("nullValue.AngleIsNull");
+            Logging.logger().severe(message);
+            throw new IllegalArgumentException(message);
+        }
+
+        return value.degrees < min.degrees ? min : (value.degrees > max.degrees ? max : value);
+    }
+
+    /**
      * Linearly interpolates between two angles.
      *
      * @param amount the interpolant.
@@ -608,13 +640,19 @@ public class Angle implements Comparable<Angle>
         return 0;
     }
 
-    private static double normalizedDegreesLatitude(double degrees)
+    public static double normalizedDegrees(double degrees)
+    {
+        double a = degrees % 360;
+        return a > 180 ? a - 360 : a < -180 ? 360 + a : a;
+    }
+
+    public static double normalizedDegreesLatitude(double degrees)
     {
         double lat = degrees % 180;
         return lat > 90 ? 180 - lat : lat < -90 ? -180 - lat : lat;
     }
 
-    private static double normalizedDegreesLongitude(double degrees)
+    public static double normalizedDegreesLongitude(double degrees)
     {
         double lon = degrees % 360;
         return lon > 180 ? lon - 360 : lon < -180 ? 360 + lon : lon;
@@ -624,6 +662,18 @@ public class Angle implements Comparable<Angle>
     {
         double deg = degrees % 360;
         return deg < 0.0 ? deg + 360 : deg;
+    }
+
+    public static Angle normalizedAngle(Angle unnormalizedAngle)
+    {
+        if (unnormalizedAngle == null)
+        {
+            String msg = Logging.getMessage("nullValue.AngleIsNull");
+            Logging.logger().severe(msg);
+            throw new IllegalArgumentException(msg);
+        }
+
+        return Angle.fromDegrees(normalizedDegrees(unnormalizedAngle.degrees));
     }
 
     public static Angle normalizedLatitude(Angle unnormalizedAngle)
@@ -660,6 +710,11 @@ public class Angle implements Comparable<Angle>
         }
 
         return Angle.fromDegrees(normalizedDegreesAbsolute(unnormalizedAngle.degrees));
+    }
+
+    public Angle normalize()
+    {
+        return normalizedAngle(this);
     }
 
     public Angle normalizedLatitude()

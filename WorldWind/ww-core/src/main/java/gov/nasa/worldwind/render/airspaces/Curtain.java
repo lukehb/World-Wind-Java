@@ -10,7 +10,7 @@ import gov.nasa.worldwind.cache.Cacheable;
 import gov.nasa.worldwind.geom.*;
 import gov.nasa.worldwind.geom.Box;
 import gov.nasa.worldwind.globes.Globe;
-import gov.nasa.worldwind.render.DrawContext;
+import gov.nasa.worldwind.render.*;
 import gov.nasa.worldwind.util.*;
 
 import javax.media.opengl.*;
@@ -45,6 +45,18 @@ public class Curtain extends AbstractAirspace
 
     public Curtain()
     {
+        this.makeDefaultDetailLevels();
+    }
+
+    public Curtain(Curtain source)
+    {
+        super(source);
+
+        this.addLocations(source.locations);
+        this.pathType = source.pathType;
+        this.splitThreshold = source.splitThreshold;
+        this.applyPositionAltitude = source.applyPositionAltitude;
+
         this.makeDefaultDetailLevels();
     }
 
@@ -109,12 +121,15 @@ public class Curtain extends AbstractAirspace
     protected void addLocations(Iterable<? extends LatLon> newLocations)
     {
         if (newLocations != null)
+        {
             for (LatLon ll : newLocations)
             {
                 if (ll != null)
                     this.locations.add(ll);
             }
-        this.setExtentOutOfDate();
+        }
+
+        this.invalidateAirspaceData();
     }
 
     public String getPathType()
@@ -132,7 +147,7 @@ public class Curtain extends AbstractAirspace
         }
 
         this.pathType = pathType;
-        this.setExtentOutOfDate();
+        this.invalidateAirspaceData();
     }
 
     public boolean isApplyPositionAltitude()
@@ -174,6 +189,54 @@ public class Curtain extends AbstractAirspace
         return points;
     }
 
+    @Override
+    protected SurfaceShape createSurfaceShape()
+    {
+        return new SurfacePolyline();
+    }
+
+    @Override
+    protected void updateSurfaceShape(DrawContext dc, SurfaceShape shape)
+    {
+        super.updateSurfaceShape(dc, shape);
+
+        // Display the airspace's interior color when its outline is disabled but its interior is enabled. This causes
+        // the surface shape to display the color most similar to the 3D airspace.
+        if (!this.getActiveAttributes().isDrawOutline() && this.getActiveAttributes().isDrawInterior())
+        {
+            shape.getAttributes().setDrawOutline(true);
+            shape.getAttributes().setOutlineMaterial(this.getActiveAttributes().getInteriorMaterial());
+        }
+    }
+
+    @Override
+    protected void regenerateSurfaceShape(DrawContext dc, SurfaceShape shape)
+    {
+        ((SurfacePolyline) this.surfaceShape).setLocations(this.getLocations());
+        this.surfaceShape.setPathType(this.getPathType());
+    }
+
+    protected void doMoveTo(Globe globe, Position oldRef, Position newRef)
+    {
+        if (oldRef == null)
+        {
+            String message = "nullValue.OldRefIsNull";
+            Logging.logger().severe(message);
+            throw new IllegalArgumentException(message);
+        }
+        if (newRef == null)
+        {
+            String message = "nullValue.NewRefIsNull";
+            Logging.logger().severe(message);
+            throw new IllegalArgumentException(message);
+        }
+
+        List<LatLon> newLocations = LatLon.computeShiftedLocations(globe, oldRef, newRef, this.getLocations());
+        this.setLocations(newLocations);
+
+        super.doMoveTo(oldRef, newRef);
+    }
+
     protected void doMoveTo(Position oldRef, Position newRef)
     {
         if (oldRef == null)
@@ -200,6 +263,7 @@ public class Curtain extends AbstractAirspace
             double azimuth = LatLon.greatCircleAzimuth(oldRef, ll).radians;
             newLocations[i] = LatLon.greatCircleEndPosition(newRef, azimuth, distance);
         }
+
         this.setLocations(Arrays.asList(newLocations));
     }
 
@@ -372,7 +436,7 @@ public class Curtain extends AbstractAirspace
         CurtainGeometry geom = this.getCurtainGeometry(dc, count, locations, pathType, splitThreshold,
             altitudes, terrainConformant, referenceCenter);
 
-        this.getRenderer().drawGeometry(dc, geom.getFillIndexGeometry(), geom.getVertexGeometry());
+        this.drawGeometry(dc, geom.getFillIndexGeometry(), geom.getVertexGeometry());
     }
 
     protected void drawCurtainOutline(DrawContext dc, int count, LatLon[] locations, String pathType,
@@ -383,7 +447,7 @@ public class Curtain extends AbstractAirspace
         CurtainGeometry geom = this.getCurtainGeometry(dc, count, locations, pathType, splitThreshold,
             altitudes, terrainConformant, referenceCenter);
 
-        this.getRenderer().drawGeometry(dc, geom.getOutlineIndexGeometry(), geom.getVertexGeometry());
+        this.drawGeometry(dc, geom.getOutlineIndexGeometry(), geom.getVertexGeometry());
     }
 
     protected void makeCurtainGeometry(DrawContext dc, int count, LatLon[] locations, String pathType,

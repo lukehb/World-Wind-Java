@@ -36,6 +36,22 @@ public class SurfaceEllipse extends AbstractSurfaceShape
     }
 
     /**
+     * Creates a shallow copy of the specified source shape.
+     *
+     * @param source the shape to copy.
+     */
+    public SurfaceEllipse(SurfaceEllipse source)
+    {
+        super(source);
+
+        this.center = source.center;
+        this.majorRadius = source.majorRadius;
+        this.minorRadius = source.minorRadius;
+        this.heading = source.heading;
+        this.intervals = source.intervals;
+    }
+
+    /**
      * Constructs a new surface ellipse with the specified normal (as opposed to highlight) attributes, default center
      * location, default radii, and default heading. Modifying the attribute reference after calling this constructor
      * causes this shape's appearance to change accordingly.
@@ -423,6 +439,15 @@ public class SurfaceEllipse extends AbstractSurfaceShape
         this.setCenter(LatLon.greatCircleEndPosition(newReferencePosition, heading, pathLength));
     }
 
+    protected void doMoveTo(Globe globe, Position oldReferencePosition, Position newReferencePosition)
+    {
+        List<LatLon> locations = new ArrayList<LatLon>(1);
+        locations.add(this.getCenter());
+        List<LatLon> newLocations = LatLon.computeShiftedLocations(globe, oldReferencePosition, newReferencePosition,
+            locations);
+        this.setCenter(newLocations.get(0));
+    }
+
     protected List<LatLon> computeLocations(Globe globe, int intervals)
     {
         if (globe == null)
@@ -478,16 +503,8 @@ public class SurfaceEllipse extends AbstractSurfaceShape
         return locations;
     }
 
-    protected List<List<LatLon>> createGeometry(Globe globe, SurfaceTileDrawContext sdc)
+    protected List<List<LatLon>> createGeometry(Globe globe, double edgeIntervalsPerDegree)
     {
-        if (globe == null)
-        {
-            String message = Logging.getMessage("nullValue.GlobeIsNull");
-            Logging.logger().severe(message);
-            throw new IllegalArgumentException(message);
-        }
-
-        double edgeIntervalsPerDegree = this.computeEdgeIntervalsPerDegree(sdc);
         int intervals = this.computeNumIntervals(globe, edgeIntervalsPerDegree);
 
         List<LatLon> drawLocations = this.computeLocations(globe, intervals);

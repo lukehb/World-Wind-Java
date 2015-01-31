@@ -42,17 +42,19 @@
 #import "ViewSelectionController.h"
 #import "TerrainProfileController.h"
 #import "AircraftLayer.h"
+#import "AircraftTrackLayer.h"
 #import "TerrainAltitudeLayer.h"
 #import "LocationTrackingViewController.h"
-#import "WWDAFIFLayer.h"
+//#import "WWDAFIFLayer.h"
 #import "WWBingLayer.h"
 #import "AddWaypointPopoverController.h"
 #import "EditWaypointPopoverController.h"
 #import "UIPopoverController+TAIGAAdditions.h"
 #import "FAASectionalsLayer.h"
-#import "DAFIFLayer.h"
+//#import "DAFIFLayer.h"
 #import "SUALayer.h"
 #import "SUADataViewController.h"
+#import "DataBarViewController.h"
 
 @implementation MovingMapViewController
 {
@@ -69,6 +71,7 @@
     BOOL isShowRouteView;
 
     UIToolbar* topToolBar;
+    DataBarViewController* dataBar;
     UIBarButtonItem* connectivityButton;
     UIBarButtonItem* overlaysButton;
     UIBarButtonItem* quickViewsButton;
@@ -95,6 +98,7 @@
 
     WaypointLayer* waypointLayer;
     AircraftLayer* aircraftLayer;
+    AircraftTrackLayer* aircraftTrackLayer;
     WWRenderableLayer* flightRouteLayer;
     FAASectionalsLayer* faaChartsLayer;
     TerrainAltitudeLayer* terrainAltitudeLayer;
@@ -102,7 +106,7 @@
     PIREPLayer* pirepLayer;
     WeatherCamLayer* weatherCamLayer;
     CompassLayer* compassLayer;
-    WWDAFIFLayer* dafifLayer;
+//    WWDAFIFLayer* dafifLayer;
     SUALayer* suaLayer;
 
     UITapGestureRecognizer* tapGestureRecognizer;
@@ -201,6 +205,7 @@
 
     [self createWorldWindView];
     [self createTopToolbar];
+    [self createDataBar];
     [self createChartsController];
     [self createRouteViewController];
     [self createSimulationController];
@@ -210,7 +215,7 @@
     viewSelectionController = [[ViewSelectionController alloc] init];
 
     float x = 20;//myFrame.size.width - 220;
-    float y = myFrame.size.height - 70;
+    float y = myFrame.size.height - 150;
     scaleBarView = [[ScaleBarView alloc] initWithFrame:CGRectMake(x, y, 200, 50) worldWindView:_wwv];
     scaleBarView.autoresizingMask = UIViewAutoresizingFlexibleRightMargin | UIViewAutoresizingFlexibleTopMargin;
     [self.view addSubview:scaleBarView];
@@ -322,6 +327,12 @@
             [[NSString alloc] initWithFormat:@"gov.nasa.worldwind.taiga.layer.enabled.%@", [waypointLayer displayName]] defaultValue:NO]];
     [layers addLayer:waypointLayer];
 
+    aircraftTrackLayer = [[AircraftTrackLayer alloc] init];
+    [aircraftTrackLayer setEnabled:[Settings                                 getBoolForName:
+            [[NSString alloc] initWithFormat:@"gov.nasa.worldwind.taiga.layer.enabled.%@",
+                                             [aircraftTrackLayer displayName]] defaultValue:YES]];
+    [layers addLayer:aircraftTrackLayer];
+
     aircraftLayer = [[AircraftLayer alloc] init];
     [[aircraftLayer userTags] setObject:@"" forKey:TAIGA_HIDDEN_LAYER];
     [layers addLayer:aircraftLayer];
@@ -341,11 +352,11 @@
             [[NSString alloc] initWithFormat:@"gov.nasa.worldwind.taiga.layer.enabled.%@",
                                              [faaChartsLayer displayName]] defaultValue:NO]];
     [[[_wwv sceneController] layers] addLayer:faaChartsLayer];
-
-    dafifLayer = [[DAFIFLayer alloc] init];
-    [dafifLayer setEnabled:[Settings                                                                               getBoolForName:
-            [[NSString alloc] initWithFormat:@"gov.nasa.worldwind.taiga.layer.enabled.%@", [dafifLayer displayName]] defaultValue:YES]];
-    [[[_wwv sceneController] layers] addLayer:dafifLayer];
+//
+//    dafifLayer = [[DAFIFLayer alloc] init];
+//    [dafifLayer setEnabled:[Settings                                                                               getBoolForName:
+//            [[NSString alloc] initWithFormat:@"gov.nasa.worldwind.taiga.layer.enabled.%@", [dafifLayer displayName]] defaultValue:YES]];
+//    [[[_wwv sceneController] layers] addLayer:dafifLayer];
 
     suaLayer = [[SUALayer alloc] init];
     [suaLayer setEnabled:[Settings                                                                               getBoolForName:
@@ -636,6 +647,16 @@
     [self.view addSubview:[locationTrackingViewController view]];
 }
 
+- (void) createDataBar
+{
+    CGRect frm = CGRectMake(0, self.view.frame.size.height - TAIGA_TOOLBAR_HEIGHT,
+            self.view.frame.size.width, TAIGA_TOOLBAR_HEIGHT);
+    dataBar = [[DataBarViewController alloc] initWithFrame:frm];
+
+    [self.view addSubview:[dataBar view]];
+    [self addChildViewController:dataBar];
+}
+
 - (void) createTopToolbar
 {
     topToolBar = [[UIToolbar alloc] init];
@@ -643,6 +664,8 @@
     [topToolBar setAutoresizingMask:UIViewAutoresizingFlexibleWidth];
     [topToolBar setBarStyle:UIBarStyleBlack];
     [topToolBar setTranslucent:NO];
+
+    [topToolBar setBackgroundColor:[UIColor clearColor]];
 
     CGSize size = CGSizeMake(140, TAIGA_TOOLBAR_HEIGHT);
 
@@ -739,7 +762,6 @@
     {
         UINavigationController* navController = [[UINavigationController alloc]
                 initWithRootViewController:layerListController];
-        [navController setDelegate:layerListController];
         layerListPopoverController = [[UIPopoverController alloc] initWithContentViewController:navController];
     }
 
@@ -761,7 +783,6 @@
     {
         UINavigationController* navController = [[UINavigationController alloc]
                 initWithRootViewController:viewSelectionController];
-        [navController setDelegate:viewSelectionController];
         viewSelectionPopoverController = [[UIPopoverController alloc] initWithContentViewController:navController];
     }
 
@@ -866,7 +887,7 @@
             {
                 if ([[[topObject parentLayer] displayName] isEqualToString:@"METAR Weather"])
                     [self showMETARData:pm];
-                else if ([[[topObject parentLayer] displayName] isEqualToString:@"PIREPS"])
+                else if ([[[topObject parentLayer] displayName] isEqualToString:@"PIREPs"])
                     [self showPIREPData:pm];
                 else if ([[[topObject parentLayer] displayName] isEqualToString:@"Weather Cams"])
                     [self showWeatherCam:pm];
@@ -994,8 +1015,8 @@
 
 - (void) gpsQualityNotification:(NSNotification*)notification
 {
-    CLLocation* location = (CLLocation*) [notification object];
-    [self showNoGPSSign:trackingLocation && ([notification object] == nil || [location horizontalAccuracy] < 0)];
+    NSNumber* quality = (NSNumber*) [notification object];
+    [self showNoGPSSign:[notification object] == nil || [quality doubleValue] <= 0];
 }
 
 - (void) showNoGPSSign:(bool)yn

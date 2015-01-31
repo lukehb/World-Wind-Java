@@ -8,7 +8,6 @@ package gov.nasa.worldwind.formats.shapefile;
 import com.jogamp.common.nio.Buffers;
 import gov.nasa.worldwind.cache.*;
 import gov.nasa.worldwind.geom.*;
-import gov.nasa.worldwind.globes.Globe;
 import gov.nasa.worldwind.layers.Layer;
 import gov.nasa.worldwind.pick.*;
 import gov.nasa.worldwind.render.*;
@@ -42,11 +41,6 @@ public class ShapefileExtrudedPolygons extends ShapefileRenderable implements Or
             super(shapefileRenderable, shapefileRecord);
 
             this.height = ShapefileUtils.extractHeightAttribute(shapefileRecord); // may be null
-
-            if (shapefileRecord instanceof ShapefileRecordPolygon)
-            {
-                this.sector = Sector.fromDegrees(((ShapefileRecordPolygon) shapefileRecord).getBoundingRectangle());
-            }
         }
 
         public Double getHeight()
@@ -68,6 +62,11 @@ public class ShapefileExtrudedPolygons extends ShapefileRenderable implements Or
                 String msg = Logging.getMessage("nullValue.TerrainIsNull");
                 Logging.logger().severe(msg);
                 throw new IllegalArgumentException(msg);
+            }
+
+            if (!this.visible) // records marked as not visible don't intersect anything
+            {
+                return null;
             }
 
             ArrayList<Intersection> intersections = new ArrayList<Intersection>();
@@ -107,9 +106,7 @@ public class ShapefileExtrudedPolygons extends ShapefileRenderable implements Or
         // Tile shape data.
         public ShapeDataCache dataCache = new ShapeDataCache(60000);
         public ShapeData currentData;
-        // Tile intersection data.
-        public ShapeData intersectionData;
-        public Terrain intersectionTerrain;
+        public IntersectionData intersectionData = new IntersectionData();
 
         public Tile(Sector sector, int level)
         {
@@ -132,6 +129,52 @@ public class ShapefileExtrudedPolygons extends ShapefileRenderable implements Or
         }
     }
 
+    protected static class IntersectionData extends ShapeData
+    {
+        protected Terrain terrain;
+        protected boolean tessellationValid;
+
+        public IntersectionData()
+        {
+            super(null, 0, 0);
+        }
+
+        public boolean isValid(Terrain terrain)
+        {
+            return this.terrain == terrain
+                && this.verticalExaggeration == terrain.getVerticalExaggeration()
+                && (this.globeStateKey != null && globeStateKey.equals(terrain.getGlobe().getGlobeStateKey()));
+        }
+
+        public void invalidate()
+        {
+            this.terrain = null;
+            this.verticalExaggeration = 1;
+            this.globeStateKey = null;
+            this.tessellationValid = false;
+        }
+
+        public Terrain getTerrain()
+        {
+            return this.terrain;
+        }
+
+        public void setTerrain(Terrain terrain)
+        {
+            this.terrain = terrain;
+        }
+
+        public boolean isTessellationValid()
+        {
+            return this.tessellationValid;
+        }
+
+        public void setTessellationValid(boolean valid)
+        {
+            this.tessellationValid = valid;
+        }
+    }
+
     // Properties.
     protected double defaultHeight;
     protected double defaultBaseDepth;
@@ -141,61 +184,111 @@ public class ShapefileExtrudedPolygons extends ShapefileRenderable implements Or
     protected int tileMaxLevel = 3;
     protected int tileMaxCapacity = 10000;
     // Data structures supporting polygon tessellation and drawing.
-    protected CompoundVecBuffer coordBuffer;
     protected ArrayList<Tile> currentTiles = new ArrayList<Tile>();
     protected PolygonTessellator tess = new PolygonTessellator();
-    protected byte[] byteArray = new byte[6];
-    protected float[] floatArray = new float[6];
-    protected double[] doubleArray = new double[16];
+    protected byte[] colorByteArray = new byte[6];
+    protected float[] colorFloatArray = new float[3];
+    protected double[] matrixArray = new double[16];
     // Data structures supporting picking.
     protected Layer pickLayer;
     protected PickSupport pickSupport = new PickSupport();
     protected ByteBuffer pickColors;
     protected Object pickColorsVboKey = new Object();
 
+    /**
+     * Creates a new ShapefileExtrudedPolygons with the specified shapefile. The normal attributes and the highlight
+     * attributes for each ShapefileRenderable.Record are assigned default values. In order to modify
+     * ShapefileRenderable.Record shape attributes or key-value attributes during construction, use {@link
+     * #ShapefileExtrudedPolygons(Shapefile, gov.nasa.worldwind.render.ShapeAttributes,
+     * gov.nasa.worldwind.render.ShapeAttributes, gov.nasa.worldwind.formats.shapefile.ShapefileRenderable.AttributeDelegate)}.
+     *
+     * @param shapefile The shapefile to display.
+     *
+     * @throws IllegalArgumentException if the shapefile is null.
+     */
     public ShapefileExtrudedPolygons(Shapefile shapefile)
     {
-        super(shapefile); // superclass constructor checks shapefile argument
-
-        if (!Shapefile.isPolygonType(shapefile.getShapeType()))
+        if (shapefile == null)
         {
-            String msg = Logging.getMessage("SHP.UnsupportedShapeType", shapefile.getShapeType());
+            String msg = Logging.getMessage("nullValue.ShapefileIsNull");
             Logging.logger().severe(msg);
             throw new IllegalArgumentException(msg);
         }
 
-        if (this.sector != null) // Suppress record assembly and tile creation for empty shapefiles.
+        this.init(shapefile, null, null, null);
+    }
+
+    /**
+     * Creates a new ShapefileExtrudedPolygons with the specified shapefile. The normal attributes, the highlight
+     * attributes and the attribute delegate are optional. Specifying a non-null value for normalAttrs or highlightAttrs
+     * causes each ShapefileRenderable.Record to adopt those attributes. Specifying a non-null value for the attribute
+     * delegate enables callbacks during creation of each ShapefileRenderable.Record. See {@link AttributeDelegate} for
+     * more information.
+     *
+     * @param shapefile         The shapefile to display.
+     * @param normalAttrs       The normal attributes for each ShapefileRenderable.Record. May be null to use the
+     *                          default attributes.
+     * @param highlightAttrs    The highlight attributes for each ShapefileRenderable.Record. May be null to use the
+     *                          default highlight attributes.
+     * @param attributeDelegate Optional callback for configuring each ShapefileRenderable.Record's shape attributes and
+     *                          key-value attributes. May be null.
+     *
+     * @throws IllegalArgumentException if the shapefile is null.
+     */
+    public ShapefileExtrudedPolygons(Shapefile shapefile, ShapeAttributes normalAttrs, ShapeAttributes highlightAttrs,
+        ShapefileRenderable.AttributeDelegate attributeDelegate)
+    {
+        if (shapefile == null)
         {
-            this.rootTile = new Tile(this.sector, 0);
-            this.assembleShapefileRecords(shapefile);
-            this.coordBuffer = shapefile.getPointBuffer(); // valid only after records are assembled
-
-            if (this.mustSplitTile(this.rootTile))
-            {
-                this.splitTile(this.rootTile);
-            }
-
-            this.rootTile.records.trimToSize(); // Reduce memory overhead from unused ArrayList capacity.
+            String msg = Logging.getMessage("nullValue.ShapefileIsNull");
+            Logging.logger().severe(msg);
+            throw new IllegalArgumentException(msg);
         }
+
+        this.init(shapefile, normalAttrs, highlightAttrs, attributeDelegate);
     }
 
     @Override
-    protected void addShapefileRecord(ShapefileRecord shapefileRecord)
+    protected void assembleRecords(Shapefile shapefile)
+    {
+        this.rootTile = new Tile(this.sector, 0);
+
+        super.assembleRecords(shapefile);
+
+        if (this.mustSplitTile(this.rootTile))
+        {
+            this.splitTile(this.rootTile);
+        }
+
+        this.rootTile.records.trimToSize(); // Reduce memory overhead from unused ArrayList capacity.
+    }
+
+    @Override
+    protected boolean mustAssembleRecord(ShapefileRecord shapefileRecord)
+    {
+        return super.mustAssembleRecord(shapefileRecord)
+            && (shapefileRecord.isPolylineRecord()
+            || shapefileRecord.isPolygonRecord()); // accept both polyline and polygon records
+    }
+
+    @Override
+    protected void assembleRecord(ShapefileRecord shapefileRecord)
     {
         Record record = this.createRecord(shapefileRecord);
-        this.records.add(record);
-        this.rootTile.records.add(record);
-        record.tile = this.rootTile;
+        this.addRecord(shapefileRecord, record);
 
         if (record.height != null && this.maxHeight < record.height)
         {
             this.maxHeight = record.height;
         }
+
+        this.rootTile.records.add(record);
+        record.tile = this.rootTile;
     }
 
     protected ShapefileExtrudedPolygons.Record createRecord(ShapefileRecord shapefileRecord)
     {
-        return new Record(this, shapefileRecord);
+        return new ShapefileExtrudedPolygons.Record(this, shapefileRecord);
     }
 
     protected boolean mustSplitTile(Tile tile)
@@ -250,7 +343,10 @@ public class ShapefileExtrudedPolygons extends ShapefileRenderable implements Or
     protected void recordDidChange(ShapefileRenderable.Record record)
     {
         Tile tile = ((ShapefileExtrudedPolygons.Record) record).tile;
-        this.invalidateTileAttributeGroups(tile);
+        if (tile != null) // tile is null when attributes are specified during construction
+        {
+            this.invalidateTileAttributeGroups(tile);
+        }
     }
 
     public double getDefaultHeight()
@@ -351,8 +447,9 @@ public class ShapefileExtrudedPolygons extends ShapefileRenderable implements Or
             tile.dataCache.addEntry(tile.currentData);
         }
 
-        // If the tile isn't visible, then don't add it or its descendants. Note that a tile with no records may have
-        // children, so we can't use the tile's record count as a determination of whether or not to add its children.
+        // Determine whether or not the tile is visible. If the tile is not visible, then neither are the tile's records
+        // or the tile's children. Note that a tile with no records may have children, so we can't use the tile's record
+        // count as a determination of whether or not to test its children.
         if (!this.isTileVisible(dc, tile))
         {
             return;
@@ -362,6 +459,7 @@ public class ShapefileExtrudedPolygons extends ShapefileRenderable implements Or
         // as necessary.
         if (tile.records.size() > 0)
         {
+            this.adjustTileExpiration(dc, tile); // reduce the remaining expiration time as the eye distance decreases
             if (this.mustRegenerateTileGeometry(dc, tile))
             {
                 this.regenerateTileGeometry(dc, tile);
@@ -387,19 +485,27 @@ public class ShapefileExtrudedPolygons extends ShapefileRenderable implements Or
 
     protected boolean isTileVisible(DrawContext dc, Tile tile)
     {
-        ShapeData shapeData = tile.currentData;
-        this.regenerateTileExtent(dc.getTerrain(), tile, shapeData);
+        Extent extent = this.makeTileExtent(dc.getTerrain(), tile);
 
-        if (dc.isSmall(shapeData.getExtent(), 1))
+        if (dc.isSmall(extent, 1))
         {
             return false;
         }
 
-        return dc.isPickingMode() ? dc.getPickFrustums().intersectsAny(shapeData.getExtent())
-            : dc.getView().getFrustumInModelCoordinates().intersects(shapeData.getExtent());
+        if (dc.isPickingMode())
+        {
+            return dc.getPickFrustums().intersectsAny(extent);
+        }
+
+        return dc.getView().getFrustumInModelCoordinates().intersects(extent);
     }
 
     protected boolean mustRegenerateTileGeometry(DrawContext dc, Tile tile)
+    {
+        return tile.currentData.isExpired(dc) || !tile.currentData.isValid(dc);
+    }
+
+    protected void adjustTileExpiration(DrawContext dc, Tile tile)
     {
         // If the new eye distance is significantly closer than cached data's the current eye distance, reduce the
         // timer's remaining time by 50%. This reduction is performed only once each time the timer is reset.
@@ -408,14 +514,16 @@ public class ShapefileExtrudedPolygons extends ShapefileRenderable implements Or
             double newEyeDistance = dc.getView().getEyePoint().distanceTo3(tile.currentData.referencePoint);
             tile.currentData.adjustTimer(dc, newEyeDistance);
         }
-
-        return tile.currentData.isExpired(dc) || !tile.currentData.isValid(dc);
     }
 
     protected void invalidateTileGeometry(Tile tile)
     {
         tile.dataCache.setAllExpired(true); // force the tile vertices to be regenerated
-        tile.dataCache.clearExtents();
+
+        synchronized (tile) // synchronize access to tile intersection data
+        {
+            tile.intersectionData.invalidate();
+        }
     }
 
     protected void invalidateAllTileGeometry()
@@ -438,7 +546,13 @@ public class ShapefileExtrudedPolygons extends ShapefileRenderable implements Or
     protected void regenerateTileGeometry(DrawContext dc, Tile tile)
     {
         ShapeData shapeData = tile.currentData;
-        this.tessellateTile(dc.getTerrain(), tile, shapeData);
+
+        // Synchronize simultaneous tile updates between rendering, intersect and Record.intersect. Access to this
+        // instance's coordinate buffer must be synchronized.
+        synchronized (this)
+        {
+            this.tessellateTile(dc.getTerrain(), tile, shapeData);
+        }
 
         shapeData.setEyeDistance(dc.getView().getEyePoint().distanceTo3(shapeData.referencePoint));
         shapeData.setGlobeStateKey(dc.getGlobe().getGlobeStateKey(dc));
@@ -446,25 +560,19 @@ public class ShapefileExtrudedPolygons extends ShapefileRenderable implements Or
         shapeData.restartTimer(dc);
     }
 
-    protected void regenerateTileExtent(Terrain terrain, Tile tile, ShapeData shapeData)
+    protected Extent makeTileExtent(Terrain terrain, Tile tile)
     {
-        Globe globe = terrain.getGlobe();
-        double verticalExaggeration = terrain.getVerticalExaggeration();
+        // Compute the tile's minimum and maximum height as height above and below the extreme elevations in the tile's
+        // sector. We use the overall maximum height of all records in order to ensure that a tile's extent includes its
+        // descendants when the parent tile's max height is less than its descendants.
+        double[] extremes = terrain.getGlobe().getMinAndMaxElevations(tile.sector);
+        double minHeight = extremes[0] - this.defaultBaseDepth;
+        double maxHeight = extremes[1] + Math.max(this.maxHeight, this.defaultHeight);
 
-        // TODO: Globe state key and vertical exaggeration are never set if the ShapeData is not regenerated.
-        // TODO: Since we need the extent but potentially not the shape data, find another way to generate or invalidate extents
-        if (shapeData.getExtent() == null)
-        {
-            // Compute the tile's minimum and maximum height as height above and below the extreme elevations in the
-            // tile's sector. We use the overall maximum height of all records in order to ensure that a tile's extent
-            // includes its descendants when the parent tile's max height is less than its descendants.
-            double[] extremes = globe.getMinAndMaxElevations(tile.sector);
-            double minHeight = extremes[0] - this.defaultBaseDepth;
-            double maxHeight = extremes[1] + Math.max(this.maxHeight, this.defaultHeight);
-
-            Extent extent = Sector.computeBoundingBox(globe, verticalExaggeration, this.sector, minHeight, maxHeight);
-            shapeData.setExtent(extent);
-        }
+        // Compute the tile's extent for the specified terrain. Associated the shape data's extent with the terrain in
+        // order to determine when it becomes invalid.
+        return Sector.computeBoundingBox(terrain.getGlobe(), terrain.getVerticalExaggeration(), tile.sector,
+            minHeight, maxHeight);
     }
 
     protected void tessellateTile(Terrain terrain, Tile tile, ShapeData shapeData)
@@ -484,13 +592,14 @@ public class ShapefileExtrudedPolygons extends ShapefileRenderable implements Or
             vertices = Buffers.newDirectFloatBuffer(2 * vertexStride * numPoints);
         }
 
+        double[] location = new double[2];
+        float[] vertex = new float[6];
+        Vec4 rp = null;
+
         // Generate the model coordinate vertices and indices for all records in the tile. This may include records that
         // are marked as not visible, as recomputing the vertices and indices for record visibility changes would be
         // expensive. The tessellated interior and outline indices are generated only once, since each record's indices
         // never change.
-        Vec4 rp = null;
-        double[] coord = this.doubleArray;
-        float[] vertex = this.floatArray;
         for (Record record : tile.records)
         {
             double height = record.height != null ? record.height : this.defaultHeight;
@@ -503,21 +612,21 @@ public class ShapefileExtrudedPolygons extends ShapefileRenderable implements Or
             this.tess.setPolygonNormal(0, 0, 1); // tessellate in geographic coordinates
             this.tess.beginPolygon();
 
-            for (int part = record.firstPartNumber; part <= record.lastPartNumber; part++)
+            for (int i = 0; i < record.getBoundaryCount(); i++)
             {
                 this.tess.beginContour();
 
-                VecBuffer subBuffer = this.coordBuffer.subBuffer(part);
-                for (int i = 0; i < subBuffer.getSize(); i++)
+                VecBuffer points = record.getBoundaryPoints(i);
+                for (int j = 0; j < points.getSize(); j++)
                 {
-                    subBuffer.get(i, coord);
-                    Vec4 p = terrain.getSurfacePoint(Angle.fromDegrees(coord[1]), Angle.fromDegrees(coord[0]), 0);
+                    points.get(j, location);
+                    Vec4 p = terrain.getSurfacePoint(Angle.fromDegrees(location[1]), Angle.fromDegrees(location[0]), 0);
 
                     // Tessellate indices in geographic coordinates. This produces an index tessellation that is
                     // independent of the record's model coordinates, since the count and organization of top and bottom
                     // of vertices is always the same.
                     int index = vertices.position() / vertexStride; // index of top vertex
-                    this.tess.addVertex(coord[0], coord[1], 0, index); // map lon,lat to x,y
+                    this.tess.addVertex(location[0], location[1], 0, index); // map lon,lat to x,y
 
                     if (rp == null) // first vertex in the tile
                     {
@@ -617,12 +726,12 @@ public class ShapefileExtrudedPolygons extends ShapefileRenderable implements Or
     {
         tile.attributeGroups.clear();
 
-        // Assemble the tile's records into groups with common attributes. Attributes are compared using the instance's
-        // address, so subsequent changes to an Attribute instance will be reflected in the record group automatically.
-        // We take care to avoid assembling groups based on any Attribute property, as those properties may change
-        // without re-assembling these groups. However, changes to a record's visibility state, highlight state, normal
-        // attributes reference and highlight attributes reference invalidate this grouping.
-        HashMap<ShapeAttributes, RecordGroup> attrMap = new HashMap<ShapeAttributes, RecordGroup>();
+        // Assemble the tile's records into groups with common attributes. Attributes are grouped by reference using an
+        // InstanceHashMap, so that subsequent changes to an Attribute instance will be reflected in the record group
+        // automatically. We take care to avoid assembling groups based on any Attribute property, as those properties
+        // may change without re-assembling these groups. However, changes to a record's visibility state, highlight
+        // state, normal attributes reference and highlight attributes reference invalidate this grouping.
+        Map<ShapeAttributes, RecordGroup> attrMap = new IdentityHashMap<ShapeAttributes, RecordGroup>();
         for (Record record : tile.records)
         {
             if (!record.isVisible()) // ignore records marked as not visible
@@ -805,8 +914,8 @@ public class ShapefileExtrudedPolygons extends ShapefileRenderable implements Or
         }
 
         Matrix modelview = dc.getView().getModelviewMatrix().multiply(shapeData.transformMatrix);
-        modelview.toArray(this.doubleArray, 0, false);
-        gl.glLoadMatrixd(this.doubleArray, 0);
+        modelview.toArray(this.matrixArray, 0, false);
+        gl.glLoadMatrixd(this.matrixArray, 0);
 
         for (RecordGroup attrGroup : tile.attributeGroups)
         {
@@ -838,7 +947,7 @@ public class ShapefileExtrudedPolygons extends ShapefileRenderable implements Or
         {
             if (!dc.isPickingMode())
             {
-                float[] color = this.floatArray;
+                float[] color = this.colorFloatArray;
                 attributeGroup.attributes.getInteriorMaterial().getDiffuse().getRGBColorComponents(color);
                 gl.glColor3f(color[0], color[1], color[2]);
             }
@@ -862,7 +971,7 @@ public class ShapefileExtrudedPolygons extends ShapefileRenderable implements Or
 
             if (!dc.isPickingMode())
             {
-                float[] color = this.floatArray;
+                float[] color = this.colorFloatArray;
                 attributeGroup.attributes.getOutlineMaterial().getDiffuse().getRGBColorComponents(color);
                 gl.glColor3f(color[0], color[1], color[2]);
             }
@@ -917,7 +1026,7 @@ public class ShapefileExtrudedPolygons extends ShapefileRenderable implements Or
             colors = pickColors;
         }
 
-        byte[] vertexColors = this.byteArray;
+        byte[] vertexColors = this.colorByteArray;
         for (Record record : tile.records)
         {
             // Get a unique pick color for the record, and add it to the list of pickable objects. We must generate a
@@ -1005,43 +1114,31 @@ public class ShapefileExtrudedPolygons extends ShapefileRenderable implements Or
 
     protected void intersectTileOrDescendants(Line line, Terrain terrain, Tile tile, List<Intersection> results)
     {
-        ShapeData shapeData = tile.intersectionData;
-        if (shapeData == null)
+        // Regenerate the tile's intersection geometry as necessary. Synchronized simultaneous read/write access to the
+        // tile's intersection data between calls to intersect or Record.intersect on separate threads.
+        ShapeData shapeData;
+        synchronized (tile)
         {
-            shapeData = new ShapeData(null, 0, 0);
-            tile.intersectionData = shapeData;
+            shapeData = this.prepareTileIntersectionData(line, terrain, tile);
         }
 
-        // Determine whether or not the tile's extent intersects the line. If the line does not intersect the tile's
-        // extent, then it cannot intersect the tile's records or the tile's children. Note that a tile with no records
-        // may have children, so we can't use the tile's record count as a determination of whether or not to test its
-        // children.
-        this.regenerateTileExtent(terrain, tile, shapeData);
-        if (!shapeData.getExtent().intersects(line))
+        if (shapeData == null) // The line does not intersect the tile.
         {
             return;
-        }
-
-        // Regenerate the tile's intersection geometry as necessary.
-        if (tile.intersectionTerrain != terrain
-            || !shapeData.getGlobeStateKey().equals(terrain.getGlobe().getGlobeStateKey())
-            || shapeData.getVerticalExaggeration() != terrain.getVerticalExaggeration())
-        {
-            this.tessellateTile(terrain, tile, shapeData);
-            tile.intersectionTerrain = terrain;
-            shapeData.setGlobeStateKey(terrain.getGlobe().getGlobeStateKey());
-            shapeData.setVerticalExaggeration(terrain.getVerticalExaggeration());
         }
 
         // Intersect the line with the tile's records. Translate the line from model coordinates to tile local
         // coordinates in order to perform this operation once on the line, rather than many times for each tile vertex.
         // Intersection points are translated back into model coordinates.
-        Line localLine = new Line(line.getOrigin().subtract3(shapeData.referencePoint), line.getDirection());
-        for (Record record : tile.records)
+        if (tile.records.size() > 0)
         {
-            if (record.isVisible()) // ignore records marked as not visible
+            Line localLine = new Line(line.getOrigin().subtract3(shapeData.referencePoint), line.getDirection());
+            for (Record record : tile.records)
             {
-                this.intersectRecordInterior(localLine, terrain, record, results);
+                if (record.isVisible()) // records marked as not visible don't intersect anything
+                {
+                    this.intersectRecordInterior(localLine, terrain, record, shapeData, results);
+                }
             }
         }
 
@@ -1057,43 +1154,69 @@ public class ShapefileExtrudedPolygons extends ShapefileRenderable implements Or
 
     protected void intersectTileRecord(Line line, Terrain terrain, Record record, List<Intersection> results)
     {
-        Tile tile = record.tile;
-
-        ShapeData shapeData = tile.intersectionData;
-        if (shapeData == null)
+        // Regenerate the tile's intersection geometry as necessary. Synchronized simultaneous read/write access to the
+        // tile's intersection data between calls to intersect or Record.intersect on separate threads.
+        ShapeData shapeData;
+        synchronized (record.tile)
         {
-            shapeData = new ShapeData(null, 0, 0);
-            tile.intersectionData = shapeData;
+            shapeData = this.prepareTileIntersectionData(line, terrain, record.tile);
         }
 
-        // Determine whether or not the tile's extent intersects the line. If the line does not intersect the tile's
-        // extent, then it cannot intersect the record.
-        this.regenerateTileExtent(terrain, tile, shapeData);
-        if (!shapeData.getExtent().intersects(line))
+        if (shapeData == null) // The line does not intersect the tile.
         {
             return;
-        }
-
-        // Regenerate the tile's intersection geometry as necessary.
-        if (tile.intersectionTerrain != terrain
-            || !shapeData.getGlobeStateKey().equals(terrain.getGlobe().getGlobeStateKey())
-            || shapeData.getVerticalExaggeration() != terrain.getVerticalExaggeration())
-        {
-            this.tessellateTile(terrain, tile, shapeData);
-            tile.intersectionTerrain = terrain;
-            shapeData.setGlobeStateKey(terrain.getGlobe().getGlobeStateKey());
-            shapeData.setVerticalExaggeration(terrain.getVerticalExaggeration());
         }
 
         // Intersect the line with the record. Translate the line from model coordinates to tile local coordinates,
         // then translate intersection points back into model coordinates.
         Line localLine = new Line(line.getOrigin().subtract3(shapeData.referencePoint), line.getDirection());
-        this.intersectRecordInterior(localLine, terrain, record, results);
+        this.intersectRecordInterior(localLine, terrain, record, shapeData, results);
     }
 
-    protected void intersectRecordInterior(Line localLine, Terrain terrain, Record record, List<Intersection> results)
+    protected ShapeData prepareTileIntersectionData(Line line, Terrain terrain, Tile tile)
     {
-        ShapeData shapeData = record.tile.intersectionData;
+        // Force regeneration of the tile's intersection extent and intersection geometry when the specified terrain
+        // changes. We regenerate the extent now and flag the geometry as invalid in order to force its regeneration
+        // later. This is necessary since we want to avoid regenerating the geometry when the line does not intersect
+        // the tile's extent.
+        IntersectionData shapeData = tile.intersectionData;
+        if (!shapeData.isValid(terrain))
+        {
+            shapeData.setExtent(this.makeTileExtent(terrain, tile)); // regenerate the intersection extent
+            shapeData.setTessellationValid(false); // force regeneration of the intersection geometry
+            shapeData.setTerrain(terrain);
+            shapeData.setGlobeStateKey(terrain.getGlobe().getGlobeStateKey());
+            shapeData.setVerticalExaggeration(terrain.getVerticalExaggeration());
+        }
+
+        // Determine whether or not the tile's extent intersects the line. If the line does not intersect the tile's
+        // extent, then it cannot intersect the tile's records or the tile's children. Note that a tile with no records
+        // may have children, so we can't use the tile's record count as a determination of whether or not to test its
+        // children.
+        if (!shapeData.getExtent().intersects(line))
+        {
+            return null;
+        }
+
+        // Regenerate the tile's intersection geometry as necessary. Suppress tessellation of tiles with no records.
+        // Synchronize simultaneous tile updates between rendering, intersect and Record.intersect. Access to this
+        // instance's coordinate buffer must be synchronized.
+        if (tile.records.size() > 0 && !shapeData.isTessellationValid())
+        {
+            synchronized (this)
+            {
+                this.tessellateTile(terrain, tile, shapeData);
+            }
+
+            shapeData.setTessellationValid(true);
+        }
+
+        return shapeData;
+    }
+
+    protected void intersectRecordInterior(Line localLine, Terrain terrain, Record record, ShapeData shapeData,
+        List<Intersection> results)
+    {
         FloatBuffer vertices = shapeData.vertices;
         IntBuffer indices = record.interiorIndices;
 

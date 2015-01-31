@@ -6,9 +6,12 @@
  */
 
 #import <Foundation/Foundation.h>
+#import "DDLog.h"
 
-#define TAIGA_VERSION (@"0.0038")
-#define TAIGA_VERSION_DATE (@"6/19/14")
+static const int ddLogLevel = LOG_LEVEL_INFO;
+
+#define TAIGA_VERSION (@"1.005")
+#define TAIGA_VERSION_DATE (@"1/6/15")
 
 #define TAIGA_DATA_HOST @"worldwindserver.net"
 
@@ -26,7 +29,11 @@
 #define TAIGA_FLIGHT_ROUTE_WAYPOINT_REMOVED (@"gov.nasa.worldwind.taiga.flightroute.waypoint.removed")
 #define TAIGA_FLIGHT_ROUTE_WAYPOINT_REPLACED (@"gov.nasa.worldwind.taiga.flightroute.waypoint.replaced")
 #define TAIGA_FLIGHT_ROUTE_WAYPOINT_MOVED (@"gov.nasa.worldwind.taiga.flightroute.waypoint.moved")
+#define TAIGA_GDB_DEVICE_ADDRESS (@"gov.nasa.worldwind.taiga.gdb.device.address")
+#define TAIGA_GDB_DEVICE_UPDATE_FREQUENCY (@"gov.nasa.worldwind.taiga.gdb.device.update.frequency")
+#define TAIGA_GDB_MESSAGE (@"gov.nasa.worldwind.taiga.gdb.message")
 #define TAIGA_GPS_DEVICE_ADDRESS (@"gov.nasa.worldwind.taiga.gpsaddress")
+#define TAIGA_GPS_DEVICE_UPDATE_FREQUENCY (@"gov.nasa.worldwind.taiga.gps.device.update.frequency")
 #define TAIGA_GPS_QUALITY (@"gov.nasa.worldwind.taiga.gpsfixquality")
 #define TAIGA_GPS_SOURCE (@"gov.nasa.worldwind.taiga.gpssource")
 #define TAIGA_HIDDEN_LAYER (@"gov.nasa.worldwind.taiga.hiddenlayer")
@@ -37,7 +44,8 @@
 #define TAIGA_LOCATION_TRACKING_MODE_NORTH_UP (@"gov.nasa.worldwind.taiga.location.tracking.mode.northup")
 #define TAIGA_LOCATION_TRACKING_MODE_TRACK_UP (@"gov.nasa.worldwind.taiga.location.tracking.mode.trackup")
 #define TAIGA_METERS_TO_FEET (3.28083989501)
-#define TAIGA_MILES_TO_METERS (1609.34)
+#define TAIGA_METERS_TO_NAUTICAL_MILES (0.000539957)
+#define TAIGA_NAUTICAL_MILES_TO_METERS (1852)
 #define TAIGA_NAME (@"gov.nasa.worldwind.taiga.name")
 #define TAIGA_PATH (@"gov.nasa.worldwind.taiga.path")
 #define TAIGA_REFRESH (@"gov.nasa.worldwind.taiga.refresh")

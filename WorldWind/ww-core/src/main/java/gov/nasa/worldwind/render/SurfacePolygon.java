@@ -31,6 +31,18 @@ public class SurfacePolygon extends AbstractSurfaceShape implements Exportable
     }
 
     /**
+     * Creates a shallow copy of the specified source shape.
+     *
+     * @param source the shape to copy.
+     */
+    public SurfacePolygon(SurfacePolygon source)
+    {
+        super(source);
+
+        this.boundaries = source.boundaries;
+    }
+
+    /**
      * Constructs a new surface polygon with the specified normal (as opposed to highlight) attributes and no locations.
      * Modifying the attribute reference after calling this constructor causes this shape's appearance to change
      * accordingly.
@@ -163,13 +175,12 @@ public class SurfacePolygon extends AbstractSurfaceShape implements Exportable
         return new Position(iterator.next(), 0);
     }
 
-    protected List<List<LatLon>> createGeometry(Globe globe, SurfaceTileDrawContext sdc)
+    protected List<List<LatLon>> createGeometry(Globe globe, double edgeIntervalsPerDegree)
     {
         if (this.boundaries.isEmpty())
             return null;
 
         ArrayList<List<LatLon>> geom = new ArrayList<List<LatLon>>();
-        double edgeIntervalsPerDegree = this.computeEdgeIntervalsPerDegree(sdc);
 
         for (Iterable<? extends LatLon> boundary : this.boundaries)
         {
@@ -208,6 +219,23 @@ public class SurfacePolygon extends AbstractSurfaceShape implements Exportable
                 Angle pathLength = LatLon.greatCircleDistance(oldReferencePosition, ll);
                 newLocations.add(LatLon.greatCircleEndPosition(newReferencePosition, heading, pathLength));
             }
+
+            this.boundaries.set(i, newLocations);
+        }
+
+        // We've changed the polygon's list of boundaries; flag the shape as changed.
+        this.onShapeChanged();
+    }
+
+    protected void doMoveTo(Globe globe, Position oldReferencePosition, Position newReferencePosition)
+    {
+        if (this.boundaries.isEmpty())
+            return;
+
+        for (int i = 0; i < this.boundaries.size(); i++)
+        {
+            List<LatLon> newLocations = LatLon.computeShiftedLocations(globe, oldReferencePosition,
+                newReferencePosition, this.boundaries.get(i));
 
             this.boundaries.set(i, newLocations);
         }
@@ -336,7 +364,7 @@ public class SurfacePolygon extends AbstractSurfaceShape implements Exportable
 
         xmlWriter.writeStartElement("Placemark");
 
-        String property = (String) getValue(AVKey.DISPLAY_NAME);
+        String property = getStringValue(AVKey.DISPLAY_NAME);
         if (property != null)
         {
             xmlWriter.writeStartElement("name");

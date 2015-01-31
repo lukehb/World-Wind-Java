@@ -154,6 +154,21 @@ public class SurfaceQuad extends AbstractSurfaceShape implements Exportable
     }
 
     /**
+     * Creates a shallow copy of the specified source shape.
+     *
+     * @param source the shape to copy.
+     */
+    public SurfaceQuad(SurfaceQuad source)
+    {
+        super(source);
+
+        this.center = source.center;
+        this.width = source.width;
+        this.height = source.height;
+        this.heading = source.heading;
+    }
+
+    /**
      * Constructs a new surface quad with the specified normal (as opposed to highlight) attributes, the specified
      * center location and dimensions (in meters). Modifying the attribute reference after calling this constructor
      * causes this shape's appearance to change accordingly.
@@ -300,6 +315,15 @@ public class SurfaceQuad extends AbstractSurfaceShape implements Exportable
         this.setCenter(LatLon.greatCircleEndPosition(newReferencePosition, heading, pathLength));
     }
 
+    protected void doMoveTo(Globe globe, Position oldReferencePosition, Position newReferencePosition)
+    {
+        List<LatLon> locations = new ArrayList<LatLon>(1);
+        locations.add(this.getCenter());
+        List<LatLon> newLocations = LatLon.computeShiftedLocations(globe, oldReferencePosition, newReferencePosition,
+            locations);
+        this.setCenter(newLocations.get(0));
+    }
+
     public Iterable<? extends LatLon> getLocations(Globe globe)
     {
         if (globe == null)
@@ -338,21 +362,13 @@ public class SurfaceQuad extends AbstractSurfaceShape implements Exportable
         return java.util.Arrays.asList(locations);
     }
 
-    protected List<List<LatLon>> createGeometry(Globe globe, SurfaceTileDrawContext sdc)
+    protected List<List<LatLon>> createGeometry(Globe globe, double edgeIntervalsPerDegree)
     {
-        if (globe == null)
-        {
-            String message = Logging.getMessage("nullValue.GlobeIsNull");
-            Logging.logger().severe(message);
-            throw new IllegalArgumentException(message);
-        }
-
         Iterable<? extends LatLon> originalLocations = this.getLocations(globe);
         if (originalLocations == null)
             return null;
 
         ArrayList<LatLon> drawLocations = new ArrayList<LatLon>();
-        double edgeIntervalsPerDegree = this.computeEdgeIntervalsPerDegree(sdc);
         this.generateIntermediateLocations(originalLocations, edgeIntervalsPerDegree, false, drawLocations);
 
         ArrayList<List<LatLon>> geom = new ArrayList<List<LatLon>>();
@@ -456,7 +472,7 @@ public class SurfaceQuad extends AbstractSurfaceShape implements Exportable
 
         xmlWriter.writeStartElement("Placemark");
 
-        String property = (String) getValue(AVKey.DISPLAY_NAME);
+        String property = getStringValue(AVKey.DISPLAY_NAME);
         if (property != null)
         {
             xmlWriter.writeStartElement("name");

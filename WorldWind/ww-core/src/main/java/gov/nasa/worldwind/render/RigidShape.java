@@ -1103,8 +1103,7 @@ public abstract class RigidShape extends AbstractShape
         Matrix matrix = Matrix.IDENTITY;
 
         // translate and orient
-        Position refPosition = globe.computePositionFromPoint(this.computeReferencePoint(globe, verticalExaggeration));
-        matrix = matrix.multiply(globe.computeSurfaceOrientationAtPosition(refPosition));
+        matrix = matrix.multiply(globe.computeSurfaceOrientationAtPosition(this.getCenterPosition()));
 
         // now apply the user-specified heading/tilt/roll:
         // order corresponds to KML rotations (YXZ, positive clockwise)
@@ -1145,8 +1144,7 @@ public abstract class RigidShape extends AbstractShape
         Matrix matrix = Matrix.IDENTITY;
 
         // translate and orient
-        Position refPosition = dc.getGlobe().computePositionFromPoint(this.getCurrentShapeData().getReferencePoint());
-        matrix = matrix.multiply(dc.getGlobe().computeSurfaceOrientationAtPosition(refPosition));
+        matrix = matrix.multiply(dc.getGlobe().computeSurfaceOrientationAtPosition(this.getCenterPosition()));
 
         // now apply the user-specified heading/tilt/roll
         // order corresponds to KML rotations (YXZ, positive clockwise)

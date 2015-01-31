@@ -16,7 +16,7 @@ import gov.nasa.worldwind.util.Logging;
  * @author tag
  * @version $Id$
  */
-public class ProjectionPolarEquidistant implements GeographicProjection
+public class ProjectionPolarEquidistant extends AbstractGeographicProjection
 {
     protected static final int NORTH = 0;
     protected static final int SOUTH = 1;
@@ -28,6 +28,7 @@ public class ProjectionPolarEquidistant implements GeographicProjection
      */
     public ProjectionPolarEquidistant()
     {
+        super(Sector.FULL_SPHERE);
     }
 
     /**
@@ -40,6 +41,8 @@ public class ProjectionPolarEquidistant implements GeographicProjection
      */
     public ProjectionPolarEquidistant(String pole)
     {
+        super(Sector.FULL_SPHERE);
+
         if (pole == null)
         {
             String message = Logging.getMessage("nullValue.HemisphereIsNull");
@@ -87,19 +90,91 @@ public class ProjectionPolarEquidistant implements GeographicProjection
     }
 
     @Override
+    public void geographicToCartesian(Globe globe, Sector sector, int numLat, int numLon, double[] metersElevation,
+        Vec4 offset, Vec4[] out)
+    {
+        double radius = globe.getRadius();
+        double minLat = sector.getMinLatitude().radians;
+        double maxLat = sector.getMaxLatitude().radians;
+        double minLon = sector.getMinLongitude().radians;
+        double maxLon = sector.getMaxLongitude().radians;
+        double deltaLat = (maxLat - minLat) / (numLat > 1 ? numLat - 1 : 1);
+        double deltaLon = (maxLon - minLon) / (numLon > 1 ? numLon - 1 : 1);
+        double pole = (this.pole == SOUTH) ? 1 : -1;
+        double pi_2 = Math.PI / 2;
+        int pos = 0;
+
+        // Iterate over the longitude coordinates in the specified sector and compute the cosine and sine of each
+        // longitude value required to compute Cartesian points for the specified sector. This eliminates the need to
+        // re-compute the same cosine and sine results for each row of constant latitude (and varying longitude).
+        double[] cosLon = new double[numLon];
+        double[] sinLon = new double[numLon];
+        double lon = minLon;
+        for (int i = 0; i < numLon; i++, lon += deltaLon)
+        {
+            if (i == numLon - 1) // explicitly set the last lon to the max longitude to ensure alignment
+                lon = maxLon;
+
+            cosLon[i] = Math.cos(lon);
+            sinLon[i] = Math.sin(lon);
+        }
+
+        // Iterate over the latitude and longitude coordinates in the specified sector, computing the Cartesian point
+        // corresponding to each latitude and longitude.
+        double lat = minLat;
+        for (int j = 0; j < numLat; j++, lat += deltaLat)
+        {
+            if (j == numLat - 1) // explicitly set the last lat to the max latitude to ensure alignment
+                lat = maxLat;
+
+            // Latitude is constant for each row. Values that are a function of latitude can be computed once per row.
+            double a = radius * (pi_2 + lat * pole);
+            if ((this.pole == NORTH && lat == pi_2) || (this.pole == SOUTH && lat == -pi_2))
+            {
+                a = 0;
+            }
+
+            for (int i = 0; i < numLon; i++)
+            {
+                double x = a * sinLon[i];
+                double y = a * cosLon[i] * pole;
+                double z = metersElevation[pos];
+                out[pos++] = new Vec4(x, y, z);
+            }
+        }
+    }
+
+    @SuppressWarnings("SuspiciousNameCombination")
+    @Override
     public Position cartesianToGeographic(Globe globe, Vec4 cart, Vec4 offset)
     {
         // Formulae taken from "Map Projections -- A Working Manual", Snyder, USGS paper 1395, pg. 196.
 
         double rho = Math.sqrt(cart.x * cart.x + cart.y * cart.y);
         if (rho < 1.0e-4)
-            return Position.fromDegrees(0, (this.pole == SOUTH ? -90 : 90), cart.z);
+            return Position.fromDegrees((this.pole == SOUTH ? -90 : 90), 0, cart.z);
 
         double c = rho / globe.getRadius();
-        double lat = Math.asin(Math.cos(c));
-        double lon = Math.atan(cart.x() / (cart.y * (this.pole == SOUTH ? 1 : -1)));
+        if (c > Math.PI) // map cartesian points beyond the projections radius to the edge of the projection
+            c = Math.PI;
+
+        double lat = Math.asin(Math.cos(c) * (this.pole == SOUTH ? -1 : 1));
+        double lon = Math.atan2(cart.x, cart.y * (this.pole == SOUTH ? 1 : -1)); // use atan2(x,y) instead of atan(x/y)
 
         return Position.fromRadians(lat, lon, cart.z);
+    }
+
+    @Override
+    public Vec4 northPointingTangent(Globe globe, Angle latitude, Angle longitude)
+    {
+        // The north pointing tangent depends on the pole. With the south pole, the north pointing tangent points in the
+        // same direction as the vector returned by cartesianToGeographic. With the north pole, the north pointing
+        // tangent has the opposite direction.
+
+        double x = Math.sin(longitude.radians) * (this.pole == SOUTH ? 1 : -1);
+        double y = Math.cos(longitude.radians);
+
+        return new Vec4(x, y, 0);
     }
 
     @Override

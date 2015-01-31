@@ -200,7 +200,7 @@ public class DirectedPath extends Path
     {
         if (arrowAngle == null)
         {
-            String message = Logging.getMessage("nullValue.AngleIsNull", arrowAngle);
+            String message = Logging.getMessage("nullValue.AngleIsNull");
             Logging.logger().severe(message);
             throw new IllegalArgumentException(message);
         }
@@ -256,7 +256,7 @@ public class DirectedPath extends Path
         // Step through polePositions to find the original path locations.
         int thisPole = polePositions.get(0) / 2;
         Position poleA = tessellatedPositions.get(thisPole);
-        Vec4 polePtA = this.computePoint(terrain, poleA);
+        Vec4 polePtA = this.computePoint(dc, terrain, poleA);
 
         // Draw one arrowhead for each segment in the original position list. The path may be tessellated,
         // so we need to find the tessellated segment halfway between each pair of original positions.
@@ -270,7 +270,7 @@ public class DirectedPath extends Path
 
             Position poleB = tessellatedPositions.get(nextPole);
 
-            Vec4 polePtB = this.computePoint(terrain, poleB);
+            Vec4 polePtB = this.computePoint(dc, terrain, poleB);
 
             // Find the segment that is midway between the two poles.
             int midPoint = (int)Math.round(this.arrowOffset * (thisPole + nextPole));
@@ -278,8 +278,8 @@ public class DirectedPath extends Path
             Position posA = tessellatedPositions.get(midPoint);
             Position posB = tessellatedPositions.get(midPoint + 1);
 
-            Vec4 ptA = this.computePoint(terrain, posA);
-            Vec4 ptB = this.computePoint(terrain, posB);
+            Vec4 ptA = this.computePoint(dc, terrain, posA);
+            Vec4 ptB = this.computePoint(dc, terrain, posB);
 
             this.computeArrowheadGeometry(dc, polePtA, polePtB, ptA, ptB, this.getArrowLength(), arrowBase, buffer,
                 pathData);
@@ -432,7 +432,7 @@ public class DirectedPath extends Path
 
         try
         {
-            if (this.isSurfacePath())
+            if (this.isSurfacePath(dc))
             {
                 // Pull the arrow triangles forward just a bit to ensure they show over the terrain.
                 dc.pushProjectionOffest(SURFACE_PATH_DEPTH_OFFSET);

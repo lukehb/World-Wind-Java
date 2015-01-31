@@ -490,6 +490,10 @@ public class RectangularTessellator extends WWObjectImpl implements Tessellator
                     lon = Angle.POS180;
 
                 Sector tileSector = new Sector(lastLat, lat, lastLon, lon);
+
+                if (dc.is2DGlobe() && this.skipTile(dc, tileSector))
+                    continue;
+
                 tops.add(this.createTile(dc, tileSector, 0));
                 lastLon = lon;
             }
@@ -497,6 +501,25 @@ public class RectangularTessellator extends WWObjectImpl implements Tessellator
         }
 
         return tops;
+    }
+
+    /**
+     * Determines whether a tile is within a 2D globe's projection limits.
+     *
+     * @param dc     the current draw context. The globe contained in the context must be a {@link
+     *               gov.nasa.worldwind.globes.Globe2D}.
+     * @param sector the tile's sector.
+     *
+     * @return <code>true</code> if the tile should be skipped -- it's outside the globe's projection limits --
+     * otherwise <code>false</code>.
+     */
+    protected boolean skipTile(DrawContext dc, Sector sector)
+    {
+        Sector limits = ((Globe2D) dc.getGlobe()).getProjection().getProjectionLimits();
+        if (limits == null || limits.equals(Sector.FULL_SPHERE))
+            return false;
+
+        return !sector.intersectsInterior(limits);
     }
 
     protected RectTile createTile(DrawContext dc, Sector tileSector, int level)
@@ -528,6 +551,9 @@ public class RectangularTessellator extends WWObjectImpl implements Tessellator
 
     protected void selectVisibleTiles(DrawContext dc, RectTile tile)
     {
+        if (dc.is2DGlobe() && this.skipTile(dc, tile.getSector()))
+            return;
+
         Extent extent = tile.getExtent();
         if (extent != null && !extent.intersects(this.currentFrustum))
             return;
@@ -1351,7 +1377,7 @@ public class RectangularTessellator extends WWObjectImpl implements Tessellator
      * @param line the ray for which an intersection is to be found.
      *
      * @return an array of <code>Intersection</code> sorted by increasing distance from the line origin, or null if no
-     *         intersection was found.
+     * intersection was found.
      */
     protected Intersection[] intersect(RectTile tile, Line line)
     {
@@ -1366,16 +1392,28 @@ public class RectangularTessellator extends WWObjectImpl implements Tessellator
             return null;
 
         // Compute 'vertical' plane perpendicular to the ground, that contains the ray
-        Vec4 normalV = line.getDirection().cross3(globe.computeSurfaceNormalAtPoint(line.getOrigin()));
-        Plane verticalPlane = new Plane(normalV.x(), normalV.y(), normalV.z(), -line.getOrigin().dot3(normalV));
-        if (!tile.getExtent().intersects(verticalPlane))
-            return null;
+        Plane verticalPlane = null;
+        Plane horizontalPlane = null;
+        double effectiveRadiusVertical = Double.MAX_VALUE;
+        double effectiveRadiusHorizontal = Double.MAX_VALUE;
+        Vec4 surfaceNormal = globe.computeSurfaceNormalAtPoint(line.getOrigin());
+        if (Math.abs(line.getDirection().normalize3().dot3(surfaceNormal)) < 1.0) // if not colinear
+        {
+            Vec4 normalV = line.getDirection().cross3(globe.computeSurfaceNormalAtPoint(line.getOrigin()));
+            verticalPlane = new Plane(normalV.x(), normalV.y(), normalV.z(), -line.getOrigin().dot3(normalV));
+            if (!tile.getExtent().intersects(verticalPlane))
+                return null;
 
-        // Compute 'horizontal' plane perpendicular to the vertical plane, that contains the ray
-        Vec4 normalH = line.getDirection().cross3(normalV);
-        Plane horizontalPlane = new Plane(normalH.x(), normalH.y(), normalH.z(), -line.getOrigin().dot3(normalH));
-        if (!tile.getExtent().intersects(horizontalPlane))
-            return null;
+            // Compute 'horizontal' plane perpendicular to the vertical plane, that contains the ray
+            Vec4 normalH = line.getDirection().cross3(normalV);
+            horizontalPlane = new Plane(normalH.x(), normalH.y(), normalH.z(), -line.getOrigin().dot3(normalH));
+            if (!tile.getExtent().intersects(horizontalPlane))
+                return null;
+
+            // Compute maximum cell size based on tile delta lat, density and globe radius
+            effectiveRadiusVertical = tile.extent.getEffectiveRadius(verticalPlane);
+            effectiveRadiusHorizontal = tile.extent.getEffectiveRadius(horizontalPlane);
+        }
 
         Intersection[] hits;
         ArrayList<Intersection> list = new ArrayList<Intersection>();
@@ -1393,10 +1431,6 @@ public class RectangularTessellator extends WWObjectImpl implements Tessellator
         double centerX = tile.ri.referenceCenter.x;
         double centerY = tile.ri.referenceCenter.y;
         double centerZ = tile.ri.referenceCenter.z;
-
-        // Compute maximum cell size based on tile delta lat, density and globe radius
-        double effectiveRadiusVertical = tile.extent.getEffectiveRadius(verticalPlane);
-        double effectiveRadiusHorizontal = tile.extent.getEffectiveRadius(horizontalPlane);
 
         // Loop through all tile cells - triangle pairs
         int startIndex = (density + 2) * 2 + 6; // skip first skirt row and a couple degenerate cells
@@ -1425,12 +1459,15 @@ public class RectangularTessellator extends WWObjectImpl implements Tessellator
             Vec4 cellCenter = Vec4.mix3(.5, v1, v2);
 
             // Test cell center distance to vertical plane
-            if (Math.abs(verticalPlane.distanceTo(cellCenter)) > effectiveRadiusVertical)
-                continue;
+            if (verticalPlane != null)
+            {
+                if (Math.abs(verticalPlane.distanceTo(cellCenter)) > effectiveRadiusVertical)
+                    continue;
 
-            // Test cell center distance to horizontal plane
-            if (Math.abs(horizontalPlane.distanceTo(cellCenter)) > effectiveRadiusHorizontal)
-                continue;
+                // Test cell center distance to horizontal plane
+                if (Math.abs(horizontalPlane.distanceTo(cellCenter)) > effectiveRadiusHorizontal)
+                    continue;
+            }
 
             // Prepare to test triangles - get other two vertices v0 & v3
             Vec4 p;
@@ -1661,7 +1698,7 @@ public class RectangularTessellator extends WWObjectImpl implements Tessellator
      * @param density the number of intervals along the sector's side
      *
      * @return a decimal ranged [0,1] representing the position between two columns or rows, rather than between two
-     *         edges of the sector
+     * edges of the sector
      */
     protected static double createPosition(int start, double decimal, int density)
     {
@@ -1683,7 +1720,7 @@ public class RectangularTessellator extends WWObjectImpl implements Tessellator
      * @param ri     the render info holding the vertices, etc.
      *
      * @return a <code>Point</code> geometrically within or on the boundary of the quadrilateral whose bottom left
-     *         corner is indexed by (<code>row</code>, <code>column</code>)
+     * corner is indexed by (<code>row</code>, <code>column</code>)
      */
     protected static Vec4 interpolate(int row, int column, double xDec, double yDec, RenderInfo ri)
     {

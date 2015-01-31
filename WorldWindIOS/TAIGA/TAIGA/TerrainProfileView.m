@@ -12,6 +12,7 @@
 #import "WWSceneController.h"
 #import "TAIGA.h"
 #import "UnitsFormatter.h"
+#import "AppConstants.h"
 
 #define NUM_INTERNAL_SEGMENTS (20)
 #define BOTTOM_MARGIN (20)
@@ -29,8 +30,9 @@
     UILabel* leftLabelView;
     UILabel* centerLabelView;
     UILabel* rightLabelView;
+    UILabel* noCourseLabel;
     UILabel* aircraftAltitudeLabelView;
-    float* gradientColors;
+    CGFloat* gradientColors;
 }
 
 - (TerrainProfileView*) initWithFrame:(CGRect)frame worldWindView:(WorldWindView*)worldWindView
@@ -40,13 +42,11 @@
     _wwv = worldWindView;
     [_wwv addDelegate:self];
 
-    _maxAltitude = 100;
-
     xs = nil;
     ys = nil;
 
     _opacity = 0.5;
-    gradientColors = malloc((size_t) 24 * sizeof(float));
+    gradientColors = malloc((size_t) 24 * sizeof(CGFloat));
     gradientColors[0] = 0.0;
     gradientColors[1] = 1.0;
     gradientColors[2] = 0.0;
@@ -74,6 +74,9 @@
 
     [self setBackgroundColor:[UIColor clearColor]];
     [self setUserInteractionEnabled:NO];
+
+    [self setAutoresizesSubviews:YES];
+    [self setAutoresizingMask:UIViewAutoresizingFlexibleWidth];
 //
 //    minLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, frame.size.height - 22, frame.size.width, 30)];
 //    [minLabel setTextColor:[UIColor whiteColor]];
@@ -116,6 +119,15 @@
     [aircraftAltitudeLabelView setShadowColor:[UIColor blackColor]];
     [aircraftAltitudeLabelView setShadowOffset:CGSizeMake(1, 1)];
     [self addSubview:aircraftAltitudeLabelView];
+//
+//    noCourseLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, 500, 200)];
+//    [noCourseLabel setText:@"NO COURSE"];
+//    [noCourseLabel setBackgroundColor:[UIColor clearColor]];
+//    [noCourseLabel setTextColor:[UIColor redColor]];
+//    [noCourseLabel setFont:[UIFont boldSystemFontOfSize:80]];
+//    [noCourseLabel sizeToFit];
+//    [noCourseLabel setAutoresizingMask:UIViewAutoresizingFlexibleRightMargin | UIViewAutoresizingFlexibleLeftMargin];
+//    [self addSubview:noCourseLabel];
 
     [self setUserInteractionEnabled:YES];
 
@@ -214,6 +226,18 @@
 
 - (void) drawRect:(CGRect)rect
 {
+    @try
+    {
+        [self doDrawRect:rect];
+    }
+    @catch (NSException* exception)
+    {
+        DDLogError(@"drawRect for TerrainProfileView exception: %@", [exception reason]);
+    }
+}
+
+- (void) doDrawRect:(CGRect)rect
+{
     if (!_enabled)
         return;
 
@@ -222,6 +246,10 @@
     CGContextRef context = UIGraphicsGetCurrentContext();
     [[UIColor colorWithWhite:0.8 alpha:0.95] set];
     CGContextFillRect(context, rect);
+
+//    [self showNoCourseSign:_path == nil rect:rect];
+    if (_path == nil)
+        return;
 
     if (numPoints < 2)
         return;
@@ -246,8 +274,10 @@
         }
     }
 
+    double maxAltitude = 1.1 * fmax(yMax, _aircraftAltitude);
+
     float xRange = xMax - xMin;
-    float yRange = _maxAltitude - yMin;
+    float yRange = (float) (maxAltitude - yMin);
 
     float firstY = graphYMax * (1 - (ys[0] - yMin) / yRange);
 
@@ -273,7 +303,8 @@
     if (_dangerAltitude > yMax)
     {
         float y0 = 1.0 - (_warningAltitude - yMin) / yRange;
-        CGFloat locations[3] = {1.0, y0 + 0.03, y0};
+        float dy = (float) fmin(0.03, (1 - y0) / 2);
+        CGFloat locations[3] = {1.0, y0 + dy, y0};
         CGGradientRef gradient = CGGradientCreateWithColorComponents(CGColorSpaceCreateDeviceRGB(), gradientColors, locations, 3);
         CGContextDrawLinearGradient(context, gradient, CGPointMake(0, 0), CGPointMake(0, graphYMax),
                 kCGGradientDrawsBeforeStartLocation | kCGGradientDrawsAfterEndLocation);
@@ -283,7 +314,9 @@
     {
         float y0 = 1.0 - (_warningAltitude - yMin) / yRange;
         float r0 = 1.0 - (_dangerAltitude - yMin) / yRange;
-        CGFloat locations[6] = {1.0, y0 + 0.03, y0, r0 + 0.03, r0, 0.0};
+        float dy = (float) fmin(0.03, (1 - y0) / 2);
+        float dr = (float) fmin(0.03, (y0 - r0) / 2);
+        CGFloat locations[6] = {1.0, y0 + dy, y0, r0 + dr, r0, 0.0};
         CGGradientRef gradient = CGGradientCreateWithColorComponents(CGColorSpaceCreateDeviceRGB(), gradientColors, locations, 6);
         CGContextDrawLinearGradient(context, gradient, CGPointMake(0, 0), CGPointMake(0, graphYMax),
                 kCGGradientDrawsBeforeStartLocation | kCGGradientDrawsAfterEndLocation);
@@ -320,7 +353,7 @@
     // Show the aircraft altitude as a dashed line across the entire graph.
     [[UIColor blackColor] setStroke];
     CGContextBeginPath(context);
-    CGContextMoveToPoint(context, TRI_HEIGHT + 5  + 1.2 * stringSize.width, aircraftY);
+    CGContextMoveToPoint(context, TRI_HEIGHT + 5 + 1.2 * stringSize.width, aircraftY);
     CGContextAddLineToPoint(context, frame.size.width, aircraftY);
     CGFloat lengths[] = {4, 4};
     CGContextSetLineDash(context, 0, lengths, 2);
@@ -375,5 +408,15 @@
     stringSize = [_rightLabel sizeWithAttributes:attrDict];
     [rightLabelView setFrame:CGRectMake(frame.size.width - stringSize.width, AXIS_LABEL_Y, 200, 30)];
     [rightLabelView setText:_rightLabel];
+}
+
+- (void) showNoCourseSign:(bool)yn rect:(CGRect)rect
+{
+    CGRect labelBounds = [noCourseLabel bounds];
+    float labelX = rect.size.width / 2 - labelBounds.size.width / 2;
+    [noCourseLabel setFrame:CGRectMake(labelX, 0, labelBounds.size.width, labelBounds.size.height)];
+    [noCourseLabel setText:yn ? @"  No Course" : @""];
+
+    [maxLabel setText:@""];
 }
 @end

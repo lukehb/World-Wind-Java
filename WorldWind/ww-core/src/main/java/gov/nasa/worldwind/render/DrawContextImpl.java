@@ -100,19 +100,32 @@ public class DrawContextImpl extends WWObjectImpl implements DrawContext
         protected OrderedRenderable or;
         protected double distanceFromEye;
         protected long time;
+        protected int globeOffset;
+        protected SectorGeometryList surfaceGeometry;
 
-        public OrderedRenderableEntry(OrderedRenderable orderedRenderable, long insertionTime)
+        public OrderedRenderableEntry(OrderedRenderable orderedRenderable, long insertionTime, DrawContext dc)
         {
             this.or = orderedRenderable;
             this.distanceFromEye = orderedRenderable.getDistanceFromEye();
             this.time = insertionTime;
+            if (dc.isContinuous2DGlobe())
+            {
+                this.globeOffset = ((Globe2D) dc.getGlobe()).getOffset();
+                this.surfaceGeometry = dc.getSurfaceGeometry();
+            }
         }
 
-        public OrderedRenderableEntry(OrderedRenderable orderedRenderable, double distanceFromEye, long insertionTime)
+        public OrderedRenderableEntry(OrderedRenderable orderedRenderable, double distanceFromEye, long insertionTime,
+            DrawContext dc)
         {
             this.or = orderedRenderable;
             this.distanceFromEye = distanceFromEye;
             this.time = insertionTime;
+            if (dc.isContinuous2DGlobe())
+            {
+                this.globeOffset = ((Globe2D) dc.getGlobe()).getOffset();
+                this.surfaceGeometry = dc.getSurfaceGeometry();
+            }
         }
     }
 
@@ -462,19 +475,39 @@ public class DrawContextImpl extends WWObjectImpl implements DrawContext
     public Color getUniquePickColor()
     {
         this.uniquePickNumber++;
-        int clearColorCode = this.getClearColor().getRGB();
 
-        if (clearColorCode == this.uniquePickNumber)
+        int clearColorCode = this.getClearColor().getRGB();
+        if (clearColorCode == this.uniquePickNumber) // skip the clear color
             this.uniquePickNumber++;
 
         if (this.uniquePickNumber >= 0x00FFFFFF)
         {
             this.uniquePickNumber = 1;  // no black, no white
-            if (clearColorCode == this.uniquePickNumber)
+            if (clearColorCode == this.uniquePickNumber) // skip the clear color
                 this.uniquePickNumber++;
         }
 
         return new Color(this.uniquePickNumber, true); // has alpha
+    }
+
+    public Color getUniquePickColorRange(int count)
+    {
+        if (count < 1)
+            return null;
+
+        Range range = new Range(this.uniquePickNumber + 1, count); // compute the requested range
+
+        int clearColorCode = this.getClearColor().getRGB();
+        if (range.contains(clearColorCode)) // skip the clear color when it's in the range
+            range.location = clearColorCode + 1;
+
+        int maxColorCode = range.location + range.length - 1;
+        if (maxColorCode >= 0x00FFFFFF) // not enough colors to satisfy the requested range
+            return null;
+
+        this.uniquePickNumber = maxColorCode; // set the unique color to the last color in the requested range
+
+        return new Color(range.location, true); // return a pointer to the beginning of the requested range
     }
 
     public Color getClearColor()
@@ -657,7 +690,7 @@ public class DrawContextImpl extends WWObjectImpl implements DrawContext
             return; // benign event
         }
 
-        this.orderedRenderables.add(new OrderedRenderableEntry(orderedRenderable, System.nanoTime()));
+        this.orderedRenderables.add(new OrderedRenderableEntry(orderedRenderable, System.nanoTime(), this));
     }
 
     /** {@inheritDoc} */
@@ -675,7 +708,8 @@ public class DrawContextImpl extends WWObjectImpl implements DrawContext
         // If multiple ordered renderables are added in this way, they are drawn according to the order in which they
         // are added.
         double eyeDistance = isBehind ? Double.MAX_VALUE : orderedRenderable.getDistanceFromEye();
-        this.orderedRenderables.add(new OrderedRenderableEntry(orderedRenderable, eyeDistance, System.nanoTime()));
+        this.orderedRenderables.add(
+            new OrderedRenderableEntry(orderedRenderable, eyeDistance, System.nanoTime(), this));
     }
 
     public OrderedRenderable peekOrderedRenderables()
@@ -688,6 +722,12 @@ public class DrawContextImpl extends WWObjectImpl implements DrawContext
     public OrderedRenderable pollOrderedRenderables()
     {
         OrderedRenderableEntry ore = this.orderedRenderables.poll();
+
+        if (ore != null && this.isContinuous2DGlobe())
+        {
+            ((Globe2D) this.getGlobe()).setOffset(ore.globeOffset);
+            this.setSurfaceGeometry(ore.surfaceGeometry);
+        }
 
         return ore != null ? ore.or : null;
     }

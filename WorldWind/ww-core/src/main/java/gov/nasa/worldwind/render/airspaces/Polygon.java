@@ -11,7 +11,7 @@ import gov.nasa.worldwind.exception.WWRuntimeException;
 import gov.nasa.worldwind.geom.Box;
 import gov.nasa.worldwind.geom.*;
 import gov.nasa.worldwind.globes.Globe;
-import gov.nasa.worldwind.render.DrawContext;
+import gov.nasa.worldwind.render.*;
 import gov.nasa.worldwind.util.*;
 
 import javax.media.opengl.*;
@@ -29,6 +29,17 @@ public class Polygon extends AbstractAirspace
     private List<LatLon> locations = new ArrayList<LatLon>();
     private boolean enableCaps = true;
     private int subdivisions = DEFAULT_SUBDIVISIONS;
+
+    public Polygon(Polygon source)
+    {
+        super(source);
+
+        this.enableCaps = source.enableCaps;
+        this.subdivisions = source.subdivisions;
+
+        this.addLocations(source.locations);
+        this.makeDefaultDetailLevels();
+    }
 
     public Polygon(Iterable<? extends LatLon> locations)
     {
@@ -100,12 +111,15 @@ public class Polygon extends AbstractAirspace
     protected void addLocations(Iterable<? extends LatLon> newLocations)
     {
         if (newLocations != null)
+        {
             for (LatLon ll : newLocations)
             {
                 if (ll != null)
                     this.locations.add(ll);
             }
-        this.setExtentOutOfDate();
+        }
+
+        this.invalidateAirspaceData();
     }
 
     public boolean isEnableCaps()
@@ -155,6 +169,27 @@ public class Polygon extends AbstractAirspace
         return points;
     }
 
+    protected void doMoveTo(Globe globe, Position oldRef, Position newRef)
+    {
+        if (oldRef == null)
+        {
+            String message = "nullValue.OldRefIsNull";
+            Logging.logger().severe(message);
+            throw new IllegalArgumentException(message);
+        }
+        if (newRef == null)
+        {
+            String message = "nullValue.NewRefIsNull";
+            Logging.logger().severe(message);
+            throw new IllegalArgumentException(message);
+        }
+
+        List<LatLon> newLocations = LatLon.computeShiftedLocations(globe, oldRef, newRef, this.getLocations());
+        this.setLocations(newLocations);
+
+        super.doMoveTo(oldRef, newRef);
+    }
+
     protected void doMoveTo(Position oldRef, Position newRef)
     {
         if (oldRef == null)
@@ -182,6 +217,27 @@ public class Polygon extends AbstractAirspace
             newLocations[i] = LatLon.greatCircleEndPosition(newRef, azimuth, distance);
         }
         this.setLocations(Arrays.asList(newLocations));
+    }
+
+    @Override
+    protected SurfaceShape createSurfaceShape()
+    {
+        return new SurfacePolygon();
+    }
+
+    @Override
+    protected void updateSurfaceShape(DrawContext dc, SurfaceShape shape)
+    {
+        super.updateSurfaceShape(dc, shape);
+
+        boolean mustDrawInterior = this.getActiveAttributes().isDrawInterior() && this.isEnableCaps();
+        shape.getAttributes().setDrawInterior(mustDrawInterior); // suppress the shape interior when caps are disabled
+    }
+
+    @Override
+    protected void regenerateSurfaceShape(DrawContext dc, SurfaceShape shape)
+    {
+        ((SurfacePolygon) shape).setOuterBoundary(this.locations);
     }
 
     protected int getSubdivisions()
@@ -309,7 +365,7 @@ public class Polygon extends AbstractAirspace
         this.adjustForGroundReference(dc, terrainConformant, altitudes, groundRef); // no-op if groudRef is null
     }
 
-    protected int computeCartesianPolygon(Globe globe, List<? extends LatLon> locations, List<Boolean> edgeFlags,
+    protected int computeEllipsoidalPolygon(Globe globe, List<? extends LatLon> locations, List<Boolean> edgeFlags,
         Vec4[] points, Boolean[] edgeFlagArray, Matrix[] transform)
     {
         if (globe == null)
@@ -358,7 +414,7 @@ public class Polygon extends AbstractAirspace
         for (int i = 0; i < locationCount; i++)
         {
             LatLon ll = locations.get(i);
-            points[i] = globe.computePointFromPosition(ll.getLatitude(), ll.getLongitude(), 0.0);
+            points[i] = globe.computeEllipsoidalPointFromPosition(ll.getLatitude(), ll.getLongitude(), 0.0);
 
             if (edgeFlagArray != null)
                 edgeFlagArray[i] = (edgeFlags != null) ? edgeFlags.get(i) : true;
@@ -379,8 +435,9 @@ public class Polygon extends AbstractAirspace
 
         // Compute a transform that will map the cartesian points to a local coordinate system centered at the average
         // of the points and oriented with the globe surface.
-        Position centerPos = globe.computePositionFromPoint(centerPoint);
-        Matrix tx = globe.computeSurfaceOrientationAtPosition(centerPos);
+        Position centerPos = globe.computePositionFromEllipsoidalPoint(centerPoint);
+        Matrix tx = globe.computeEllipsoidalOrientationAtPosition(centerPos.latitude, centerPos.longitude,
+            centerPos.elevation);
         Matrix txInv = tx.getInverse();
         // Map the cartesian points to a local coordinate space.
         for (int i = 0; i < locationCount; i++)
@@ -498,7 +555,7 @@ public class Polygon extends AbstractAirspace
         // re-create the polygon's geometry.
         this.locations = Collections.emptyList();
         // Reinitialize the polygon, since we've replaced its locations with an empty list.
-        this.setExtentOutOfDate();
+        this.invalidateAirspaceData();
     }
 
     private void drawPolygonFill(DrawContext dc, List<LatLon> locations, List<Boolean> edgeFlags,
@@ -509,7 +566,7 @@ public class Polygon extends AbstractAirspace
         PolygonGeometry geom = this.getPolygonGeometry(dc, locations, edgeFlags, altitudes, terrainConformant,
             enableCaps, subdivisions, referenceCenter);
         if (geom != null)
-            this.getRenderer().drawGeometry(dc, geom.getFillIndexGeometry(), geom.getVertexGeometry());
+            this.drawGeometry(dc, geom.getFillIndexGeometry(), geom.getVertexGeometry());
     }
 
     private void drawPolygonOutline(DrawContext dc, List<LatLon> locations, List<Boolean> edgeFlags,
@@ -520,7 +577,7 @@ public class Polygon extends AbstractAirspace
         PolygonGeometry geom = this.getPolygonGeometry(dc, locations, edgeFlags, altitudes, terrainConformant,
             enableCaps, subdivisions, referenceCenter);
         if (geom != null)
-            this.getRenderer().drawGeometry(dc, geom.getOutlineIndexGeometry(), geom.getVertexGeometry());
+            this.drawGeometry(dc, geom.getOutlineIndexGeometry(), geom.getVertexGeometry());
     }
 
     private void makePolygon(DrawContext dc, List<LatLon> locations, List<Boolean> edgeFlags,
@@ -537,7 +594,7 @@ public class Polygon extends AbstractAirspace
         Vec4[] polyPoints = new Vec4[locations.size() + 1];
         Boolean[] polyEdgeFlags = new Boolean[locations.size() + 1];
         Matrix[] polyTransform = new Matrix[1];
-        int polyCount = this.computeCartesianPolygon(dc.getGlobe(), locations, edgeFlags, polyPoints, polyEdgeFlags,
+        int polyCount = this.computeEllipsoidalPolygon(dc.getGlobe(), locations, edgeFlags, polyPoints, polyEdgeFlags,
             polyTransform);
 
         // Compute the winding order of the planar cartesian points. If the order is not counter-clockwise, then
@@ -627,7 +684,7 @@ public class Polygon extends AbstractAirspace
         ArrayList<Vec4> points = new ArrayList<Vec4>();
         for (LatLon ll : locations)
         {
-            points.add(globe.computePointFromLocation(ll));
+            points.add(globe.computeEllipsoidalPointFromPosition(ll.latitude, ll.longitude, 0));
         }
 
         //noinspection StringEquality
@@ -635,7 +692,8 @@ public class Polygon extends AbstractAirspace
             Collections.reverse(locations);
 
         Vec4 centerPoint = Vec4.computeAveragePoint(points);
-        Vec4 surfaceNormal = globe.computeSurfaceNormalAtPoint(centerPoint);
+        Position centerPos = globe.computePositionFromEllipsoidalPoint(centerPoint);
+        Vec4 surfaceNormal = globe.computeEllipsoidalNormalAtLocation(centerPos.latitude, centerPos.longitude);
 
         int numPoints = points.size();
         float[] coords = new float[3 * numPoints];
@@ -656,7 +714,7 @@ public class Polygon extends AbstractAirspace
         for (int i = 0; i < tessellatedPoints.getVertexCount(); i++)
         {
             Vec4 v = Vec4.fromFloatArray(tessellatedPoints.getVertices(), 3 * i, 3);
-            tessellatedLocations.add(globe.computePositionFromPoint(v));
+            tessellatedLocations.add(globe.computePositionFromEllipsoidalPoint(v));
         }
     }
 
@@ -822,12 +880,12 @@ public class Polygon extends AbstractAirspace
             int index = 3 * i;
             Vec4 vec = new Vec4(locationVerts[index], locationVerts[index + 1], locationVerts[index + 2]);
             vec = vec.transformBy4(locationTransform);
-            Position pos = globe.computePositionFromPoint(vec);
+            Position pos = globe.computePositionFromEllipsoidalPoint(vec); // ellipsoidal-coordinate point and transform
 
             for (int j = 0; j < 2; j++)
             {
                 vec = this.computePointFromPosition(dc, pos.getLatitude(), pos.getLongitude(), altitude[j],
-                    terrainConformant[j]);
+                    terrainConformant[j]); // final model-coordinate point
 
                 index = 2 * i + j;
                 index = 3 * (vertexPos + index);
@@ -867,8 +925,9 @@ public class Polygon extends AbstractAirspace
             Vec4 vec = new Vec4(locationVerts[index], locationVerts[index + 1], locationVerts[index + 2]);
             vec = vec.transformBy4(locationTransform);
 
-            Position pos = globe.computePositionFromPoint(vec);
-            vec = this.computePointFromPosition(dc, pos.getLatitude(), pos.getLongitude(), altitude, terrainConformant);
+            Position pos = globe.computePositionFromEllipsoidalPoint(vec); // ellipsoidal-coordinate point and transform
+            vec = this.computePointFromPosition(dc, pos.getLatitude(), pos.getLongitude(), altitude,
+                terrainConformant); // final model-coordinate point
 
             index = 3 * (vertexPos + i);
             vertices[index] = (float) (vec.x - referenceCenter.x);

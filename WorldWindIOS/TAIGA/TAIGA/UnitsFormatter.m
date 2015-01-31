@@ -10,9 +10,16 @@
 
 @implementation UnitsFormatter
 
-- (id)init
+- (id) init
 {
     self = [super init];
+
+    angleFormatter = [[NSNumberFormatter alloc] init];
+    [angleFormatter setNumberStyle:NSNumberFormatterDecimalStyle];
+    [angleFormatter setMinimumFractionDigits:2];
+    [angleFormatter setMaximumFractionDigits:2];
+    [angleFormatter setPositiveSuffix:@"\u00B0"];
+    [angleFormatter setNegativeSuffix:@"\u00B0"];
 
     latitudeFormatter = [[NSNumberFormatter alloc] init];
     [latitudeFormatter setNumberStyle:NSNumberFormatterDecimalStyle];
@@ -36,7 +43,35 @@
     [altitudeFormatter setPositiveSuffix:@"\u2032"];
     [altitudeFormatter setNegativeSuffix:@"\u2032"];
 
+    speedFormatter = [[NSNumberFormatter alloc] init];
+    [speedFormatter setNumberStyle:NSNumberFormatterDecimalStyle];
+    [speedFormatter setMaximumFractionDigits:0];
+    [speedFormatter setPositiveSuffix:@" kts"];
+    [speedFormatter setNegativeSuffix:@" kts"];
+
+    distanceFormatterFeet = [[NSNumberFormatter alloc] init];
+    [distanceFormatterFeet setNumberStyle:NSNumberFormatterDecimalStyle];
+    [distanceFormatterFeet setMaximumFractionDigits:0];
+    [distanceFormatterFeet setPositiveSuffix:@"\u2032"];
+    [distanceFormatterFeet setNegativeSuffix:@"\u2032"];
+
+    distanceFormatterMiles = [[NSNumberFormatter alloc] init];
+    [distanceFormatterMiles setNumberStyle:NSNumberFormatterDecimalStyle];
+    [distanceFormatterMiles setMaximumFractionDigits:0];
+    [distanceFormatterMiles setPositiveSuffix:@" nm"];
+    [distanceFormatterMiles setNegativeSuffix:@" nm"];
+
     return self;
+}
+
+- (NSString*) formatAngle:(double)angle
+{
+    return [angleFormatter stringFromNumber:[NSNumber numberWithDouble:angle]];
+}
+
+- (NSString*) formatAngle2:(double)angle
+{
+    return [NSString stringWithFormat:@"%03d\u00B0", (int) round(angle)];
 }
 
 - (NSString*) formatDegreesLatitude:(double)latitude
@@ -71,14 +106,31 @@
     return ms;
 }
 
-- (NSString*) formatMetersAltitude:(double)altitude
+- (NSString*) formatMetersAltitude:(double)meters
 {
-    return [altitudeFormatter stringFromNumber:[NSNumber numberWithDouble:altitude * TAIGA_METERS_TO_FEET]];
+    return [altitudeFormatter stringFromNumber:[NSNumber numberWithDouble:meters * TAIGA_METERS_TO_FEET]];
 }
 
-- (NSString*) formatFeetAltitude:(double)altitude
+- (NSString*) formatFeetAltitude:(double)meters
 {
-    return [altitudeFormatter stringFromNumber:[NSNumber numberWithDouble:altitude]];
+    return [altitudeFormatter stringFromNumber:[NSNumber numberWithDouble:meters]];
+}
+
+- (NSString*) formatKnotsSpeed:(double)metersPerSecond
+{
+    return [speedFormatter stringFromNumber:
+            [NSNumber numberWithDouble:metersPerSecond * TAIGA_METERS_TO_NAUTICAL_MILES / 3600]];
+}
+
+- (NSString*) formatFeetDistance:(double)meters
+{
+    return [distanceFormatterFeet stringFromNumber:[NSNumber numberWithDouble:meters * TAIGA_METERS_TO_FEET]];
+}
+
+- (NSString*) formatMilesDistance:(double)meters
+{
+    return [distanceFormatterMiles stringFromNumber:[NSNumber numberWithDouble:meters *
+            TAIGA_METERS_TO_NAUTICAL_MILES]];
 }
 
 @end

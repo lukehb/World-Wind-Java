@@ -90,7 +90,7 @@ public class ForwardEdgeOfBattleArea extends AbstractMilStd2525TacticalGraphic
 
         /** {@inheritDoc} */
         @Override
-        protected void layoutTextModifiers(DrawContext dc, AVList modifiers)
+        protected void layoutTextModifiers(DrawContext dc, AVList modifiers, OrderedSymbol osym)
         {
             this.currentLabels.clear();
 
@@ -98,7 +98,7 @@ public class ForwardEdgeOfBattleArea extends AbstractMilStd2525TacticalGraphic
             Offset imgOffset = this.leftAlign ? RIGHT_CENTER : LEFT_CENTER;
             Offset txtOffset = this.leftAlign ? LEFT_CENTER : RIGHT_CENTER;
 
-            this.addLabel(dc, imgOffset, txtOffset, this.getText(), font, null, null);
+            this.addLabel(dc, imgOffset, txtOffset, this.getText(), font, null, null, osym);
         }
 
         /**

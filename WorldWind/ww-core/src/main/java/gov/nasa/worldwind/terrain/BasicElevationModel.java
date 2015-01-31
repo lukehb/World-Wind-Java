@@ -23,7 +23,7 @@ import javax.swing.*;
 import javax.xml.xpath.XPath;
 import java.awt.image.*;
 import java.io.*;
-import java.net.URL;
+import java.net.*;
 import java.nio.*;
 import java.util.*;
 
@@ -119,6 +119,10 @@ public class BasicElevationModel extends AbstractElevationModel implements BulkR
         s = params.getStringValue(AVKey.ELEVATION_EXTREMES_FILE);
         if (s != null)
             this.loadExtremeElevations(s);
+
+        b = (Boolean) params.getValue(AVKey.DELETE_CACHE_ON_EXIT);
+        if (b != null)
+            this.setValue(AVKey.DELETE_CACHE_ON_EXIT, true);
 
         // Set some fallback values if not already set.
         setFallbacks(params);
@@ -445,7 +449,7 @@ public class BasicElevationModel extends AbstractElevationModel implements BulkR
 
                 this.elevationModel.downloadElevations(tile);
             }
-            catch (IOException e)
+            catch (Exception e)
             {
                 String msg = Logging.getMessage("ElevationModel.ExceptionRequestingElevations",
                     this.tileKey.toString());
@@ -494,7 +498,7 @@ public class BasicElevationModel extends AbstractElevationModel implements BulkR
 
     // Reads a tile's elevations from the file cache and adds the tile to the memory cache.
 
-    protected boolean loadElevations(ElevationTile tile, java.net.URL url) throws IOException
+    protected boolean loadElevations(ElevationTile tile, java.net.URL url) throws Exception
     {
         BufferWrapper elevations = this.readElevations(url);
         if (elevations == null || elevations.length() == 0)
@@ -536,7 +540,7 @@ public class BasicElevationModel extends AbstractElevationModel implements BulkR
     // Read elevations from the file cache. Don't be confused by the use of a URL here: it's used so that files can
     // be read using System.getResource(URL), which will draw the data from a jar file in the classpath.
 
-    protected BufferWrapper readElevations(URL url) throws IOException
+    protected BufferWrapper readElevations(URL url) throws Exception
     {
         try
         {
@@ -545,7 +549,7 @@ public class BasicElevationModel extends AbstractElevationModel implements BulkR
             else
                 return this.makeBilElevations(url);
         }
-        catch (java.io.IOException e)
+        catch (Exception e)
         {
             Logging.logger().log(java.util.logging.Level.SEVERE,
                 "ElevationModel.ExceptionReadingElevationFile", url.toString());
@@ -568,9 +572,9 @@ public class BasicElevationModel extends AbstractElevationModel implements BulkR
         return BufferWrapper.wrap(byteBuffer, bufferParams);
     }
 
-    protected BufferWrapper makeTiffElevations(URL url) throws IOException
+    protected BufferWrapper makeTiffElevations(URL url) throws IOException, URISyntaxException
     {
-        File file = new File(url.getPath());
+        File file = new File(url.toURI());
 
         // Create a raster reader for the file type.
         DataRasterReaderFactory readerFactory = (DataRasterReaderFactory) WorldWind.createConfigurationComponent(
@@ -1817,9 +1821,13 @@ public class BasicElevationModel extends AbstractElevationModel implements BulkR
             this.elevations = elevations;
             this.updateTime = System.currentTimeMillis();
 
-            for (int i = 0; i < this.elevations.length(); i++)
+            if (this.elevations.length() > 0)
             {
-                em.determineExtremes(this.elevations.getDouble(i), extremes);
+                this.extremes = WWUtil.defaultMinMix();
+                for (int i = 0; i < this.elevations.length(); i++)
+                {
+                    em.determineExtremes(this.elevations.getDouble(i), this.extremes);
+                }
             }
         }
 
@@ -2044,68 +2052,76 @@ public class BasicElevationModel extends AbstractElevationModel implements BulkR
     public ByteBuffer generateExtremeElevations(int levelNumber)
     {
         return null;
-//        long waitTime = 1000;
-//        long timeout = 10 * 60 * 1000;
-//
-//        ElevationModel.Elevations elevs;
-//        BasicElevationModel em = new EarthElevationModel();
-//
-//        double delta = 20d / Math.pow(2, levelNumber);
-//
-//        int numLats = (int) Math.ceil(180 / delta);
-//        int numLons = (int) Math.ceil(360 / delta);
-//
-//        System.out.printf("Building extreme elevations for layer %d, num lats %d, num lons %d\n",
-//            levelNumber, numLats, numLons);
-//
-//        ByteBuffer byteBuffer = ByteBuffer.allocateDirect(2 * 2 * numLats * numLons);
-//        ShortBuffer buffer = byteBuffer.asShortBuffer();
-//        buffer.rewind();
-//
-//        Level level = this.levels.getLevel(levelNumber);
-//        for (int j = 0; j < numLats; j++)
-//        {
-//            double lat = -90 + j * delta;
-//            for (int i = 0; i < numLons; i++)
-//            {
-//                double lon = -180 + i * delta;
-//                Sector s = Sector.fromDegrees(lat, lat + delta, lon, lon + delta);
-//                long startTime = System.currentTimeMillis();
-//                while ((elevs = em.getElevations(s, level)) == null)
-//                {
-//                    try
-//                    {
-//                        Thread.sleep(waitTime);
-//                    }
-//                    catch (InterruptedException e)
-//                    {
-//                        e.printStackTrace();
-//                    }
-//                    if (System.currentTimeMillis() - startTime >= timeout)
-//                        break;
-//                }
-//
-//                if (elevs == null)
-//                {
-//                    System.out.printf("null elevations for (%f, %f) %s\n", lat, lon, s);
-//                    continue;
-//                }
-//
-//
-//                double[] extremes = elevs.getExtremes();
-//                if (extremes != null)
-//                {
-//                    System.out.printf("%d:%d, (%f, %f) min = %f, max = %f\n", j, i, lat, lon, extremes[0], extremes[1]);
-//                    buffer.put((short) extremes[0]).put((short) extremes[1]);
-//                }
-//                else
-//                    System.out.printf("no extremes for (%f, %f)\n", lat, lon);
-//            }
-//        }
-//
-//        return (ByteBuffer) buffer.rewind();
+        //Level level = this.levels.getLevel(levelNumber);
+        //Sector sector = this.levels.getSector();
+        //Angle latDelta = level.getTileDelta().getLatitude();
+        //Angle lonDelta = level.getTileDelta().getLongitude();
+        //Angle latOrigin = this.levels.getTileOrigin().getLatitude();
+        //Angle lonOrigin = this.levels.getTileOrigin().getLongitude();
+        //
+        //int firstRow = Tile.computeRow(latDelta, sector.getMinLatitude(), latOrigin);
+        //int lastRow = Tile.computeRow(latDelta, sector.getMaxLatitude(), latOrigin);
+        //int firstCol = Tile.computeColumn(lonDelta, sector.getMinLongitude(), lonOrigin);
+        //int lastCol = Tile.computeColumn(lonDelta, sector.getMaxLongitude(), lonOrigin);
+        //
+        //int tileCount = (lastRow - firstRow + 1) * (lastCol - firstCol + 1);
+        //ByteBuffer byteBuffer = ByteBuffer.allocate(2 * 2 * tileCount);
+        //ShortBuffer buffer = byteBuffer.asShortBuffer();
+        //
+        //final Object condition = new Object();
+        //final PropertyChangeListener changeListener = new PropertyChangeListener()
+        //{
+        //    @Override
+        //    public void propertyChange(PropertyChangeEvent evt)
+        //    {
+        //        synchronized (condition)
+        //        {
+        //            condition.notifyAll();
+        //        }
+        //    }
+        //};
+        //this.addPropertyChangeListener(AVKey.ELEVATION_MODEL, changeListener);
+        //
+        //for (int row = firstRow; row <= lastRow; row++)
+        //{
+        //    System.out.printf("row %d/%d", row - firstRow, lastRow - firstRow);
+        //
+        //    for (int col = firstCol; col <= lastCol; col++)
+        //    {
+        //        TileKey key = new TileKey(levelNumber, row, col, level.getCacheName());
+        //        ElevationTile tile;
+        //
+        //        while ((tile = this.getTileFromMemory(key)) == null)
+        //        {
+        //            try
+        //            {
+        //                this.requestTile(key);
+        //
+        //                synchronized (condition)
+        //                {
+        //                    condition.wait(1000);
+        //                }
+        //            }
+        //            catch (InterruptedException e)
+        //            {
+        //                e.printStackTrace();
+        //            }
+        //        }
+        //
+        //        short min = (short) tile.extremes[0];
+        //        short max = (short) tile.extremes[1];
+        //        buffer.put(min).put(max);
+        //    }
+        //
+        //    System.out.println(" Done");
+        //}
+        //
+        //System.out.println("All rows Done");
+        //this.removePropertyChangeListener(AVKey.ELEVATION_MODEL, changeListener);
+        //
+        //return (ByteBuffer) byteBuffer.rewind();
     }
-//
+
 //    public final int getTileCount(Sector sector, int resolution)
 //    {
 //        if (sector == null)

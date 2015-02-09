@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/wcmatthysen/World-Wind-Java.svg?branch=master)](https://travis-ci.org/wcmatthysen/World-Wind-Java)
+
 This file explains the organization of the World Wind Subversion repository's directories, and briefly outlines their contents.
 
 WorldWind

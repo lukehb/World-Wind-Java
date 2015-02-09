@@ -6,24 +6,20 @@
 package gov.nasa.worldwind.render.airspaces;
 
 import gov.nasa.worldwind.geom.*;
-import junit.framework.*;
-import junit.textui.TestRunner;
 
 import java.util.List;
+
+import org.junit.Test;
+
+import static org.junit.Assert.assertEquals;
 
 /**
  * @author dcollins
  * @version $Id$
  */
-public class TrackAirspaceTest extends TestCase
+public class TrackAirspaceTest
 {
-    public static void main(String[] args)
-    {
-        TestSuite testSuite = new TestSuite();
-        testSuite.addTestSuite(TrackAirspaceTest.class);
-        new TestRunner().doRun(testSuite);
-    }
-
+    @Test
     public void testRestoreState()
     {
         TrackAirspace expected = new TrackAirspace();
@@ -59,8 +55,8 @@ public class TrackAirspaceTest extends TestCase
         assertEquals(expected.getAttributes(), actual.getAttributes());
         assertEquals(expected.getHighlightAttributes(), actual.getHighlightAttributes());
         assertEquals(expected.isHighlighted(), actual.isHighlighted());
-        assertEquals(expected.getAltitudes()[0], actual.getAltitudes()[0]);
-        assertEquals(expected.getAltitudes()[1], actual.getAltitudes()[1]);
+        assertEquals(expected.getAltitudes()[0], actual.getAltitudes()[0], 0.0001);
+        assertEquals(expected.getAltitudes()[1], actual.getAltitudes()[1], 0.0001);
         assertEquals(expected.isTerrainConforming()[0], actual.isTerrainConforming()[0]);
         assertEquals(expected.isTerrainConforming()[1], actual.isTerrainConforming()[1]);
         assertEquals(expected.getAltitudeDatum()[0], actual.getAltitudeDatum()[0]);
@@ -96,7 +92,7 @@ public class TrackAirspaceTest extends TestCase
     {
         assertEquals(expected.getLocations()[0], actual.getLocations()[0]);
         assertEquals(expected.getLocations()[1], actual.getLocations()[1]);
-        assertEquals(expected.getWidths()[0], actual.getWidths()[0]);
-        assertEquals(expected.getWidths()[1], actual.getWidths()[1]);
+        assertEquals(expected.getWidths()[0], actual.getWidths()[0], 0.0001);
+        assertEquals(expected.getWidths()[1], actual.getWidths()[1], 0.0001);
     }
 }

@@ -39,7 +39,7 @@ import org.junit.Ignore;
 @Ignore
 public class BrowserBalloonTest extends ApplicationTemplate
 {
-    public static final String DEFAULT_FILE = "src/main/java/gov/nasa/worldwind/render/BrowserBalloonTest.html";
+    public static final String DEFAULT_FILE = "src/test/java/gov/nasa/worldwind/render/BrowserBalloonTest.html";
 
     public static class AppFrame extends ApplicationTemplate.AppFrame
     {

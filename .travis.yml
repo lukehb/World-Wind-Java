@@ -3,4 +3,4 @@ notifications:
   email:
     on_success: never
     on_failure: always
-script: cd WorldWind && mvn install -DskipTests=true && mvn test
+script: cd WorldWind/lib/gdal && ./mvn-install.sh && cd ../../ && mvn install -DskipTests=true && mvn test

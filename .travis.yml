@@ -3,4 +3,4 @@ notifications:
   email:
     on_success: never
     on_failure: always
-script: sh -e 'cd WorldWind && mvn install -DskipTests=true && mvn test'
+script: cd WorldWind && mvn install -DskipTests=true && mvn test

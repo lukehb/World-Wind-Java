@@ -7,5 +7,3 @@ before_script:
   - export DISPLAY=:99.0
   - sh -e /etc/init.d/xvfb start
 script: cd WorldWind/lib/gdal && ./mvn-install.sh && cd ../../ && mvn install -DskipTests=true && mvn test
-after_success:
-  - mvn clean cobertura:cobertura coveralls:report

@@ -273,7 +273,7 @@ public class DirectedPath extends Path
             Vec4 polePtB = this.computePoint(dc, terrain, poleB);
 
             // Find the segment that is midway between the two poles.
-            int midPoint = (int)Math.round(this.arrowOffset * (thisPole + nextPole));
+            int midPoint = (int)Math.floor(this.arrowOffset * (thisPole + nextPole));
 
             Position posA = tessellatedPositions.get(midPoint);
             Position posB = tessellatedPositions.get(midPoint + 1);

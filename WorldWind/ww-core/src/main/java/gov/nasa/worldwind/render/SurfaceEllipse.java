@@ -492,7 +492,7 @@ public class SurfaceEllipse extends AbstractSurfaceShape
             double azimuth = (Math.PI / 2.0) - (Math.acos(xLength / distance) * Math.signum(yLength)
                 - this.heading.radians);
 
-            locations.add(LatLon.linearEndPosition(this.center, Angle.fromRadians(azimuth), Angle.fromRadians(distance / globeRadius)));
+            locations.add(LatLon.rhumbEndPosition(this.center, Angle.fromRadians(azimuth), Angle.fromRadians(distance / globeRadius)));
         }
         
         // If the ellipse is not closed, end at the center-position.

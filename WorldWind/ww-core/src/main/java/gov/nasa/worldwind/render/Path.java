@@ -102,6 +102,9 @@ public class Path extends AbstractShape
     protected static final double DEFAULT_DRAW_POSITIONS_THRESHOLD = 1e6;
     /** The default scale for position dots. The scale is applied to the current outline width to produce the dot size. */
     protected static final double DEFAULT_DRAW_POSITIONS_SCALE = 10;
+    
+    protected static final int DEFAULT_SHOW_POSITION_OFFSET = 1;
+    protected static final int DEFAULT_SHOW_POSITION_LIMIT = 0;
 
     /** The PositionColors interface defines an RGBA color for each of a path's original positions. */
     public static interface PositionColors
@@ -658,6 +661,8 @@ public class Path extends AbstractShape
     protected double showPositionsThreshold = DEFAULT_DRAW_POSITIONS_THRESHOLD;
     protected double showPositionsScale = DEFAULT_DRAW_POSITIONS_SCALE;
     protected boolean positionsSpanDateline;
+    protected int showPositionOffset = DEFAULT_SHOW_POSITION_OFFSET;
+    protected int showPositionLimit = DEFAULT_SHOW_POSITION_LIMIT;
 
     /** Creates a path with no positions. */
     public Path()
@@ -684,6 +689,8 @@ public class Path extends AbstractShape
         this.showPositions = source.showPositions;
         this.showPositionsThreshold = source.showPositionsThreshold;
         this.showPositionsScale = source.showPositionsScale;
+        this.showPositionOffset = source.showPositionOffset;
+        this.showPositionLimit = source.showPositionLimit;
     }
 
     /**
@@ -1050,6 +1057,46 @@ public class Path extends AbstractShape
     public void setShowPositionsScale(double showPositionsScale)
     {
         this.showPositionsScale = showPositionsScale;
+    }
+    
+    /**
+     * Indicates the position-offset that controls the start-index when drawing position dots.
+     *
+     * @return the position-offset. The default offset is 0.
+     */
+    public int getShowPositionOffset()
+    {
+        return this.showPositionOffset;
+    }
+    
+    /**
+     * Specifies the position-offset that controls the start-index when drawing position dots.
+     *
+     * @param showPositionOffset the position-offset.
+     */
+    public void setShowPositionOffset(int showPositionOffset)
+    {
+        this.showPositionOffset = showPositionOffset;
+    }
+    
+    /**
+     * Indicates the position-limit that controls the end-index when drawing position dots.
+     *
+     * @return the position-limit. The default limit is 0.
+     */
+    public int getShowPositionLimit()
+    {
+        return showPositionLimit;
+    }
+    
+    /**
+     * Specifies the position-limit that controls the end-index when drawing position dots.
+     *
+     * @param showPositionLimit the position-limit.
+     */
+    public void setShowPositionLimit(int showPositionLimit)
+    {
+        this.showPositionLimit = showPositionLimit;
     }
 
     /**
@@ -1459,7 +1506,7 @@ public class Path extends AbstractShape
         }
 
         this.prepareToDrawPoints(dc);
-        gl.glDrawElements(GL.GL_POINTS, posPoints.limit(), GL.GL_UNSIGNED_INT, posPoints.rewind());
+        gl.glDrawElements(GL.GL_POINTS, posPoints.limit() - showPositionLimit - showPositionOffset, GL.GL_UNSIGNED_INT, posPoints.position(showPositionOffset));
 
         // Restore gl state
         gl.glPointSize(1f);
@@ -1512,7 +1559,7 @@ public class Path extends AbstractShape
 
         this.prepareToDrawPoints(dc);
         gl.glBindBuffer(GL.GL_ELEMENT_ARRAY_BUFFER, vboIds[2]);
-        gl.glDrawElements(GL.GL_POINTS, posPoints.limit(), GL.GL_UNSIGNED_INT, 0);
+        gl.glDrawElements(GL.GL_POINTS, posPoints.limit() - showPositionLimit - showPositionOffset, GL.GL_UNSIGNED_INT, 4 * showPositionOffset);
 
         // Restore the previous GL point state.
         gl.glPointSize(1f);

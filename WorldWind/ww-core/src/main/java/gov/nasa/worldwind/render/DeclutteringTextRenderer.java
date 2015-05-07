@@ -20,8 +20,8 @@ import java.io.IOException;
 import java.util.Iterator;
 
 /**
- * A simplified version of {@link GeographicTextRenderer} that participates in globe text decluttering. See {@link
- * ClutterFilter} for more information on decluttering.
+ * A simplified version of {@link BasicGeographicTextRenderer} that participates in globe text decluttering.
+ * See {@link ClutterFilter} for more information on decluttering.
  *
  * @author tag
  * @version $Id$

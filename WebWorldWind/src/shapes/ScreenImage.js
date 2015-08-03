@@ -10,6 +10,7 @@ define([
         '../error/ArgumentError',
         '../shaders/BasicTextureProgram',
         '../util/Color',
+        '../util/ImageSource',
         '../util/Logger',
         '../geom/Matrix',
         '../util/Offset',
@@ -21,6 +22,7 @@ define([
     function (ArgumentError,
               BasicTextureProgram,
               Color,
+              ImageSource,
               Logger,
               Matrix,
               Offset,
@@ -41,18 +43,20 @@ define([
          * @param {Offset} screenOffset The offset indicating the image's placement on the screen.
          * Use [the image offset property]{@link ScreenImage#imageOffset} to position the image relative to the
          * specified screen offset.
-         * @param {String} imagePath The URL of the image to display.
-         * @throws {ArgumentError} If the specified screen point or image path is null or undefined.
+         * @param {String|ImageSource} imageSource The source of the image to display.
+         * May be either a string identifying the URL of the image, or an {@link ImageSource} object identifying a
+         * dynamically created image.
+         * @throws {ArgumentError} If the specified screen offset or image source is null or undefined.
          */
-        var ScreenImage = function (screenOffset, imagePath) {
+        var ScreenImage = function (screenOffset, imageSource) {
             if (!screenOffset) {
                 throw new ArgumentError(
                     Logger.logMessage(Logger.LEVEL_SEVERE, "ScreenImage", "constructor", "missingOffset"));
             }
 
-            if (!imagePath) {
+            if (!imageSource) {
                 throw new ArgumentError(
-                    Logger.logMessage(Logger.LEVEL_SEVERE, "ScreenImage", "constructor", "missingPath"));
+                    Logger.logMessage(Logger.LEVEL_SEVERE, "ScreenImage", "constructor", "missingImage"));
             }
 
             Renderable.call(this);
@@ -63,12 +67,8 @@ define([
              */
             this.screenOffset = screenOffset;
 
-            /**
-             * The URL of the image to display.
-             * @type {String}
-             * @default null
-             */
-            this._imagePath = imagePath;
+            // Documented with its property accessor below.
+            this._imageSource = imageSource;
 
             /**
              * The image color. When displayed, this shape's image is multiplied by this image color to achieve the
@@ -95,21 +95,21 @@ define([
 
             /**
              * The amount of rotation to apply to the image, measured in degrees clockwise from the top of the window.
-             * @type {number}
+             * @type {Number}
              * @default 0
              */
             this.imageRotation = 0;
 
             /**
              * The amount of tilt to apply to the image, measured in degrees.
-             * @type {number}
+             * @type {Number}
              * @default 0
              */
             this.imageTilt = 0;
 
             /**
-             * Indicates whether this screen image is drawn.
-             * @type {boolean}
+             * Indicates whether to draw this screen image.
+             * @type {Boolean}
              * @default true
              */
             this.enabled = true;
@@ -117,13 +117,13 @@ define([
             /**
              * This image's opacity. When this screen image is drawn, the actual opacity is the product of
              * this opacity and the opacity of the layer containing this screen image.
-             * @type {number}
+             * @type {Number}
              */
             this.opacity = 1;
 
             /**
-             * Indicates the object to return as the <code>userObject</code> of this shape when picked. If null,
-             * then this shape is returned as the <code>userObject</code>.
+             * Indicates the object to return as the userObject of this shape when picked. If null,
+             * then this shape is returned as the userObject.
              * @type {Object}
              * @default null
              * @see  [PickedObject.userObject]{@link PickedObject#userObject}
@@ -152,30 +152,42 @@ define([
         ScreenImage.prototype = Object.create(Renderable.prototype);
 
         Object.defineProperties(ScreenImage.prototype, {
-            imagePath: {
+            /**
+             * The source of the image to display.
+             * May be either a string identifying the URL of the image, or an {@link ImageSource} object identifying a
+             * dynamically created image.
+             * @type {String|ImageSource}
+             * @default null
+             * @memberof ScreenImage.prototype
+             */
+            imageSource: {
                 get: function () {
-                    return this._imagePath;
+                    return this._imageSource;
                 },
-                set: function (imagePath) {
-                    if (!imagePath) {
-                        throw new ArgumentError(Logger.logMessage(Logger.LEVEL_SEVERE, "SurfaceImage", "imagePath",
-                            "missingPath"));
+                set: function (imageSource) {
+                    if (!imageSource) {
+                        throw new ArgumentError(Logger.logMessage(Logger.LEVEL_SEVERE, "ScreenImage", "imageSource",
+                            "missingImage"));
                     }
 
-                    this._imagePath = imagePath;
-                    this.imagePathWasUpdated = true;
+                    this._imageSource = imageSource;
+                    this.imageSourceWasUpdated = true;
                 }
             }
         });
 
         /**
          * Renders this screen image. This method is typically not called by applications but is called by
-         * [RenderableLayer]{@link RenderableLayer} during rendering. For this shape this method creates and
+         * {@link RenderableLayer} during rendering. For this shape this method creates and
          * enques an ordered renderable with the draw context and does not actually draw the image.
          * @param {DrawContext} dc The current draw context.
          */
         ScreenImage.prototype.render = function (dc) {
             if (!this.enabled) {
+                return;
+            }
+
+            if (!dc.accumulateOrderedRenderables) {
                 return;
             }
 
@@ -214,14 +226,17 @@ define([
             }
         };
 
+        // Internal. Intentionally not documented.
         ScreenImage.prototype.makeOrderedRenderable = function (dc) {
             var w, h, s, ws, hs,
                 iOffset, sOffset;
 
-            this.activeTexture = dc.gpuResourceCache.resourceForKey(this._imagePath);
-            if (!this.activeTexture) {
-                dc.gpuResourceCache.retrieveTexture(dc.currentGlContext, this._imagePath);
-                return null;
+            this.activeTexture = this.getActiveTexture(dc);
+            if (!this.activeTexture || this.imageSourceWasUpdated) {
+                this.activeTexture = dc.gpuResourceCache.retrieveTexture(dc.currentGlContext, this._imageSource);
+                if (!this.activeTexture) {
+                    return null;
+                }
             }
 
             this.eyeDistance = 0;
@@ -249,6 +264,10 @@ define([
             return this;
         };
 
+        ScreenImage.prototype.getActiveTexture = function (dc) {
+            return dc.gpuResourceCache.resourceForKey(this._imageSource);
+        };
+
         // Internal. Intentionally not documented.
         ScreenImage.prototype.isVisible = function (dc) {
             if (dc.pickingMode) {
@@ -273,7 +292,7 @@ define([
             var gl = dc.currentGlContext,
                 program;
 
-            dc.findAndBindProgram(gl, BasicTextureProgram);
+            dc.findAndBindProgram(BasicTextureProgram);
 
             // Configure GL to use the draw context's unit quad VBOs for both model coordinates and texture coordinates.
             // Most browsers can share the same buffer for vertex and texture coordinates, but Internet Explorer requires
@@ -290,7 +309,8 @@ define([
             program.loadModulateColor(gl, dc.pickingMode);
 
             // Turn off depth testing.
-            gl.disable(WebGLRenderingContext.DEPTH_TEST);
+            // tag, 6/17/15: It's not clear why this call was here. It was carried over from WWJ.
+            //gl.disable(WebGLRenderingContext.DEPTH_TEST);
         };
 
         // Internal. Intentionally not documented.
@@ -303,7 +323,6 @@ define([
             gl.disableVertexAttribArray(program.vertexTexCoordLocation);
 
             // Clear GL bindings.
-            dc.bindProgram(gl, null);
             gl.bindBuffer(WebGLRenderingContext.ARRAY_BUFFER, null);
             gl.bindTexture(WebGLRenderingContext.TEXTURE_2D, null);
 
@@ -320,15 +339,13 @@ define([
             gl.vertexAttribPointer(program.vertexPointLocation, 3, WebGLRenderingContext.FLOAT, false, 0, 0);
 
             // Compute and specify the MVP matrix.
-            ScreenImage.matrix.setToMatrix(dc.screenProjection);
+            ScreenImage.matrix.copy(dc.screenProjection);
             ScreenImage.matrix.multiplyMatrix(this.imageTransform);
 
-            if (this.imageRotation !== 0 || this.imageTilt !== 0) {
-                ScreenImage.matrix.multiplyByTranslation(0.5, 0.5, 0.5);
-                ScreenImage.matrix.multiplyByRotation(1, 0, 0, this.imageTilt);
-                ScreenImage.matrix.multiplyByRotation(0, 0, 1, this.imageRotation);
-                ScreenImage.matrix.multiplyByTranslation(-0.5, -0.5, 0);
-            }
+            ScreenImage.matrix.multiplyByTranslation(0.5, 0.5, 0.5); // shift Z to prevent image clipping
+            ScreenImage.matrix.multiplyByRotation(1, 0, 0, this.imageTilt);
+            ScreenImage.matrix.multiplyByRotation(0, 0, 1, this.imageRotation);
+            ScreenImage.matrix.multiplyByTranslation(-0.5, -0.5, 0);
 
             program.loadModelviewProjection(gl, ScreenImage.matrix);
 

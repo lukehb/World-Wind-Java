@@ -9,7 +9,7 @@
  */
 
 requirejs(['../src/WorldWind',
-        './LayerManager/LayerManager'],
+        './LayerManager'],
     function (ww,
               LayerManager) {
         "use strict";
@@ -23,10 +23,20 @@ requirejs(['../src/WorldWind',
         /**
          * Added imagery layers.
          */
-        wwd.addLayer(new WorldWind.BMNGOneImageLayer());
-        wwd.addLayer(new WorldWind.BMNGLandsatLayer()); // Blue Marble + Landsat
-        wwd.addLayer(new WorldWind.BingWMSLayer()); // Bing
-        wwd.addLayer(new WorldWind.CompassLayer);
+        var layers = [
+            {layer: new WorldWind.BMNGLayer(), enabled: true},
+            {layer: new WorldWind.BMNGLandsatLayer(), enabled: false},
+            {layer: new WorldWind.BingAerialWithLabelsLayer(null), enabled: true},
+            {layer: new WorldWind.OpenStreetMapImageLayer(null), enabled: false},
+            {layer: new WorldWind.CompassLayer(), enabled: true},
+            {layer: new WorldWind.CoordinatesDisplayLayer(wwd), enabled: true},
+            {layer: new WorldWind.ViewControlsLayer(wwd), enabled: true}
+        ];
+
+        for (var l = 0; l < layers.length; l++) {
+            layers[l].layer.enabled = layers[l].enabled;
+            wwd.addLayer(layers[l].layer);
+        }
 
         // Define the images we'll use for the placemarks.
         var images = [
@@ -53,7 +63,7 @@ requirejs(['../src/WorldWind',
             "castshadow-white.png"
         ];
 
-        var pinLibrary = WorldWind.WWUtil.currentUrlSansFilePart() + "/../images/pushpins/", // location of the image files
+        var pinLibrary = WorldWind.configuration.baseUrl + "images/pushpins/", // location of the image files
             placemark,
             placemarkAttributes = new WorldWind.PlacemarkAttributes(null),
             highlightAttributes,
@@ -71,22 +81,22 @@ requirejs(['../src/WorldWind',
             WorldWind.OFFSET_FRACTION, 0.5,
             WorldWind.OFFSET_FRACTION, 1.0);
         placemarkAttributes.labelAttributes.color = WorldWind.Color.YELLOW;
-        placemarkAttributes.drawLeaderline = true;
+        placemarkAttributes.drawLeaderLine = true;
         placemarkAttributes.leaderLineAttributes.outlineColor = WorldWind.Color.RED;
 
         // For each placemark image, create a placemark with a label.
         for (var i = 0, len = images.length; i < len; i++) {
             // Create the placemark and its label.
-            placemark = new WorldWind.Placemark(new WorldWind.Position(latitude, longitude + i, 1e2));
+            placemark = new WorldWind.Placemark(new WorldWind.Position(latitude, longitude + i, 1e2), true, null);
             placemark.label = "Placemark " + i.toString() + "\n"
-            + "Lat " + latitude.toPrecision(4).toString() + "\n"
-            + "Lon " + longitude.toPrecision(5).toString();
+            + "Lat " + placemark.position.latitude.toPrecision(4).toString() + "\n"
+            + "Lon " + placemark.position.longitude.toPrecision(5).toString();
             placemark.altitudeMode = WorldWind.RELATIVE_TO_GROUND;
 
             // Create the placemark attributes for this placemark. Note that the attributes differ only by their
             // image URL.
             placemarkAttributes = new WorldWind.PlacemarkAttributes(placemarkAttributes);
-            placemarkAttributes.imagePath = pinLibrary + images[i];
+            placemarkAttributes.imageSource = pinLibrary + images[i];
             placemark.attributes = placemarkAttributes;
 
             // Create the highlight attributes for this placemark. Note that the normal attributes are specified as
@@ -103,11 +113,8 @@ requirejs(['../src/WorldWind',
         // Add the placemarks layer to the World Window's layer list.
         wwd.addLayer(placemarkLayer);
 
-        // Draw the World Window for the first time.
-        wwd.redraw();
-
         // Create a layer manager for controlling layer visibility.
-        var layerManger = new LayerManager('divLayerManager', wwd);
+        var layerManger = new LayerManager(wwd);
 
         // Now set up to handle picking.
 
@@ -163,6 +170,5 @@ requirejs(['../src/WorldWind',
         wwd.addEventListener("mousemove", handlePick);
 
         // Listen for taps on mobile devices and highlight the placemarks that the user taps.
-        var tapRecognizer = new WorldWind.TapRecognizer(wwd);
-        tapRecognizer.addGestureListener(handlePick);
+        var tapRecognizer = new WorldWind.TapRecognizer(wwd, handlePick);
     });

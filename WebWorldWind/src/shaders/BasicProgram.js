@@ -10,14 +10,12 @@ define([
         '../error/ArgumentError',
         '../util/Color',
         '../shaders/GpuProgram',
-        '../util/Logger',
-        '../geom/Matrix'
+        '../util/Logger'
     ],
     function (ArgumentError,
               Color,
               GpuProgram,
-              Logger,
-              Matrix) {
+              Logger) {
         "use strict";
 
         /**
@@ -52,18 +50,21 @@ define([
             /**
              * The WebGL location for this program's 'vertexPoint' attribute.
              * @type {Number}
+             * @readonly
              */
             this.vertexPointLocation = this.attributeLocation(gl, "vertexPoint");
 
             /**
              * The WebGL location for this program's 'mvpMatrix' uniform.
              * @type {WebGLUniformLocation}
+             * @readonly
              */
             this.mvpMatrixLocation = this.uniformLocation(gl, "mvpMatrix");
 
             /**
              * The WebGL location for this program's 'color' uniform.
              * @type {WebGLUniformLocation}
+             * @readonly
              */
             this.colorLocation = this.uniformLocation(gl, "color");
         };
@@ -91,7 +92,7 @@ define([
                     Logger.logMessage(Logger.LEVEL_SEVERE, "BasicProgram", "loadModelviewProjection", "missingMatrix"));
             }
 
-            GpuProgram.loadUniformMatrix(gl, matrix, this.mvpMatrixLocation);
+            this.loadUniformMatrix(gl, matrix, this.mvpMatrixLocation);
         };
 
         /**
@@ -107,7 +108,20 @@ define([
                     Logger.logMessage(Logger.LEVEL_SEVERE, "BasicProgram", "loadColor", "missingColor"));
             }
 
-            GpuProgram.loadUniformColor(gl, color, this.colorLocation);
+            this.loadUniformColor(gl, color, this.colorLocation);
+        };
+
+        /**
+         * Loads the specified RGBA color components as the value of this program's 'color' uniform variable.
+         *
+         * @param {WebGLRenderingContext} gl The current WebGL context.
+         * @param {Number} red The red component, a number between 0 and 1.
+         * @param {Number} green The green component, a number between 0 and 1.
+         * @param {Number} blue The blue component, a number between 0 and 1.
+         * @param {Number} alpha The alpha component, a number between 0 and 1.
+         */
+        BasicProgram.prototype.loadColorComponents = function (gl, red, green, blue, alpha) {
+            this.loadUniformColorComponents(gl, red, green, blue, alpha, this.colorLocation);
         };
 
         return BasicProgram;

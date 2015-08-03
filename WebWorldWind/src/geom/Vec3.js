@@ -17,10 +17,12 @@ define([
         /**
          * Constructs a three-component vector.
          * @alias Vec3
-         * @classdesc Represents a three-component vector.
-         * @param x X component of vector.
-         * @param y Y component of vector.
-         * @param z Z component of vector.
+         * @classdesc Represents a three-component vector. Access the X component of the vector as v[0], the Y
+         * component as v[1] and the Z component as v[2].
+         * @augments Float64Array
+         * @param {Number} x X component of vector.
+         * @param {Number} y Y component of vector.
+         * @param {Number} z Z component of vector.
          * @constructor
          */
         var Vec3 = function Vec3(x, y, z) {
@@ -29,17 +31,8 @@ define([
             this[2] = z;
         };
 
-        /**
-         * Number of elements in a Vec3.
-         * @type {number}
-         */
-        Vec3.NUM_ELEMENTS = 3;
-
-        /**
-         * Vec3 inherits all methods and representation of Float64Array.
-         * @type {Float64Array}
-         */
-        Vec3.prototype = new Float64Array(Vec3.NUM_ELEMENTS);
+        // Vec3 extends Float64Array.
+        Vec3.prototype = new Float64Array(3);
 
         /**
          * A vector corresponding to the origin.
@@ -48,14 +41,15 @@ define([
         Vec3.ZERO = new Vec3(0, 0, 0);
 
         /**
-         * Computes the average of a specified array of points.
-         * @param {Vec3[]} points The points whose average to compute.
+         * Computes the average of a specified array of vectors.
+         * @param {Vec3[]} vectors The vectors whose average to compute.
          * @param {Vec3} result A pre-allocated Vec3 in which to return the computed average.
-         * @returns {Vec3} The result argument set to the average of the specified lists of points.
-         * @throws {ArgumentError} If the specified array of points or the result argument is null or undefined..
+         * @returns {Vec3} The result argument set to the average of the specified array of vectors.
+         * @throws {ArgumentError} If the specified array of vectors is null, undefined or empty or the specified
+         * result argument is null or undefined.
          */
-        Vec3.average = function (points, result) {
-            if (!points || points.length < 1) {
+        Vec3.average = function (vectors, result) {
+            if (!vectors || vectors.length < 1) {
                 throw new ArgumentError(
                     Logger.logMessage(Logger.LEVEL_SEVERE, "Vec3", "average", "missingArray"));
             }
@@ -65,15 +59,15 @@ define([
                     Logger.logMessage(Logger.LEVEL_SEVERE, "Vec3", "average", "missingResult"));
             }
 
-            var count = points.length,
+            var count = vectors.length,
                 vec;
 
             result[0] = 0;
             result[1] = 0;
             result[2] = 0;
 
-            for (var i = 0, len = points.length; i < len; i++) {
-                vec = points[i];
+            for (var i = 0, len = vectors.length; i < len; i++) {
+                vec = vectors[i];
 
                 result[0] += vec[0] / count;
                 result[1] += vec[1] / count;
@@ -84,11 +78,12 @@ define([
         };
 
         /**
-         * Computes the average of a specified array of points.
-         * @param {Float32Array} points The points whose average to compute.
+         * Computes the average of a specified array of points packed into a single array.
+         * @param {Float32Array | Float64Array | Number[]} points The points whose average to compute.
          * @param {Vec3} result A pre-allocated Vec3 in which to return the computed average.
-         * @returns {Vec3} The result argument set to the average of the specified lists of points.
-         * @throws {ArgumentError} If the specified array of points or the result argument is null or undefined..
+         * @returns {Vec3} The result argument set to the average of the specified array of points.
+         * @throws {ArgumentError} If the specified array of points is null, undefined or empty or the result argument
+         * is null or undefined.
          */
         Vec3.averageOfBuffer = function (points, result) {
             if (!points || points.length < 1) {
@@ -117,10 +112,126 @@ define([
         };
 
         /**
-         * Assign the components of a vector.
-         * @param x The X component of the vector.
-         * @param y The Y component of the vector.
-         * @param z The Z component of the vector.
+         * Indicates whether three vectors are colinear.
+         * @param {Vec3} a The first vector.
+         * @param {Vec3} b The second vector.
+         * @param {Vec3} c The third vector.
+         * @returns {Boolean} true if the vectors are colinear, otherwise false.
+         * @throws {ArgumentError} If any of the specified vectors are null or undefined.
+         */
+        Vec3.areColinear = function (a, b, c) {
+            if (!a || !b || !c) {
+                throw new ArgumentError(
+                    Logger.logMessage(Logger.LEVEL_SEVERE, "Vec3", "areColinear", "missingVector"));
+            }
+
+            var ab = b.subtract(a).normalize(),
+                bc = c.subtract(b).normalize();
+
+            // ab and bc are considered colinear if their dot product is near +/-1.
+            return Math.abs(ab.dot(bc)) > 0.999;
+        };
+
+        /**
+         * Computes the normal vector of a specified triangle.
+         *
+         * @param {Vec3} a The triangle's first vertex.
+         * @param {Vec3} b The triangle's second vertex.
+         * @param {Vec3} c The triangle's third vertex.
+         * @returns {Vec3} The triangle's unit-normal vector.
+         * @throws {ArgumentError} If any of the specified vectors are null or undefined.
+         */
+        Vec3.computeTriangleNormal = function (a, b, c) {
+            if (!a || !b || !c) {
+                throw new ArgumentError(
+                    Logger.logMessage(Logger.LEVEL_SEVERE, "Vec3", "areColinear", "missingVector"));
+            }
+
+            var x = ((b[1] - a[1]) * (c[2] - a[2])) - ((b[2] - a[2]) * (c[1] - a[1])),
+                y = ((b[2] - a[2]) * (c[0] - a[0])) - ((b[0] - a[0]) * (c[2] - a[2])),
+                z = ((b[0] - a[0]) * (c[1] - a[1])) - ((b[1] - a[1]) * (c[0] - a[0])),
+                length = (x * x) + (y * y) + (z * z);
+
+            if (length === 0) {
+                return new Vec3(x, y, z);
+            }
+
+            length = Math.sqrt(length);
+
+            return new Vec3(x / length, y / length, z / length);
+        };
+
+        /**
+         * Finds three non-colinear points in an array of coordinates.
+         *
+         * @param {Number[]} coords The coordinates, in the order x0, y0, z0, x1, y1, z1, ...
+         * @param {Number} stride The number of numbers between successive points. 0 indicates that the points
+         * are arranged one immediately after the other, as would the value 3.
+         * @returns {Vec3[]} Three non-colinear points from the input array of coordinates, or null if three
+         * non-colinear points could not be found or the specified coordinates array is null, undefined or
+         * contains fewer than three points.
+         */
+        Vec3.findThreeIndependentVertices = function (coords, stride) {
+            var xstride = (stride && stride > 0) ? stride : 3;
+
+            if (!coords || coords.length < 3 * xstride) {
+                return null;
+            }
+
+            var a = new Vec3(coords[0], coords[1], coords[2]),
+                b = null,
+                c = null,
+                k = xstride;
+
+            for (; k < coords.length; k += xstride) {
+                b = new Vec3(coords[k], coords[k + 1], coords[k + 2]);
+                if (!(b[0] === a[0] && b[1] === a[1] && b[2] === a[2])) {
+                    break;
+                }
+                b = null;
+            }
+
+            if (!b) {
+                return null;
+            }
+
+            for (k += xstride; k < coords.length; k += xstride) {
+                c = new Vec3(coords[k], coords[k + 1], coords[k + 2]);
+
+                // if c is not coincident with a or b, and the vectors ab and bc are not colinear, break and
+                // return a, b, c.
+                if (!((c[0] === a[0] && c[1] === a[1] && c[2] === a[2])
+                    || (c[0] === b[0] && c[1] === b[1] && c[2] === b[2]))) {
+                    if (!Vec3.areColinear(a, b, c))
+                        break;
+                }
+
+                c = null;
+            }
+
+            return c ? [a, b, c] : null;
+        };
+
+        /**
+         * Computes a unit-normal vector for a buffer of coordinate triples. The normal vector is computed from the
+         * first three non-colinear points in the buffer.
+         *
+         * @param {Number[]} coords The coordinates, in the order x0, y0, z0, x1, y1, z1, ...
+         * @param {Number} stride The number of numbers between successive points. 0 indicates that the points
+         * are arranged one immediately after the other, as would the value 3.
+         * @returns {Vec3} The computed unit-length normal vector.
+         */
+        Vec3.computeBufferNormal = function (coords, stride) {
+            var vertices = Vec3.findThreeIndependentVertices(coords, stride);
+
+            return vertices ? Vec3.computeTriangleNormal(vertices[0], vertices[1], vertices[2]) : null;
+        };
+
+        /**
+         * Assigns the components of this vector.
+         * @param {Number} x The X component of the vector.
+         * @param {Number} y The Y component of the vector.
+         * @param {Number} z The Z component of the vector.
          * @returns {Vec3} This vector with the specified components assigned.
          */
         Vec3.prototype.set = function (x, y, z) {
@@ -132,11 +243,17 @@ define([
         };
 
         /**
-         * Copy a vector.
+         * Copies the components of a specified vector to this vector.
          * @param {Vec3} vector The vector to copy.
-         * @returns {Vec3} This vector set to the values of the specified vector.
+         * @returns {Vec3} This vector set to the X, Y and Z values of the specified vector.
+         * @throws {ArgumentError} If the specified vector is null or undefined.
          */
         Vec3.prototype.copy = function (vector) {
+            if (!vector) {
+                throw new ArgumentError(
+                    Logger.logMessage(Logger.LEVEL_SEVERE, "Vec3", "copy", "missingVector"));
+            }
+
             this[0] = vector[0];
             this[1] = vector[1];
             this[2] = vector[2];
@@ -145,21 +262,27 @@ define([
         };
 
         /**
-         * Indicates whether this vector is identical to a specified vector.
+         * Indicates whether the components of this vector are identical to those of a specified vector.
          * @param {Vec3} vector The vector to test.
-         * @returns {boolean} <code>true</code> if this vector is equal to the specified one, otherwise <code>false</code>.
+         * @returns {Boolean} true if the components of this vector are equal to those of the specified one,
+         * otherwise false.
          */
         Vec3.prototype.equals = function (vector) {
             return this[0] === vector[0] && this[1] === vector[1] && this[2] === vector[2];
         };
 
         /**
-         * Add a vector to this vector.
+         * Adds a specified vector to this vector.
          * @param {Vec3} addend The vector to add.
-         * @returns {Vec3} this vector after adding the specified vector to it.
+         * @returns {Vec3} This vector after adding the specified vector to it.
          * @throws {ArgumentError} If the addend is null or undefined.
          */
         Vec3.prototype.add = function (addend) {
+            if (!addend) {
+                throw new ArgumentError(
+                    Logger.logMessage(Logger.LEVEL_SEVERE, "Vec3", "add", "missingVector"));
+            }
+
             this[0] += addend[0];
             this[1] += addend[1];
             this[2] += addend[2];
@@ -168,12 +291,17 @@ define([
         };
 
         /**
-         * Subtract a vector from this vector.
+         * Subtracts a specified vector from this vector.
          * @param {Vec3} subtrahend The vector to subtract
          * @returns {Vec3} This vector after subtracting the specified vector from it.
          * @throws {ArgumentError} If the subtrahend is null or undefined.
          */
         Vec3.prototype.subtract = function (subtrahend) {
+            if (!subtrahend) {
+                throw new ArgumentError(
+                    Logger.logMessage(Logger.LEVEL_SEVERE, "Vec3", "subtract", "missingVector"));
+            }
+
             this[0] -= subtrahend[0];
             this[1] -= subtrahend[1];
             this[2] -= subtrahend[2];
@@ -182,8 +310,8 @@ define([
         };
 
         /**
-         * Multiply this vector by a scalar.
-         * @param {number} scalar The scalar to multiply this vector by.
+         * Multiplies this vector by a scalar.
+         * @param {Number} scalar The scalar to multiply this vector by.
          * @returns {Vec3} This vector multiplied by the specified scalar.
          */
         Vec3.prototype.multiply = function (scalar) {
@@ -195,8 +323,8 @@ define([
         };
 
         /**
-         * Divide this vector by a scalar.
-         * @param {number} divisor The scalar to divide this vector by.
+         * Divides this vector by a scalar.
+         * @param {Number} divisor The scalar to divide this vector by.
          * @returns {Vec3} This vector divided by the specified scalar.
          */
         Vec3.prototype.divide = function (divisor) {
@@ -208,7 +336,7 @@ define([
         };
 
         /**
-         * Multiply this vector by a 4x4 matrix. The multiplication is performed with an implicit W component of 1.
+         * Multiplies this vector by a 4x4 matrix. The multiplication is performed with an implicit W component of 1.
          * The resultant W component of the product is then divided through the X, Y, and Z components.
          *
          * @param {Matrix} matrix The matrix to multiply this vector by.
@@ -234,9 +362,9 @@ define([
         };
 
         /**
-         * Mix (interpolate) a specified vector with this vector, modifying this vector.
+         * Mixes (interpolates) a specified vector with this vector, modifying this vector.
          * @param {Vec3} vector The vector to mix with this one.
-         * @param {number} weight The relative weight of this vector.
+         * @param {Number} weight The relative weight of this vector.
          * @returns {Vec3} This vector modified to the mix of itself and the specified vector.
          * @throws {ArgumentError} If the specified vector is null or undefined.
          */
@@ -257,7 +385,7 @@ define([
         };
 
         /**
-         * Negate this vector.
+         * Negates the components of this vector.
          * @returns {Vec3} This vector, negated.
          */
         Vec3.prototype.negate = function () {
@@ -269,9 +397,9 @@ define([
         };
 
         /**
-         * Compute the scalar dot product of this vector and a specified vector.
+         * Computes the scalar dot product of this vector and a specified vector.
          * @param {Vec3} vector The vector to multiply.
-         * @returns {number} The dot product of the two vectors.
+         * @returns {Number} The dot product of the two vectors.
          * @throws {ArgumentError} If the specified vector is null or undefined.
          */
         Vec3.prototype.dot = function (vector) {
@@ -286,7 +414,7 @@ define([
         };
 
         /**
-         * Compute the cross product of this vector and a specified vector, modifying this vector.
+         * Computes the cross product of this vector and a specified vector, modifying this vector.
          * @param {Vec3} vector The vector to cross with this vector.
          * @returns {Vec3} This vector set to the cross product of itself and the specified vector.
          * @throws {ArgumentError} If the specified vector is null or undefined.
@@ -309,23 +437,23 @@ define([
         };
 
         /**
-         * Compute the squared magnitude of this vector.
-         * @returns {number} The squared magnitude of this vector.
+         * Computes the squared magnitude of this vector.
+         * @returns {Number} The squared magnitude of this vector.
          */
         Vec3.prototype.magnitudeSquared = function () {
             return this.dot(this);
         };
 
         /**
-         * Compute the magnitude of this vector.
-         * @returns {number} The magnitude of this vector.
+         * Computes the magnitude of this vector.
+         * @returns {Number} The magnitude of this vector.
          */
         Vec3.prototype.magnitude = function () {
             return Math.sqrt(this.magnitudeSquared());
         };
 
         /**
-         * Normalize this vector to a unit vector.
+         * Normalizes this vector to a unit vector.
          * @returns {Vec3} This vector, normalized.
          */
         Vec3.prototype.normalize = function () {
@@ -340,9 +468,9 @@ define([
         };
 
         /**
-         * Compute the squared distance from this vector to a specified vector.
+         * Computes the squared distance from this vector to a specified vector.
          * @param {Vec3} vector The vector to compute the distance to.
-         * @returns {number} The squared distance between the vectors
+         * @returns {Number} The squared distance between the vectors.
          * @throws {ArgumentError} If the specified vector is null or undefined.
          */
         Vec3.prototype.distanceToSquared = function (vector) {
@@ -359,7 +487,7 @@ define([
         };
 
         /**
-         * Compute the distance from this vector to another vector.
+         * Computes the distance from this vector to another vector.
          * @param {Vec3} vector The vector to compute the distance to.
          * @returns {number} The distance between the vectors.
          * @throws {ArgumentError} If the specified vector is null or undefined.
@@ -374,7 +502,8 @@ define([
         };
 
         /**
-         * Swap this vector with that vector.
+         * Swaps this vector with that vector. This vector's components are set to the values of the specified
+         * vector's components, and the specified vector's components are set to the values of this vector's components.
          * @param {Vec3} that The vector to swap.
          * @returns {Vec3} This vector set to the values of the specified vector.
          */
@@ -396,7 +525,7 @@ define([
 
         /**
          * Returns a string representation of this vector.
-         * @returns {string} A string representation of this vector, in the form "(x, y, z)".
+         * @returns {String} A string representation of this vector, in the form "(x, y, z)".
          */
         Vec3.prototype.toString = function () {
             return "(" + this[0] + ", " + this[1] + ", " + this[2] + ")";

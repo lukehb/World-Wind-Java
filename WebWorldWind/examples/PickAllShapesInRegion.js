@@ -7,7 +7,7 @@
  */
 
 requirejs(['../src/WorldWind',
-        './LayerManager/LayerManager'],
+        './LayerManager'],
     function (ww,
               LayerManager) {
         "use strict";
@@ -15,10 +15,21 @@ requirejs(['../src/WorldWind',
         WorldWind.Logger.setLoggingLevel(WorldWind.Logger.LEVEL_WARNING);
 
         var wwd = new WorldWind.WorldWindow("canvasOne");
-        wwd.addLayer(new WorldWind.BMNGOneImageLayer());
-        wwd.addLayer(new WorldWind.BMNGLandsatLayer());
-        wwd.addLayer(new WorldWind.BingWMSLayer());
-        wwd.addLayer(new WorldWind.CompassLayer);
+
+        var layers = [
+            {layer: new WorldWind.BMNGLayer(), enabled: true},
+            {layer: new WorldWind.BMNGLandsatLayer(), enabled: false},
+            {layer: new WorldWind.BingAerialWithLabelsLayer(null), enabled: true},
+            {layer: new WorldWind.OpenStreetMapImageLayer(null), enabled: false},
+            {layer: new WorldWind.CompassLayer(), enabled: true},
+            {layer: new WorldWind.CoordinatesDisplayLayer(wwd), enabled: true},
+            {layer: new WorldWind.ViewControlsLayer(wwd), enabled: true}
+        ];
+
+        for (var l = 0; l < layers.length; l++) {
+            layers[l].layer.enabled = layers[l].enabled;
+            wwd.addLayer(layers[l].layer);
+        }
 
         var images = [
             "plain-black.png",
@@ -61,9 +72,10 @@ requirejs(['../src/WorldWind',
         for (var j = 0; j < 10; j++) {
             latitude -= j > 0 ? latDelta : 0;
             for (var i = 0, len = images.length; i < len; i++) {
-                placemark = new WorldWind.Placemark(new WorldWind.Position(latitude, longitude + i * lonDelta, 1e2));
+                placemark = new WorldWind.Placemark(
+                    new WorldWind.Position(latitude, longitude + i * lonDelta, 1e2), true, null);
                 placemarkAttributes = new WorldWind.PlacemarkAttributes(placemarkAttributes);
-                placemarkAttributes.imagePath = pinLibrary + images[i];
+                placemarkAttributes.imageSource = pinLibrary + images[i];
                 highlightAttributes = new WorldWind.PlacemarkAttributes(placemarkAttributes);
                 highlightAttributes.imageScale = 1.2;
                 placemark.attributes = placemarkAttributes;
@@ -75,9 +87,8 @@ requirejs(['../src/WorldWind',
         placemarkLayer.displayName = "Placemarks";
         wwd.addLayer(placemarkLayer);
 
-        wwd.redraw();
-
-        var layerManger = new LayerManager('divLayerManager', wwd);
+        // Create a layer manager for controlling layer visibility.
+        var layerManger = new LayerManager(wwd);
 
         // Now set up to handle picking.
 
@@ -112,8 +123,10 @@ requirejs(['../src/WorldWind',
             // Highlight the items picked.
             if (pickList.objects.length > 0) {
                 for (var p = 0; p < pickList.objects.length; p++) {
-                    pickList.objects[p].userObject.highlighted = true;
-                    highlightedItems.push(pickList.objects[p].userObject);
+                    if (pickList.objects[p].isOnTop) {
+                        pickList.objects[p].userObject.highlighted = true;
+                        highlightedItems.push(pickList.objects[p].userObject);
+                    }
                 }
             }
 
@@ -127,6 +140,5 @@ requirejs(['../src/WorldWind',
         wwd.addEventListener("mousemove", handlePick);
 
         // Listen for taps on mobile devices and highlight the placemarks that the user taps.
-        var tapRecognizer = new WorldWind.TapRecognizer(wwd);
-        tapRecognizer.addGestureListener(handlePick);
+        var tapRecognizer = new WorldWind.TapRecognizer(wwd, handlePick);
     });

@@ -104,7 +104,7 @@ public class SurfaceObjectTileBuilder
     /** Controls if surface tiles are rendered using a linear filter or a nearest-neighbor filter. */
     protected boolean useLinearFilter = true;
     /** Controls if mip-maps are generated for surface tile textures. */
-    protected boolean useMipmaps;
+    protected boolean useMipmaps = true;
     /** Controls if tiles are forced to update during {@link #buildTiles(DrawContext, Iterable)}. */
     protected boolean forceTileUpdates;
     /** Controls the tile resolution as distance changes between the globe's surface and the eye point. */
@@ -274,7 +274,7 @@ public class SurfaceObjectTileBuilder
      * textures only update their contents when the surface renderables change. Initially false.
      *
      * @return true if tile textures always update their contents, false if tile textures only update when the surface
-     *         renderables change.
+     * renderables change.
      */
     public boolean isForceTileUpdates()
     {
@@ -688,6 +688,15 @@ public class SurfaceObjectTileBuilder
             GL.GL_LINEAR : GL.GL_NEAREST);
         gl.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_S, GL.GL_CLAMP_TO_EDGE);
         gl.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_T, GL.GL_CLAMP_TO_EDGE);
+
+        if (this.isUseMipmaps())
+        {
+            double maxAnisotropy = dc.getGLRuntimeCapabilities().getMaxTextureAnisotropy();
+            if (dc.getGLRuntimeCapabilities().isUseAnisotropicTextureFilter() && maxAnisotropy >= 2.0)
+            {
+                gl.glTexParameterf(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MAX_ANISOTROPY_EXT, (float) maxAnisotropy);
+            }
+        }
 
         return t;
     }
@@ -1110,7 +1119,11 @@ public class SurfaceObjectTileBuilder
         // than one thousandth of the eye distance. The field of view scale is specified as a ratio between the current
         // field of view and a the default field of view. In a perspective projection, decreasing the field of view by
         // 50% has the same effect on object size as decreasing the distance between the eye and the object by 50%.
-        double detailScale = Math.pow(10, -this.getSplitScale());
+        // The detail hint is reduced for tiles above 75 degrees north and below 75 degrees south.
+        double s = this.getSplitScale();
+        if (tile.getSector().getMinLatitude().degrees >= 75 || tile.getSector().getMaxLatitude().degrees <= -75)
+            s *= 0.85;
+        double detailScale = Math.pow(10, -s);
         double fieldOfViewScale = dc.getView().getFieldOfView().tanHalfAngle() / Angle.fromDegrees(45).tanHalfAngle();
         fieldOfViewScale = WWMath.clamp(fieldOfViewScale, 0, 1);
 
@@ -1385,7 +1398,7 @@ public class SurfaceObjectTileBuilder
          * Returns whether list of surface renderables intersecting this tile has elements.
          *
          * @return {@code true} if the list of surface renderables intersecting this tile has elements, and {@code
-         *         false} otherwise.
+         * false} otherwise.
          */
         public boolean hasObjects()
         {

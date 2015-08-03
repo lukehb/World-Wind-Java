@@ -9,7 +9,7 @@
  */
 
 requirejs(['../src/WorldWind',
-        './LayerManager/LayerManager'],
+        './LayerManager'],
     function (ww,
               LayerManager) {
         "use strict";
@@ -23,52 +23,65 @@ requirejs(['../src/WorldWind',
         /**
          * Added imagery layers.
          */
-        wwd.addLayer(new WorldWind.BMNGOneImageLayer());
-        wwd.addLayer(new WorldWind.BMNGLandsatLayer()); // Blue Marble + Landsat
-        wwd.addLayer(new WorldWind.BingWMSLayer()); // Bing
-        wwd.addLayer(new WorldWind.CompassLayer);
+        var layers = [
+            {layer: new WorldWind.BMNGLayer(), enabled: true},
+            {layer: new WorldWind.BMNGLandsatLayer(), enabled: false},
+            {layer: new WorldWind.BingAerialWithLabelsLayer(null), enabled: true},
+            {layer: new WorldWind.OpenStreetMapImageLayer(null), enabled: false},
+            {layer: new WorldWind.CompassLayer(), enabled: true},
+            {layer: new WorldWind.CoordinatesDisplayLayer(wwd), enabled: true},
+            {layer: new WorldWind.ViewControlsLayer(wwd), enabled: true}
+        ];
+
+        for (var l = 0; l < layers.length; l++) {
+            layers[l].layer.enabled = layers[l].enabled;
+            wwd.addLayer(layers[l].layer);
+        }
 
         var screenText,
             textAttributes = new WorldWind.TextAttributes(null),
-            textLayer = new WorldWind.RenderableLayer("Screen Text"),
-            canvasWidth = wwd.canvas.width,
-            canvasHeight = wwd.canvas.height;
+            textLayer = new WorldWind.RenderableLayer("Screen Text");
 
         // Set up the common text attributes.
-        textAttributes.color = WorldWind.Color.YELLOW;
+        textAttributes.color = WorldWind.Color.RED;
 
         // Create a screen text shape and its attributes.
-        screenText = new WorldWind.ScreenText(new WorldWind.Vec2(0, 0), "Upper Left");
+        screenText = new WorldWind.ScreenText(
+            new WorldWind.Offset(WorldWind.OFFSET_FRACTION, 0, WorldWind.OFFSET_FRACTION, 1), "Upper Left");
         textAttributes = new WorldWind.TextAttributes(textAttributes);
-        // Use offset to position the upper left corner of the text string at the shape's screen position (0, 0).
+        // Use offset to position the upper left corner of the text string at the shape's screen location.
         textAttributes.offset = new WorldWind.Offset(WorldWind.OFFSET_FRACTION, 0, WorldWind.OFFSET_FRACTION, 1);
         screenText.attributes = textAttributes;
         textLayer.addRenderable(screenText);
 
-        screenText = new WorldWind.ScreenText(new WorldWind.Vec2(0, canvasHeight), "Lower Left");
+        screenText = new WorldWind.ScreenText(
+            new WorldWind.Offset(WorldWind.OFFSET_FRACTION, 0, WorldWind.OFFSET_FRACTION, 0), "Lower Left");
         textAttributes = new WorldWind.TextAttributes(textAttributes);
-        // Use offset to position the lower left corner of the text string at the shape's screen position (0, height).
+        // Use offset to position the lower left corner of the text string at the shape's screen location.
         textAttributes.offset = new WorldWind.Offset(WorldWind.OFFSET_FRACTION, 0, WorldWind.OFFSET_FRACTION, 0);
         screenText.attributes = textAttributes;
         textLayer.addRenderable(screenText);
 
-        screenText = new WorldWind.ScreenText(new WorldWind.Vec2(canvasWidth, 0), "Upper Right");
+        screenText = new WorldWind.ScreenText(
+            new WorldWind.Offset(WorldWind.OFFSET_FRACTION, 1, WorldWind.OFFSET_FRACTION, 1), "Upper Right");
         textAttributes = new WorldWind.TextAttributes(textAttributes);
-        // Use offset to position the upper right corner of the text string at the shape's screen position (width, 0).
+        // Use offset to position the upper right corner of the text string at the shape's screen location.
         textAttributes.offset = new WorldWind.Offset(WorldWind.OFFSET_FRACTION, 1, WorldWind.OFFSET_FRACTION, 1);
         screenText.attributes = textAttributes;
         textLayer.addRenderable(screenText);
 
-        screenText = new WorldWind.ScreenText(new WorldWind.Vec2(canvasWidth, canvasHeight), "Lower Right");
+        screenText = new WorldWind.ScreenText(
+            new WorldWind.Offset(WorldWind.OFFSET_FRACTION, 1, WorldWind.OFFSET_FRACTION, 0), "Lower Right");
         textAttributes = new WorldWind.TextAttributes(textAttributes);
-        // Use offset to position the lower right corner of the text string at the shape's screen position (width, height).
+        // Use offset to position the lower right corner of the text string at the shape's screen location.
         textAttributes.offset = new WorldWind.Offset(WorldWind.OFFSET_FRACTION, 1, WorldWind.OFFSET_FRACTION, 0);
         screenText.attributes = textAttributes;
         textLayer.addRenderable(screenText);
 
-        screenText = new WorldWind.ScreenText(new WorldWind.Vec2(canvasWidth / 2, canvasHeight / 2), "Center");
+        screenText = new WorldWind.ScreenText(
+            new WorldWind.Offset(WorldWind.OFFSET_FRACTION, 0.5, WorldWind.OFFSET_FRACTION, 0.5), "Center");
         textAttributes = new WorldWind.TextAttributes(textAttributes);
-        // Use offset to position the center of the text string at the shape's screen position (width/2, height/2).
+        // Use offset to position the center of the text string at the shape's screen location.
         textAttributes.offset = new WorldWind.Offset(WorldWind.OFFSET_FRACTION, 0.5, WorldWind.OFFSET_FRACTION, 0.5);
         screenText.attributes = textAttributes;
         textLayer.addRenderable(screenText);
@@ -76,9 +89,6 @@ requirejs(['../src/WorldWind',
         // Add the text layer to the World Window's layer list.
         wwd.addLayer(textLayer);
 
-        // Draw the World Window for the first time.
-        wwd.redraw();
-
         // Create a layer manager for controlling layer visibility.
-        var layerManger = new LayerManager('divLayerManager', wwd);
+        var layerManger = new LayerManager(wwd);
     });

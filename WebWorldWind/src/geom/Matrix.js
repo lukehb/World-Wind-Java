@@ -73,11 +73,8 @@ define([
             this[15] = m44;
         };
 
-        Matrix.NUM_ELEMENTS = 16;
-
-        Matrix.EPSILON = 1.0e-6;
-
-        Matrix.prototype = new Float64Array(Matrix.NUM_ELEMENTS);
+        // Derives from Float64Array.
+        Matrix.prototype = new Float64Array(16);
 
         /**
          * Creates an identity matrix.
@@ -94,11 +91,13 @@ define([
 
         /**
          * Computes the principal axes of a point collection expressed in a typed array.
-         * @param {Float32Array} points The points for which to compute the axes.
+         * @param {Float32Array} points The points for which to compute the axes,
+         * expressed as X0, Y0, Z0, X1, Y1, Z1, ...
          * @param {Vec3} axis1 A vector in which to return the first (longest) principal axis.
          * @param {Vec3} axis2 A vector in which to return the second (mid-length) principal axis.
          * @param {Vec3} axis3 A vector in which to return the third (shortest) principal axis.
-         * @throws {ArgumentError} If the specified points array or one of the specified axes is null or undefined.
+         * @throws {ArgumentError} If the specified points array is null, undefined or empty, or one of the
+         * specified axes arguments is null or undefined.
          */
         Matrix.principalAxesFromPoints = function (points, axis1, axis2, axis3) {
             if (!points || points.length < 1) {
@@ -193,11 +192,17 @@ define([
         };
 
         /**
-         * Copy a matrix.
+         * Copies the components of a specified matrix to this matrix.
          * @param {Matrix} matrix The matrix to copy.
          * @returns {Matrix} This matrix set to the values of the specified matrix.
+         * @throws {ArgumentError} If the specified matrix is null or undefined.
          */
         Matrix.prototype.copy = function (matrix) {
+            if (!matrix) {
+                throw new ArgumentError(
+                    Logger.logMessage(Logger.LEVEL_SEVERE, "Matrix", "copy", "missingMatrix"));
+            }
+
             this[0] = matrix[0];
             this[1] = matrix[1];
             this[2] = matrix[2];
@@ -217,11 +222,11 @@ define([
         };
 
         /**
-         * Indicates whether this matrix is equal to a specified matrix.
+         * Indicates whether the components of this matrix are equal to those of a specified matrix.
          * @param {Matrix} matrix The matrix to test equality with. May be null or undefined, in which case this
-         * function returns <code>false</code>.
-         * @returns {boolean} <code>true</code> if all components of this matrix are equal to the corresponding
-         * components of the specified matrix, otherwise <code>false</code>.
+         * function returns false.
+         * @returns {boolean} true if all components of this matrix are equal to the corresponding
+         * components of the specified matrix, otherwise false.
          */
         Matrix.prototype.equals = function (matrix) {
             return matrix
@@ -244,13 +249,13 @@ define([
         };
 
         /**
-         * Stores this matrix's components in column-major order in the specified array.
+         * Stores this matrix's components in column-major order in a specified array.
          * <p>
          * The array must have space for at least 16 elements. This matrix's components are stored in the array
          * starting with row 0 column 0 in index 0, row 1 column 0 in index 1, row 2 column 0 in index 2, and so on.
          *
-         * @param {Float32Array} result An array of at least 16 elements. Upon return, contains this matrix's components in
-         * column-major.
+         * @param {Float32Array | Float64Array | Number[]} result An array of at least 16 elements. Upon return,
+         * contains this matrix's components in column-major.
          * @returns {Float32Array} The specified result array.
          * @throws {ArgumentError} If the specified result array in null or undefined.
          */
@@ -375,38 +380,6 @@ define([
         };
 
         /**
-         * Sets this matrix to the values of a specified matrix.
-         * @param {Matrix} matrix The matrix whose values to assign to this one.
-         * @returns {Matrix} This matrix with its values set to those of the specific matrix.
-         * @throws {ArgumentError} If the specified matrix in null or undefined.
-         */
-        Matrix.prototype.setToMatrix = function (matrix) {
-            if (!matrix) {
-                throw new ArgumentError(
-                    Logger.logMessage(Logger.LEVEL_SEVERE, "Matrix", "setToMatrix", "missingMatrix"));
-            }
-
-            this[0] = matrix[0];
-            this[1] = matrix[1];
-            this[2] = matrix[2];
-            this[3] = matrix[3];
-            this[4] = matrix[4];
-            this[5] = matrix[5];
-            this[6] = matrix[6];
-            this[7] = matrix[7];
-            this[8] = matrix[8];
-            this[9] = matrix[9];
-            this[10] = matrix[10];
-            this[11] = matrix[11];
-            this[12] = matrix[12];
-            this[13] = matrix[13];
-            this[14] = matrix[14];
-            this[15] = matrix[15];
-
-            return this;
-        };
-
-        /**
          * Sets this matrix to the transpose of a specified matrix.
          * @param {Matrix} matrix The matrix whose transpose is to be copied.
          * @returns {Matrix} This matrix, with its values set to the transpose of the specified matrix.
@@ -490,7 +463,7 @@ define([
          * value. If any entry is zero, then there's no correlation between the two coordinates defining that entry. If the
          * returned matrix is diagonal, then all three coordinates are uncorrelated, and the specified point is
          * distributed evenly about its mean point.
-         * @param {Float32Array} points The points to consider.
+         * @param {Float32Array | Float64Array | Number[]} points The points to consider.
          * @returns {Matrix} This matrix set to the covariance matrix for the specified list of points.
          * @throws {ArgumentError} If the specified array of points is null, undefined or empty.
          */
@@ -726,7 +699,7 @@ define([
 
         /**
          * Returns the translation components of this matrix.
-         * @param {Vec3} result A pre-allocated {@link Vec3} in which to store the translation components.
+         * @param {Vec3} result A pre-allocated {@link Vec3} in which to return the translation components.
          * @returns {Vec3} The specified result argument set to the translation components of this matrix.
          * @throws {ArgumentError} If the specified result argument is null or undefined.
          */
@@ -745,7 +718,7 @@ define([
 
         /**
          * Returns the rotation angles of this matrix.
-         * @param {Vec3} result A pre-allocated {@link Vec3} in which to store the rotation angles.
+         * @param {Vec3} result A pre-allocated {@link Vec3} in which to return the rotation angles.
          * @returns {Vec3} The specified result argument set to the rotation angles of this matrix. The angles are in
          * degrees.
          * @throws {ArgumentError} If the specified result argument is null or undefined.
@@ -938,52 +911,45 @@ define([
         };
 
         /**
-         * Sets this matrix to a perspective projection matrix for the specified viewport and clip distances.
+         * Sets this matrix to a perspective projection matrix for the specified viewport dimensions and clip distances.
          * <p>
-         * A perspective projection matrix maps points in eye coordinates into clip coordinates in a way that causes distant
-         * objects to appear smaller, and preserves the appropriate depth information for each point. In model coordinates, a
-         * perspective projection is defined by frustum originating at the eye position and extending outward in the viewer's
-         * direction. The near distance and the far distance identify the minimum and maximum distance, respectively, at which an
-         * object in the scene is visible. Near and far distances must be positive and may not be equal.
-         * <p>
-         * The viewport is in the OpenGL screen coordinate system, with its origin in the bottom-left corner and axes that extend
-         * up and to the right from the origin point. The resultant projection matrix preserves the scene's size on screen when
-         * the viewport width and height are swapped. This has the effect of maintaining the scene's size when the device is
-         * rotated.
+         * A perspective projection matrix maps points in eye coordinates into clip coordinates in a way that causes
+         * distant objects to appear smaller, and preserves the appropriate depth information for each point. In model
+         * coordinates, a perspective projection is defined by frustum originating at the eye position and extending
+         * outward in the viewer's direction. The near distance and the far distance identify the minimum and maximum
+         * distance, respectively, at which an object in the scene is visible. Near and far distances must be positive
+         * and may not be equal.
          *
-         * @param {Rectangle} viewport The viewport rectangle, in OpenGL screen coordinates.
+         * @param {Number} viewportWidth The viewport width, in screen coordinates.
+         * @param {Number} viewportHeight The viewport height, in screen coordinates.
          * @param {Number} nearDistance The near clip plane distance, in model coordinates.
          * @param {Number} farDistance The far clip plane distance, in model coordinates.
-         *
-         * @exception NSInvalidArgumentException If either the viewport width or the viewport height are zero, if near and far
-         * are equivalent, or if either near or far ar not positive.
+         * @throws {ArgumentError} If the specified width or height is less than or equal to zero, if the near and far
+         * distances are equal, or if either the near or far distance are less than or equal to zero.
          */
-        Matrix.prototype.setToPerspectiveProjection = function (viewport, nearDistance, farDistance) {
-            if (!viewport) {
-                throw new ArgumentError(
-                    Logger.logMessage(Logger.LEVEL_SEVERE, "Matrix", "setToPerspectiveProjection", "missingViewport"));
+        Matrix.prototype.setToPerspectiveProjection = function (viewportWidth, viewportHeight, nearDistance, farDistance) {
+            if (viewportWidth <= 0) {
+                throw new ArgumentError(Logger.logMessage(Logger.LEVEL_SEVERE, "Matrix", "setToPerspectiveProjection",
+                    "invalidWidth"));
             }
 
-            if (viewport.width <= 0 || viewport.height <= 0) {
-                throw new ArgumentError(
-                    Logger.logMessage(Logger.LEVEL_SEVERE, "Matrix", "setToPerspectiveProjection",
-                        "Viewport width or height is zero or negative."));
+            if (viewportHeight <= 0) {
+                throw new ArgumentError(Logger.logMessage(Logger.LEVEL_SEVERE, "Matrix", "setToPerspectiveProjection",
+                    "invalidHeight"));
             }
 
             if (nearDistance === farDistance) {
-                throw new ArgumentError(
-                    Logger.logMessage(Logger.LEVEL_SEVERE, "Matrix", "setToPerspectiveProjection",
+                throw new ArgumentError(Logger.logMessage(Logger.LEVEL_SEVERE, "Matrix", "setToPerspectiveProjection",
                         "Near and far distance are the same."));
             }
 
             if (nearDistance <= 0 || farDistance <= 0) {
-                throw new ArgumentError(
-                    Logger.logMessage(Logger.LEVEL_SEVERE, "Matrix", "setToPerspectiveProjection",
+                throw new ArgumentError(Logger.logMessage(Logger.LEVEL_SEVERE, "Matrix", "setToPerspectiveProjection",
                         "Near or far distance is less than or equal to zero."));
             }
 
-            // Compute the dimensions of the near clip rectangle corresponding to the specified viewport rectangle.
-            var nearRect = WWMath.perspectiveFrustumRectangle(viewport, nearDistance),
+            // Compute the dimensions of the viewport rectangle at the near distance.
+            var nearRect = WWMath.perspectiveFrustumRectangle(viewportWidth, viewportHeight, nearDistance),
                 left = nearRect.getMinX(),
                 right = nearRect.getMaxX(),
                 bottom = nearRect.getMinY(),
@@ -1016,67 +982,57 @@ define([
         };
 
         /**
-         * Sets this matrix to an screen projection matrix for the specified viewport.
+         * Sets this matrix to a screen projection matrix for the specified viewport dimensions.
          * <p>
-         * A screen projection matrix is an orthographic projection that assumes that points in model coordinates represent
-         * screen coordinates and screen depth values. Screen projection matrices therefore map model coordinates directly into
-         * screen coordinates without modification. A point's xy coordinates are interpreted as literal screen coordinates and
-         * must be in the viewport rectangle to be visible. A point's z coordinate is interpreted as a depth value that ranges
-         * from 0 to 1.
-         * <p>
-         * The resultant projection matrix has the effect of preserving coordinates that have already been projected using
-         * [WWNavigatorState project:result:].
-         * <p>
-         * The viewport is in the OpenGL screen coordinate system, with its origin in the bottom-left corner and axes that extend
-         * up and to the right from the origin point.
+         * A screen projection matrix is an orthographic projection that assumes that points in model coordinates
+         * represent a screen point and a depth. Screen projection matrices therefore map model coordinates directly
+         * into screen coordinates without modification. A point's xy coordinates are interpreted as literal screen
+         * coordinates and must be in the viewport to be visible. A point's z coordinate is interpreted as a depth value
+         * that ranges from 0 to 1. Additionally, the screen projection matrix preserves the depth value returned by
+         * [NavigatorState.project]{@link NavigatorState#project}.
          *
-         * @param {Rectangle} viewport The viewport rectangle, in OpenGL screen coordinates.
-         *
-         * @throws {ArgumentError} If the viewport is null or undefined or either the viewport width or the viewport
-         * height are zero.
+         * @param {Number} viewportWidth The viewport width, in screen coordinates.
+         * @param {Number} viewportHeight The viewport height, in screen coordinates.
+         * @throws {ArgumentError} If the specified width or height is less than or equal to zero.
          */
-        Matrix.prototype.setToScreenProjection = function (viewport) {
-            if (!viewport) {
-                throw new ArgumentError(
-                    Logger.logMessage(Logger.LEVEL_SEVERE, "Matrix", "setToScreenProjection", "missingViewport"));
+        Matrix.prototype.setToScreenProjection = function (viewportWidth, viewportHeight) {
+            if (viewportWidth <= 0) {
+                throw new ArgumentError(Logger.logMessage(Logger.LEVEL_SEVERE, "Matrix", "setToScreenProjection",
+                    "invalidWidth"));
             }
 
-            if (viewport.width <= 0 || viewport.height <= 0) {
-                throw new ArgumentError(
-                    Logger.logMessage(Logger.LEVEL_SEVERE, "Matrix", "setToScreenProjection",
-                        "Viewport width or height is zero or negative."));
+            if (viewportHeight <= 0) {
+                throw new ArgumentError(Logger.logMessage(Logger.LEVEL_SEVERE, "Matrix", "setToScreenProjection",
+                    "invalidHeight"));
             }
-
-            var left = viewport.getMinX(),
-                right = viewport.getMaxX(),
-                bottom = viewport.getMinY(),
-                top = viewport.getMaxY();
 
             // Taken from Mathematics for 3D Game Programming and Computer Graphics, Second Edition, equation 4.57.
+            // Simplified to assume that the viewport origin is (0, 0).
             //
-            // The third row of this projection matrix is configured so that points with z coordinates representing depth values
-            // ranging from 0 to 1 are not modified after transformation into window coordinates. This projection matrix maps z
-            // values in the range [0, 1] to the range [-1, 1] by applying the following function to incoming z coordinates:
+            // The third row of this projection matrix is configured so that points with z coordinates representing
+            // depth values ranging from 0 to 1 are not modified after transformation into window coordinates. This
+            // projection matrix maps z values in the range [0, 1] to the range [-1, 1] by applying the following
+            // function to incoming z coordinates:
             //
             // zp = z0 * 2 - 1
             //
-            // Where 'z0' is the point's z coordinate and 'zp' is the projected z coordinate. The GPU then maps the projected z
-            // coordinate into window coordinates in the range [0, 1] by applying the following function:
+            // Where 'z0' is the point's z coordinate and 'zp' is the projected z coordinate. The GPU then maps the
+            // projected z coordinate into window coordinates in the range [0, 1] by applying the following function:
             //
             // zw = zp * 0.5 + 0.5
             //
             // The result is that a point's z coordinate is effectively passed to the GPU without modification.
 
             // Row 1
-            this[0] = 2 / (right - left);
+            this[0] = 2 / viewportWidth;
             this[1] = 0;
             this[2] = 0;
-            this[3] = -(right + left) / (right - left);
+            this[3] = -1;
             // Row 2
             this[4] = 0;
-            this[5] = 2 / (top - bottom);
+            this[5] = 2 / viewportHeight;
             this[6] = 0;
-            this[7] = -(top + bottom) / (top - bottom);
+            this[7] = -1;
             // Row 3
             this[8] = 0;
             this[9] = 0;
@@ -1232,33 +1188,33 @@ define([
         /**
          * Applies a specified depth offset to this projection matrix.
          * <p>
-         * This method assumes that this matrix represents a projection matrix. If this does not represent a projection matrix
-         * the results are undefined. Projection matrices can be created by calling
-         * setToPerspectiveProjection:nearDistance:farDistance: or setToScreenProjection:.
+         * This method assumes that this matrix represents a projection matrix. If this does not represent a projection
+         * matrix the results are undefined. Projection matrices can be created by calling
+         * [setToPerspectiveProjection]{@link Matrix#setToPerspectiveProjection} or [setToScreenProjection]{@link Matrix#setToScreenProjection}.
          * <p>
-         * The depth offset may be any real number and is typically used to draw geometry slightly closer to the user's eye in
-         * order to give those shapes visual priority over nearby or geometry. An offset of zero has no effect. An offset less
-         * than zero brings depth values closer to the eye, while an offset greater than zero pushes depth values away from the
-         * eye.
+         * The depth offset may be any real number and is typically used to draw geometry slightly closer to the user's
+         * eye in order to give those shapes visual priority over nearby or geometry. An offset of zero has no effect.
+         * An offset less than zero brings depth values closer to the eye, while an offset greater than zero pushes
+         * depth values away from the eye.
          * <p>
-         * Depth offset may be applied to both perspective and orthographic projection matrices. The effect on each projection
-         * type is outlined here:
+         * Depth offset may be applied to both perspective and orthographic projection matrices. The effect on each
+         * projection type is outlined here:
          * <p>
-         * *Perspective Projection*
+         * <strong>Perspective Projection</strong>
          * <p>
-         * The effect of depth offset on a perspective projection increases exponentially with distance from the eye. This
-         * has the effect of adjusting the offset for the loss in depth precision with geometry drawn further from the eye.
-         * Distant geometry requires a greater offset to differentiate itself from nearby geometry, while close geometry does
-         * not.
+         * The effect of depth offset on a perspective projection increases exponentially with distance from the eye.
+         * This has the effect of adjusting the offset for the loss in depth precision with geometry drawn further from
+         * the eye. Distant geometry requires a greater offset to differentiate itself from nearby geometry, while close
+         * geometry does not.
          * <p>
-         * *Orthographic Projection*
+         * <strong>Orthographic Projection</strong>
          * <p>
-         * The effect of depth offset on an orthographic projection increases linearly with distance from the eye. While it is
-         * reasonable to apply a depth offset to an orthographic projection, the effect is most appropriate when applied to the
-         * projection used to draw the scene. For example, when an object's coordinates are projected by a perspective projection
-         * into screen coordinates then drawn using an orthographic projection, it is best to apply the offset to the original
-         * perspective projection. The method [WWNavigatorState project:result:depthOffset:] performs the correct behavior
-         * for the projection type used to draw the scene.
+         * The effect of depth offset on an orthographic projection increases linearly with distance from the eye. While
+         * it is reasonable to apply a depth offset to an orthographic projection, the effect is most appropriate when
+         * applied to the projection used to draw the scene. For example, when an object's coordinates are projected by
+         * a perspective projection into screen coordinates then drawn using an orthographic projection, it is best to
+         * apply the offset to the original perspective projection. The method [NavigatorState.project]{@link NavigatorState#project} performs the
+         * correct behavior for the projection type used to draw the scene.
          *
          * @param {Number} depthOffset The amount of offset to apply.
          * @returns {Matrix} This matrix with it's depth offset set to the specified offset.
@@ -1488,14 +1444,14 @@ define([
             return this;
         };
 
-        /**
+        /* Internal. Intentionally not documented.
          * Utility method to solve a linear system with an LU factorization of a matrix.
          * Solves Ax=b, where A is in LU factorized form.
          * Algorithm derived from "Numerical Recipes in C", Press et al., 1988.
          *
-         * @param {Number[]} A an LU factorization of a matrix
-         * @param {Number[]} index permutation vector of that LU factorization
-         * @param {Number[]} b vector to be solved
+         * @param {Number[]} A An LU factorization of a matrix.
+         * @param {Number[]} index Permutation vector of that LU factorization.
+         * @param {Number[]} b Vector to be solved.
          */
             // Method "lubksb" derived from "Numerical Recipes in C", Press et al., 1988
         Matrix.lubksb = function (A, index, b) {
@@ -1530,7 +1486,7 @@ define([
             }
         };
 
-        /**
+        /* Internal. Intentionally not documented.
          * Utility method to perform an LU factorization of a matrix.
          * "ludcmp" is derived from "Numerical Recipes in C", Press et al., 1988.
          *
@@ -1840,6 +1796,29 @@ define([
             result1.multiply(m11);
             result2.multiply(m22);
             result3.multiply(m33);
+        };
+
+        /**
+         * Extracts and returns a new matrix whose upper 3x3 entries are identical to those of this matrix,
+         * and whose fourth row and column are 0 except for a 1 in the diagonal position.
+         * @returns {Matrix} The upper 3x3 matrix of this matrix.
+         */
+        Matrix.prototype.upper3By3 = function () {
+            var result = Matrix.fromIdentity();
+
+            result[0] = this[0];
+            result[1] = this[1];
+            result[2] = this[2];
+
+            result[4] = this[4];
+            result[5] = this[5];
+            result[6] = this[6];
+
+            result[8] = this[8];
+            result[9] = this[9];
+            result[10] = this[10];
+
+            return result;
         };
 
         return Matrix;

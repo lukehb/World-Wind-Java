@@ -44,7 +44,7 @@ public class RadarVolumeExample extends ApplicationTemplate
         {
             super(true, true, false);
 
-            Position center = Position.fromDegrees(36.8378, -118.8743, 100); // radar location
+            Position center = Position.fromDegrees(36.8378, -118.8743, 100e2); // radar location
             Angle startAzimuth = Angle.fromDegrees(140);
             Angle endAzimuth = Angle.fromDegrees(270);
             Angle startElevation = Angle.fromDegrees(-50);
@@ -62,7 +62,7 @@ public class RadarVolumeExample extends ApplicationTemplate
 
             if (CONE_VOLUME)
             {
-                vertices = this.computeConeVertices(center, coneFieldOfView, coneAzimuth, coneElevation, innerRange,
+                vertices = this.computeSphereVertices(center, coneFieldOfView, coneAzimuth, coneElevation, innerRange,
                     outerRange, numAz, numEl);
             }
             else
@@ -193,9 +193,8 @@ public class RadarVolumeExample extends ApplicationTemplate
             double dTheta = 2 * Math.PI / (width - 1);
 
             // Compute the near grid.
-            double innerWidth = innerRange * fov.tanHalfAngle();
-            double R = innerWidth / fov.divide(2).sin();
-            double r0 = R * fov.divide(2).cos();
+            double innerWidth = innerRange * fov.divide(2).sin(); // half width of chord
+            double R = innerRange; // radius of sphere
             double dRadius = innerWidth / (height - 1);
 
             // Compute rings of vertices to define the grid.
@@ -211,11 +210,8 @@ public class RadarVolumeExample extends ApplicationTemplate
                     y = radius * Math.sin(theta);
 
                     // Compute Z on the sphere of inner range radius.
-                    double w = Math.sqrt(x * x + y * y);
-                    double a = Math.atan(w / r0);
-                    double t = Math.sqrt(w * w + r0 * r0);
-                    double tp = R - t;
-                    double z = (2 * r0 - R) + tp / Math.cos(a);
+                    double w = Math.sqrt(x * x + y * y); // perpendicular distance from centerline to point on sphere
+                    double z = Math.sqrt(Math.max(R * R - w * w, 0));
 
                     Vec4 v = new Vec4(x, y, -z);
                     vertices.add(v.transformBy3(combined));
@@ -223,9 +219,8 @@ public class RadarVolumeExample extends ApplicationTemplate
             }
 
             // Compute the far grid.
-            double outerWidth = outerRange * fov.tanHalfAngle();
-            R = outerWidth / fov.divide(2).sin();
-            r0 = R * fov.divide(2).cos();
+            double outerWidth = outerRange * fov.divide(2).sin();
+            R = outerRange;
             dRadius = outerWidth / (height - 1);
 
             for (int j = 0; j < height; j++)
@@ -240,11 +235,70 @@ public class RadarVolumeExample extends ApplicationTemplate
                     y = radius * Math.sin(theta);
 
                     // Compute Z on the sphere of outer range radius.
-                    double w = Math.sqrt(x * x + y * y);
-                    double a = Math.atan(w / r0);
-                    double t = Math.sqrt(w * w + r0 * r0);
-                    double tp = R - t;
-                    double z = (2 * r0 - R) + tp / Math.cos(a);
+                    double w = Math.sqrt(x * x + y * y); // perpendicular distance from centerline to point on sphere
+                    double z = Math.sqrt(Math.max(R * R - w * w, 0));
+
+                    Vec4 v = new Vec4(x, y, -z);
+                    vertices.add(v.transformBy3(combined));
+                }
+            }
+
+            // The vertices are computed relative to the origin. Transform them to the radar position and orientation.
+            return this.transformVerticesToPosition(apex, vertices);
+        }
+
+        List<Vec4> computeSphereVertices(Position apex, Angle fov, Angle azimuth, Angle elevation, double innerRange,
+            double outerRange, int width, int height)
+        {
+            List<Vec4> vertices = new ArrayList<Vec4>();
+            vertices.add(Vec4.ZERO); // the first vertex is the radar position.
+
+            // Rotate both grids around the Y axis to the specified elevation.
+            Matrix elevationMatrix = Matrix.fromAxisAngle(Angle.NEG90.subtract(elevation), 0, 1, 0);
+
+            // Rotate both grids around the Z axis to the specified azimuth.
+            Matrix azimuthMatrix = Matrix.fromAxisAngle(Angle.POS90.subtract(azimuth), 0, 0, 1);
+
+            // Combine the rotations and build the full vertex list.
+            Matrix combined = azimuthMatrix.multiply(elevationMatrix);
+
+            double x, y, z;
+
+            double dTheta = 2 * Math.PI / (width - 1);
+
+            // Compute the near grid.
+            double phi;
+            double dPhi = fov.divide(2).radians / (height - 1);
+
+            for (int j = 0; j < height; j++)
+            {
+                phi = fov.divide(2).radians - j * dPhi;
+
+                for (int i = 0; i < width; i++)
+                {
+                    double theta = i * dTheta;
+
+                    x = innerRange * Math.cos(theta) * Math.sin(phi);
+                    y = innerRange * Math.sin(theta) * Math.sin(phi);
+                    z = innerRange * Math.cos(phi);
+
+                    Vec4 v = new Vec4(x, y, -z);
+                    vertices.add(v.transformBy3(combined));
+                }
+            }
+
+            // Compute the far grid.
+            for (int j = 0; j < height; j++)
+            {
+                phi = fov.divide(2).radians - j * dPhi;
+
+                for (int i = 0; i < width; i++)
+                {
+                    double theta = i * dTheta;
+
+                    x = outerRange * Math.cos(theta) * Math.sin(phi);
+                    y = outerRange * Math.sin(theta) * Math.sin(phi);
+                    z = outerRange * Math.cos(phi);
 
                     Vec4 v = new Vec4(x, y, -z);
                     vertices.add(v.transformBy3(combined));
@@ -293,7 +347,7 @@ public class RadarVolumeExample extends ApplicationTemplate
                 Position position = positions.get(i);
 
                 // Mark the position as obstructed if it's below the minimum elevation.
-                if (this.isBelowMinimumElevation(position, i, origin.getAltitude()))
+                if (this.isBelowMinimumElevation(position, originPoint))
                 {
                     obstructionFlags[i - 1] = RadarVolume.EXTERNAL_OBSTRUCTION;
                     continue;
@@ -386,13 +440,14 @@ public class RadarVolumeExample extends ApplicationTemplate
             return obstructionFlags;
         }
 
-        protected boolean isBelowMinimumElevation(Position position, int positionIndex, double referenceAltitude)
+        protected boolean isBelowMinimumElevation(Position position, Vec4 cartesianOrigin)
         {
-            double R = positionIndex < this.numAz * this.numEl ? this.innerRange : this.outerRange;
+            Globe globe = this.getWwd().getModel().getGlobe();
 
-            double elevation = Math.asin((position.getAltitude() - referenceAltitude) / R);
+            Vec4 cartesianPosition = globe.computeEllipsoidalPointFromPosition(position);
+            Angle angle = cartesianOrigin.angleBetween3(cartesianPosition.subtract3(cartesianOrigin));
 
-            return elevation < this.minimumElevation.radians;
+            return angle.radians > (Math.PI / 2 - this.minimumElevation.radians);
         }
 
         List<Position> makePositions(List<Vec4> vertices)

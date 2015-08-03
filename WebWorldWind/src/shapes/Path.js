@@ -17,6 +17,8 @@ define([
         '../geom/Matrix',
         '../pick/PickedObject',
         '../geom/Position',
+        '../shapes/ShapeAttributes',
+        '../shapes/SurfacePolyline',
         '../geom/Vec2',
         '../geom/Vec3'
     ],
@@ -30,6 +32,8 @@ define([
               Matrix,
               PickedObject,
               Position,
+              ShapeAttributes,
+              SurfacePolyline,
               Vec2,
               Vec3) {
         "use strict";
@@ -39,7 +43,7 @@ define([
          * @alias Path
          * @constructor
          * @augments AbstractShape
-         * @classdesc Represents a line or curve between specified positions. The path is drawn between input
+         * @classdesc Represents a line, curve or curtain between specified positions. The path is drawn between input
          * positions to achieve a specified path type, which can be one of the following:
          * <ul>
          *     <li>[WorldWind.GREAT_CIRCLE]{@link WorldWind#GREAT_CIRCLE}</li>
@@ -58,17 +62,27 @@ define([
          * </ul>
          * If the latter, the path positions' altitudes are ignored.
          * <p>
-         *     Paths have separate attributes for normal display and highlighted display.
+         *     Paths have separate attributes for normal display and highlighted display. They use the interior and
+         *     outline attributes of {@link ShapeAttributes} but do not use the image attributes.
+         * <p>
+         *     A path displays as a curtain if its [extrude]{@link Path#extrude} property is true. A curtain extends
+         *     from the line formed by the path positions to the ground.
+         * <p>
+         *     This shape uses a {@link SurfacePolyline} when drawing on 2D globes and this shape's
+         *     [useSurfaceShapeFor2D]{@link AbstractShape#useSurfaceShapeFor2D} is true.
+         *
          * @param {Position[]} positions An array containing the path positions.
+         * @param {ShapeAttributes} attributes The attributes to associate with this path. May be null, in which case
+         * default attributes are associated.
          * @throws {ArgumentError} If the specified positions array is null or undefined.
          */
-        var Path = function (positions) {
+        var Path = function (positions, attributes) {
             if (!positions) {
                 throw new ArgumentError(
                     Logger.logMessage(Logger.LEVEL_SEVERE, "Path", "constructor", "missingPositions"));
             }
 
-            AbstractShape.call(this);
+            AbstractShape.call(this, attributes);
 
             // Private. Documentation is with the defined property below.
             this._positions = positions;
@@ -82,12 +96,10 @@ define([
             // Private. Documentation is with the defined property below.
             this._numSubSegments = 10;
 
-            // Assign the first position as the reference position.
-            this.referencePosition = positions.length > 0 ? positions[0] : null;
-        };
+            this.referencePosition = this.determineReferencePosition(this._positions);
 
-        Path.scratchMatrix = Matrix.fromIdentity(); // scratch variable
-        Path.scratchPoint = new Vec3(0, 0, 0); // scratch variable
+            this.scratchPoint = new Vec3(0, 0, 0); // scratch variable
+        };
 
         Path.prototype = Object.create(AbstractShape.prototype);
 
@@ -108,7 +120,7 @@ define([
                     }
 
                     this._positions = positions;
-                    this.referencePosition = positions.length > 0 ? positions[0] : null;
+                    this.referencePosition = this.determineReferencePosition(this._positions);
                     this.reset();
                 }
             },
@@ -170,9 +182,9 @@ define([
             /**
              * The type of path to follow when drawing the path. Recognized values are:
              * <ul>
-             * <li>[WorldWind.GREAT_CIRCLE]{@link WorldWind#GREAT_CIRCLE}
-             * <li>[WorldWind.RHUMB_LINE]{@link WorldWind#RHUMB_LINE}
-             * <li>[WorldWind.LINEAR]{@link WorldWind#LINEAR}
+             * <li>[WorldWind.GREAT_CIRCLE]{@link WorldWind#GREAT_CIRCLE}</li>
+             * <li>[WorldWind.RHUMB_LINE]{@link WorldWind#RHUMB_LINE}</li>
+             * <li>[WorldWind.LINEAR]{@link WorldWind#LINEAR}</li>
              * </ul>
              * @type {String}
              * @default WorldWind.GREAT_CIRCLE
@@ -206,23 +218,57 @@ define([
             }
         });
 
-        // Overridden from AbstractShape base class.
-        Path.prototype.doMakeOrderedRenderable = function (dc) {
-            // See if the current shape data can be re-used.
-            if (this.currentData.tessellatedPoints
-                && this.currentData.drawInterior === this.activeAttributes.drawInterior
-                && this.currentData.drawVerticals === this.activeAttributes.drawVerticals) {
-                return this;
+        // Intentionally not documented.
+        Path.prototype.determineReferencePosition = function (positions) {
+            // Assign the first position as the reference position.
+            return (positions.length > 0) ? positions[0] : null;
+        };
+
+        // Internal. Determines whether this shape's geometry must be re-computed.
+        Path.prototype.mustGenerateGeometry = function (dc) {
+            if (!this.currentData.tessellatedPoints) {
+                return true;
             }
 
+            if (this.currentData.drawInterior !== this.activeAttributes.drawInterior
+                || this.currentData.drawVerticals !== this.activeAttributes.drawVerticals) {
+                return true;
+            }
+
+            if (!this.followTerrain && this.currentData.numSubSegments !== this.numSubSegments) {
+                return true;
+            }
+
+            if (this.followTerrain && this.currentData.terrainConformance !== this.terrainConformance) {
+                return true;
+            }
+
+            if (this.altitudeMode === WorldWind.ABSOLUTE) {
+                return false;
+            }
+
+            return this.currentData.isExpired
+        };
+
+        Path.prototype.createSurfaceShape = function () {
+            return new SurfacePolyline(this.positions, null);
+        };
+
+        // Overridden from AbstractShape base class.
+        Path.prototype.doMakeOrderedRenderable = function (dc) {
             // A null reference position is a signal that there are no positions to render.
-            if (!this.referencePosition || this._positions.length < 2) {
+            if (!this.referencePosition) {
                 return null;
+            }
+
+            // See if the current shape data can be re-used.
+            if (!this.mustGenerateGeometry(dc)) {
+                return this;
             }
 
             // Set the transformation matrix to correspond to the reference position.
             var refPt = this.currentData.referencePoint;
-            dc.terrain.surfacePointForMode(this.referencePosition.latitude, this.referencePosition.longitude,
+            dc.surfacePointForMode(this.referencePosition.latitude, this.referencePosition.longitude,
                 this.referencePosition.altitude, this._altitudeMode, refPt);
             this.currentData.transformationMatrix.setToTranslation(refPt[0], refPt[1], refPt[2]);
 
@@ -238,12 +284,15 @@ define([
             this.currentData.tessellatedPoints = tessellatedPoints;
             this.currentData.drawInterior = this.activeAttributes.drawInterior;
             this.currentData.drawVerticals = this.activeAttributes.drawVerticals;
+            this.currentData.numSubSegments = this.numSubSegments;
+            this.currentData.terrainConformance = this.terrainConformance;
+            this.resetExpiration(this.currentData);
+            this.currentData.fillVbo = true;
 
             // Create the extent from the Cartesian points. Those points are relative to this path's reference point, so
             // translate the computed extent to the reference point.
             if (!this.currentData.extent) {
                 this.currentData.extent = new BoundingBox();
-
             }
             this.currentData.extent.setToPoints(tessellatedPoints);
             this.currentData.extent.translate(this.currentData.referencePoint);
@@ -269,14 +318,14 @@ define([
 
             tessellatedPositions.push(posA);
 
-            dc.terrain.surfacePointForMode(posA.latitude, posA.longitude, posA.altitude, this._altitudeMode, ptA);
+            dc.surfacePointForMode(posA.latitude, posA.longitude, posA.altitude, this._altitudeMode, ptA);
 
             for (var i = 1, len = this._positions.length; i < len; i++) {
                 posB = this._positions[i];
-                dc.terrain.surfacePointForMode(posB.latitude, posB.longitude, posB.altitude, this._altitudeMode, ptB);
+                dc.surfacePointForMode(posB.latitude, posB.longitude, posB.altitude, this._altitudeMode, ptB);
                 eyeDistance = navState.eyePoint.distanceTo(ptA);
                 pixelSize = navState.pixelSizeAtDistance(eyeDistance);
-                if (ptA.distanceTo(ptB) < pixelSize * 8) {
+                if (ptA.distanceTo(ptB) < pixelSize * 8 && this.altitudeMode !== WorldWind.ABSOLUTE) {
                     tessellatedPositions.push(posB); // distance is short so no need for sub-segments
                 } else {
                     this.makeSegment(dc, posA, posB, ptA, ptB, tessellatedPositions);
@@ -341,39 +390,41 @@ define([
                 segmentAzimuth = Location.greatCircleAzimuth(posA, posB);
             }
 
-            Path.scratchPoint.copy(ptA);
+            this.scratchPoint.copy(ptA);
             for (s = 0, p = 0; s < 1;) {
                 if (this._followTerrain) {
-                    p += this._terrainConformance * navState.pixelSizeAtDistance(Path.scratchPoint.distanceTo(eyePoint));
+                    p += this._terrainConformance * navState.pixelSizeAtDistance(this.scratchPoint.distanceTo(eyePoint));
                 } else {
                     p += arcLength / this._numSubSegments;
                 }
 
+                // Stop adding intermediate positions when we reach the arc length, or the remaining distance is in
+                // millimeters on Earth.
+                if (arcLength < p || arcLength - p < 1e-9)
+                    break;
+
                 s = p / arcLength;
-                if (s >= 1) {
-                    pos = posB;
+                distance = s * segmentDistance;
+
+                if (this._pathType === WorldWind.LINEAR) {
+                    Location.linearLocation(posA, segmentAzimuth, distance, pos);
+                } else if (this._pathType === WorldWind.RHUMB_LINE) {
+                    Location.rhumbLocation(posA, segmentAzimuth, distance, pos);
                 } else {
-                    distance = s * segmentDistance;
-
-                    if (this._pathType === WorldWind.LINEAR) {
-                        Location.linearLocation(posA, segmentAzimuth, distance, pos);
-                    } else if (this._pathType === WorldWind.RHUMB_LINE) {
-                        Location.rhumbLocation(posA, segmentAzimuth, distance, pos);
-                    } else {
-                        Location.greatCircleLocation(posA, segmentAzimuth, distance, pos);
-                    }
-
-                    pos.altitude = (1 - s) * posA.altitude + s * posB.altitude;
+                    Location.greatCircleLocation(posA, segmentAzimuth, distance, pos);
                 }
 
+                pos.altitude = (1 - s) * posA.altitude + s * posB.altitude;
                 tessellatedPositions.push(new Position(pos.latitude, pos.longitude, pos.altitude));
 
                 if (this._followTerrain) {
                     // Compute a new reference point for eye distance.
-                    dc.terrain.surfacePointForMode(pos.latitude, pos.longitude, pos.altitude,
-                        WorldWind.CLAMP_TO_GROUND, Path.scratchPoint);
+                    dc.surfacePointForMode(pos.latitude, pos.longitude, pos.altitude,
+                        WorldWind.CLAMP_TO_GROUND, this.scratchPoint);
                 }
             }
+
+            tessellatedPositions.push(posB);
         };
 
         // Private. Intentionally not documented.
@@ -396,7 +447,7 @@ define([
             for (var i = 0, len = tessellatedPositions.length; i < len; i++) {
                 pos = tessellatedPositions[i];
 
-                dc.terrain.surfacePointForMode(pos.latitude, pos.longitude, pos.altitude, altitudeMode, pt);
+                dc.surfacePointForMode(pos.latitude, pos.longitude, pos.altitude, altitudeMode, pt);
 
                 dSquared = pt.distanceToSquared(eyePoint);
                 if (dSquared < eyeDistSquared) {
@@ -411,7 +462,7 @@ define([
                 tessellatedPoints[k + 2] = pt[2];
 
                 if (capturePoles) {
-                    dc.terrain.surfacePointForMode(pos.latitude, pos.longitude, 0, WorldWind.CLAMP_TO_GROUND, pt);
+                    dc.surfacePointForMode(pos.latitude, pos.longitude, 0, WorldWind.CLAMP_TO_GROUND, pt);
 
                     dSquared = pt.distanceToSquared(eyePoint);
                     if (dSquared < eyeDistSquared) {
@@ -434,13 +485,15 @@ define([
 
         // Private. Intentionally not documented.
         Path.prototype.mustDrawInterior = function (dc) {
-            return this.activeAttributes.drawInterior && !(this._altitudeMode === WorldWind.CLAMP_TO_GROUND);
+            return this.activeAttributes.drawInterior
+                && this._extrude
+                && this._altitudeMode !== WorldWind.CLAMP_TO_GROUND;
         };
 
         // Private. Intentionally not documented.
         Path.prototype.mustDrawVerticals = function (dc) {
             return this.activeAttributes.drawOutline && this.activeAttributes.drawVerticals
-                && !this.altitudeMode === WorldWind.CLAMP_TO_GROUND;
+                && this.altitudeMode !== WorldWind.CLAMP_TO_GROUND;
         };
 
         // Overridden from AbstractShape base class.
@@ -453,23 +506,27 @@ define([
 
             this.applyMvpMatrix(dc);
 
-            if (!currentData.vboKey) {
-                currentData.vboKey = dc.gpuResourceCache.generateCacheKey();
+            if (!currentData.vboCacheKey) {
+                currentData.vboCacheKey = dc.gpuResourceCache.generateCacheKey();
             }
 
-            vboId = dc.gpuResourceCache.resourceForKey(currentData.vboKey);
+            vboId = dc.gpuResourceCache.resourceForKey(currentData.vboCacheKey);
             if (!vboId) {
                 vboId = gl.createBuffer();
-                dc.gpuResourceCache.putResource(currentData.vboKey, vboId, numPoints * 3 * 4);
+                dc.gpuResourceCache.putResource(this.currentData.vboCacheKey, vboId,
+                    currentData.tessellatedPoints.length * 4);
+                currentData.fillVbo = true;
+            }
 
-                gl.bindBuffer(WebGLRenderingContext.ARRAY_BUFFER, vboId);
+            // Bind and if necessary fill the VBO. We fill the VBO here rather than in doMakeOrderedRenderable so that
+            // there's no possibility of the VBO being ejected from the cache between the time it's filled and
+            // the time it's used.
+            gl.bindBuffer(WebGLRenderingContext.ARRAY_BUFFER, vboId);
+            if (currentData.fillVbo) {
                 gl.bufferData(WebGLRenderingContext.ARRAY_BUFFER, currentData.tessellatedPoints,
                     WebGLRenderingContext.STATIC_DRAW);
-            } else {
-                gl.bindBuffer(WebGLRenderingContext.ARRAY_BUFFER, vboId);
-                gl.bufferSubData(WebGLRenderingContext.ARRAY_BUFFER, 0, currentData.tessellatedPoints);
+                dc.frameStatistics.incrementVboLoadCount(1);
             }
-            dc.frameStatistics.incrementVboLoadCount(1);
 
             program.loadTextureEnabled(gl, false);
 
@@ -485,7 +542,7 @@ define([
                     gl.depthMask(false);
                 }
                 program.loadColor(gl, dc.pickingMode ? pickColor : color);
-                program.loadOpacity(gl, dc.pickingMode ? 1 : opacity);
+                program.loadOpacity(gl, dc.pickingMode ? (opacity > 0 ? 1 : 0) : opacity);
 
                 gl.vertexAttribPointer(program.vertexPointLocation, 3, WebGLRenderingContext.FLOAT, false, 0, 0);
                 gl.drawArrays(WebGLRenderingContext.TRIANGLE_STRIP, 0, numPoints);
@@ -521,30 +578,31 @@ define([
                 gl.drawArrays(WebGLRenderingContext.LINE_STRIP, 0, nPts);
 
                 if (this.mustDrawVerticals(dc)) {
-                    if (!currentData.verticalIndicesCacheKey) {
-                        currentData.verticalIndicesCacheKey = dc.gpuResourceCache.generateCacheKey();
+                    if (!currentData.verticalIndicesVboCacheKey) {
+                        currentData.verticalIndicesVboCacheKey = dc.gpuResourceCache.generateCacheKey();
                     }
 
-                    vboId = dc.gpuResourceCache.resourceForKey(currentData.verticalIndicesCacheKey);
+                    vboId = dc.gpuResourceCache.resourceForKey(currentData.verticalIndicesVboCacheKey);
                     if (!vboId) {
                         vboId = gl.createBuffer();
-                        dc.gpuResourceCache.putResource(currentData.verticalIndicesCacheKey, vboId,
+                        dc.gpuResourceCache.putResource(currentData.verticalIndicesVboCacheKey, vboId,
                             currentData.verticalIndices.length * 4);
+                        currentData.fillVbo = true;
+                    }
 
-                        gl.bindBuffer(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, vboId);
+                    gl.bindBuffer(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, vboId);
+                    if (currentData.fillVbo) {
                         gl.bufferData(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, currentData.verticalIndices,
                             WebGLRenderingContext.STATIC_DRAW);
-                    } else {
-                        gl.bindBuffer(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, vboId);
-                        gl.bufferSubData(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, 0, currentData.verticalIndices);
+                        dc.frameStatistics.incrementVboLoadCount(1);
                     }
-                    dc.frameStatistics.incrementVboLoadCount(1);
 
                     gl.vertexAttribPointer(program.vertexPointLocation, 3, WebGLRenderingContext.FLOAT, false, 0, 0);
                     gl.drawElements(WebGLRenderingContext.LINES, currentData.verticalIndices.length,
                         WebGLRenderingContext.UNSIGNED_SHORT, 0);
                 }
             }
+            currentData.fillVbo = false;
 
             if (dc.pickingMode) {
                 var po = new PickedObject(pickColor, this.pickDelegate ? this.pickDelegate : this, null, dc.currentLayer,
@@ -561,7 +619,7 @@ define([
                 gl.disable(WebGLRenderingContext.CULL_FACE);
             }
 
-            dc.findAndBindProgram(gl, BasicTextureProgram);
+            dc.findAndBindProgram(BasicTextureProgram);
             gl.enableVertexAttribArray(dc.currentProgram.vertexPointLocation);
         };
 
@@ -570,27 +628,9 @@ define([
             var gl = dc.currentGlContext;
 
             gl.disableVertexAttribArray(dc.currentProgram.vertexPointLocation);
-            dc.bindProgram(gl, null);
             gl.depthMask(true);
             gl.lineWidth(1);
             gl.enable(WebGLRenderingContext.CULL_FACE);
-        };
-
-        // Private. Intentionally not documented.
-        Path.prototype.applyMvpMatrix = function (dc) {
-            Path.scratchMatrix.setToMatrix(dc.navigatorState.modelviewProjection);
-            Path.scratchMatrix.multiplyMatrix(this.currentData.transformationMatrix);
-            dc.currentProgram.loadModelviewProjection(dc.currentGlContext, Path.scratchMatrix);
-        };
-
-        // Private. Intentionally not documented.
-        Path.prototype.applyMvpMatrixForOutline = function (dc) {
-            // Causes the outline to stand out from the interior.
-            Path.scratchMatrix.setToMatrix(dc.navigatorState.projection);
-            Path.scratchMatrix.offsetProjectionDepth(-0.001);
-            Path.scratchMatrix.multiplyMatrix(dc.navigatorState.modelview);
-            Path.scratchMatrix.multiplyMatrix(this.currentData.transformationMatrix);
-            dc.currentProgram.loadModelviewProjection(dc.currentGlContext, Path.scratchMatrix);
         };
 
         return Path;

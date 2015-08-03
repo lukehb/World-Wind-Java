@@ -21,10 +21,10 @@ define([
          * @classdesc Provides a limited-size memory cache of key-value pairs. The meaning of size depends on usage.
          * Some instances of this class work in bytes while others work in counts. See the documentation for the
          * specific use to determine the size units.
-         * @param {number} capacity The cache's capacity.
-         * @param {number} lowWater The size to clear the cache to when its capacity is exceeded.
-         * @throws {ArgumentError} If either the capacity is zero or negative or the low-water value is greater than
-         * or equal to the capacity.
+         * @param {Number} capacity The cache's capacity.
+         * @param {Number} lowWater The size to clear the cache to when its capacity is exceeded.
+         * @throws {ArgumentError} If either the capacity is 0 or negative or the low-water value is greater than
+         * or equal to the capacity or less than 1.
          */
         var MemoryCache = function (capacity, lowWater) {
             if (!capacity || capacity < 1) {
@@ -32,89 +32,93 @@ define([
                     "The specified capacity is undefined, zero or negative"));
             }
 
-            if (!lowWater || lowWater >= capacity) {
+            if (!lowWater || lowWater >= capacity || lowWater < 0) {
                 throw new ArgumentError(Logger.logMessage(Logger.LEVEL_SEVERE, "MemoryCache", "constructor",
-                    "The specified low-water value is undefined, greater than or equal to the capacity"));
+                    "The specified low-water value is undefined, greater than or equal to the capacity, or less than 1"));
             }
 
-            /**
-             * The maximum size this cache may hold. Use [setCapacity]{@link MemoryCache#setCapacity} to set the
-             * capacity for this memory cache.
-             * @type {number}
-             * @readonly
-             */
-            this.capacity = capacity;
+            // Documented with its property accessor below.
+            this._capacity = capacity;
 
-            /**
-             * The size to clear this cache to when its capacity is exceeded. This value is initially specified to this
-             * memory cache's constructor.
-             * @type {Number}
-             */
-            this.lowWater = lowWater;
+            // Documented with its property accessor below.
+            this._lowWater = lowWater;
 
             /**
              * The size currently used by this cache.
-             * @type {number}
+             * @type {Number}
              * @readonly
              */
             this.usedCapacity = 0;
 
             /**
              * The size currently unused by this cache.
-             * @type {number}
+             * @type {Number}
              * @readonly
              */
             this.freeCapacity = capacity;
 
-            // Internal. Intentionally not documented.
-            // The cache entries.
-            /**
-             *  This cache's cache entries. Applications must not modify this object.
-             * @type {{}}
-             * @protected
-             */
+            // Private. The cache entries.
             this.entries = {};
 
-            /**
-             * The cache listeners associated with this memory cache. Applications must not modify this object.
-             * @type {Array}
-             * @protected
-             */
+            // Private. The cache listeners.
             this.listeners = [];
-
-            // Internal. Intentionally not documented.
-            // Cache counter used to indicate the least recently used entry. Incremented each time an entry is accessed and
-            // assigned to the associated entry's lastUsed ivar.
-            this.entryUsedCounter = 0;
         };
 
-        /**
-         * Sets the capacity of this cache to a specified value.
-         * @param {Number} capacity The capacity of this cache. If the specified capacity is less than this cache's
-         * low-water value, the low-water value is set to 85% of the specified capacity.
-         * @throws {ArgumentError} If the specified capacity is less than or equal to 0.
-         * @see [capacity]{@link MemoryCache#capacity}
-         */
-        MemoryCache.prototype.setCapacity = function (capacity) {
-            if (capacity < 1) {
-                throw new ArgumentError(
-                    Logger.logMessage(Logger.LEVEL_SEVERE, "MemoryCache", "setCapacity",
-                        "Specified cache capacity is 0 or negative."));
+        Object.defineProperties(MemoryCache.prototype, {
+            /**
+             * The maximum this cache may hold. When the capacity is explicitly set via this property, and the current
+             * low-water value is greater than the specified capacity, the low-water value is adjusted to be 85% of
+             * the specified capacity. The specified capacity may not be less than or equal to 0.
+             * @type {Number}
+             * @memberof MemoryCache.prototype
+             */
+            capacity: {
+                get: function() {
+                    return this._capacity;
+                },
+                set: function (value) {
+                    if (!value || value < 1) {
+                        throw new ArgumentError(
+                            Logger.logMessage(Logger.LEVEL_SEVERE, "MemoryCache", "capacity",
+                                "Specified cache capacity is undefined, 0 or negative."));
+                    }
+
+                    var oldCapacity = this._capacity;
+
+                    this._capacity = value;
+
+                    if (this._capacity <= this.lowWater) {
+                        this._lowWater = 0.85 * this._capacity;
+                    }
+
+                    // Trim the cache to the low-water mark if it's less than the old capacity
+                    if (this._capacity < oldCapacity) {
+                        this.makeSpace(0);
+                    }
+                }
+            },
+
+            /**
+             * The size to clear this cache to when its capacity is exceeded. It must be less than the current
+             * capacity and not negative.
+             * @type {Number}
+             * @memberof MemoryCache.prototype
+             */
+            lowWater: {
+                get: function () {
+                    return this._lowWater;
+                },
+                set: function (value) {
+                    if (!value || value >= this._capacity || value < 0) {
+                        throw new ArgumentError(
+                            Logger.logMessage(Logger.LEVEL_SEVERE, "MemoryCache", "lowWater",
+                                "Specified cache low-water value is undefined, negative or not less than the current capacity."));
+                    }
+
+                    this._lowWater = value;
+                }
             }
-
-            var oldCapacity = this.capacity;
-
-            this.capacity = capacity;
-
-            if (this.capacity <= this.lowWater) {
-                this.lowWater = 0.85 * this.capacity;
-            }
-
-            // Trim the cache to the low-water mark if it's less than the old capacity
-            if (this.capacity < oldCapacity) {
-                this.makeSpace(0);
-            }
-        };
+        });
 
         /**
          * Returns the entry for a specified key.
@@ -130,7 +134,7 @@ define([
             if (!cacheEntry)
                 return null;
 
-            cacheEntry.lastUsed = this.entryUsedCounter++;
+            cacheEntry.lastUsed = Date.now();
 
             return cacheEntry.entry;
         };
@@ -167,20 +171,41 @@ define([
                 this.removeEntry(key);
             }
 
-            if (this.usedCapacity + size > this.capacity) {
+            if (this.usedCapacity + size > this._capacity) {
                 this.makeSpace(size);
             }
 
             this.usedCapacity += size;
+            this.freeCapacity = this._capacity - this.usedCapacity;
 
             cacheEntry = {
                 key: key,
                 entry: entry,
                 size: size,
-                lastUsed: this.entryUsedCounter++
+                lastUsed: Date.now()
             };
 
             this.entries[key] = cacheEntry;
+        };
+
+        /**
+         * Removes all resources from this cache.
+         * @param {Boolean} callListeners If true, the current cache listeners are called for each entry removed.
+         * If false, the cache listeners are not called.
+         */
+        MemoryCache.prototype.clear = function (callListeners) {
+            if (callListeners) {
+                // Remove each entry individually so that the listeners can be called for each entry.
+                for (var key in this.entries) {
+                    if (this.entries.hasOwnProperty(key)) {
+                        this.removeCacheEntry(key);
+                    }
+                }
+            }
+
+            this.entries = {};
+            this.freeCapacity = this._capacity;
+            this.usedCapacity = 0;
         };
 
         /**
@@ -197,20 +222,14 @@ define([
             }
         };
 
-        /**
-         * Internal method to remove a cache entry. Applications should use [removeEntry]{@link MemoryCache#removeEntry}
-         * to remove entries from this cache.
-         * @param {Object} cacheEntry The entry to remove.
-         * @protected
-         * @see [removeEntry]{@link MemoryCache#removeEntry}
-         */
+        // Private. Removes a specified entry from this cache.
         MemoryCache.prototype.removeCacheEntry = function (cacheEntry) {
             // All removal passes through this function.
 
             delete this.entries[cacheEntry.key];
 
             this.usedCapacity -= cacheEntry.size;
-            this.freeCapacity = this.capacity - this.usedCapacity;
+            this.freeCapacity = this._capacity - this.usedCapacity;
 
             for (var i = 0, len = this.listeners.length; i < len; i++) {
                 try {
@@ -224,7 +243,7 @@ define([
         /**
          * Indicates whether a specified entry is in this cache.
          * @param {String} key The key of the entry to search for.
-         * @returns {boolean} <code>true</code> if the entry exists, otherwise <code>false</code>.
+         * @returns {Boolean} true if the entry exists, otherwise false.
          */
         MemoryCache.prototype.containsKey = function (key) {
             return key && this.entries[key];
@@ -268,14 +287,7 @@ define([
             }
         };
 
-        /**
-         * Clears this memory cache to that necessary to contain a specified amount of free space. This cache's used
-         * capacity is reduced to its low-water value or to that necessary to hold the specified amount of space. This
-         * cache's used capacity is reduced to zero if the specified required space is greater than this cache's
-         * capacity.
-         * @param {Number} spaceRequired The free space required.
-         * @protected
-         */
+        // Private. Clears this cache to that necessary to contain a specified amount of free space.
         MemoryCache.prototype.makeSpace = function (spaceRequired) {
             var sortedEntries = [];
 
@@ -283,9 +295,10 @@ define([
             // until the cache capacity reaches the low water and the cache has enough free capacity for the required
             // space.
 
-            for (var entry in this.entries) {
-                if (entry.hasOwnProperty('lastUsedTime')) {
-                    sortedEntries.push(entry);
+            var sizeAtStart = this.usedCapacity;
+            for (var key in this.entries) {
+                if (this.entries.hasOwnProperty(key)) {
+                    sortedEntries.push(this.entries[key]);
                 }
             }
 
@@ -294,7 +307,7 @@ define([
             });
 
             for (var i = 0, len = sortedEntries.length; i < len; i++) {
-                if (this.usedCapacity > this.lowWater || this.freeCapacity < spaceRequired) {
+                if (this.usedCapacity > this._lowWater || this.freeCapacity < spaceRequired) {
                     this.removeCacheEntry(sortedEntries[i]);
                 } else {
                     break;

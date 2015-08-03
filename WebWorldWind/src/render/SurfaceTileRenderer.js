@@ -42,6 +42,7 @@ define([
          * @param {DrawContext} dc The current draw context.
          * @param {SurfaceTile[]} surfaceTiles The surface tiles to render.
          * @param {number} opacity The opacity at which to draw the surface tiles.
+         * @throes {ArgumentError} If the specified surface tiles array is null or undefined.
          */
         SurfaceTileRenderer.prototype.renderTiles = function (dc, surfaceTiles, opacity) {
             if (!surfaceTiles) {
@@ -65,6 +66,8 @@ define([
                 return;
 
             this.isSurfaceShapeTileRendering = surfaceTiles[0] instanceof SurfaceShapeTile;
+
+            opacity *= dc.surfaceOpacity;
 
             // For each terrain tile, render it for each overlapping surface tile.
             program = this.beginRendering(dc, opacity);
@@ -115,9 +118,10 @@ define([
             }
         };
 
+        // Intentionally not documented.
         SurfaceTileRenderer.prototype.beginRendering = function (dc, opacity) {
             var gl = dc.currentGlContext,
-                program = dc.findAndBindProgram(gl, SurfaceTileRendererProgram);
+                program = dc.findAndBindProgram(SurfaceTileRendererProgram);
             program.loadTexSampler(gl, WebGLRenderingContext.TEXTURE0);
 
             if (dc.pickingMode && !this.isSurfaceShapeTileRendering) {
@@ -130,10 +134,13 @@ define([
             return program;
         };
 
+        // Intentionally not documented.
         SurfaceTileRenderer.prototype.endRendering = function (dc) {
-            dc.bindProgram(dc.currentGlContext, null);
+            var gl = dc.currentGlContext;
+            gl.bindTexture(WebGLRenderingContext.TEXTURE_2D, null);
         };
 
+        // Intentionally not documented.
         SurfaceTileRenderer.prototype.applyTileState = function (dc, terrainTile, surfaceTile) {
             // Sets up the texture transform and mask that applies the texture tile to the terrain tile.
             var gl = dc.currentGlContext,

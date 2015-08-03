@@ -10,10 +10,10 @@ define([
         '../geom/Angle',
         '../error/ArgumentError',
         '../geom/BoundingBox',
-        '../projections/ProjectionEquirectangular',
         '../projections/GeographicProjection',
         '../globe/Globe',
         '../util/Logger',
+        '../projections/ProjectionEquirectangular',
         '../geom/Sector',
         '../globe/Tessellator',
         '../geom/Vec3',
@@ -22,10 +22,10 @@ define([
     function (Angle,
               ArgumentError,
               BoundingBox,
-              ProjectionEquirectangular,
               GeographicProjection,
               Globe,
               Logger,
+              ProjectionEquirectangular,
               Sector,
               Tessellator,
               Vec3,
@@ -33,12 +33,13 @@ define([
         "use strict";
 
         /**
-         * Constructs 2D globe.
+         * Constructs a 2D globe with a default {@link ZeroElevationModel} and
+         * [equirectangular projection]{@link ProjectionEquirectangular}.
          * @alias Globe2D
          * @constructor
          * @augments Globe
-         * @classdesc Represents a 2D flat globe. Depending on the projection, the globe may be continuously
-         * scrolling longitudinally.
+         * @classdesc Represents a 2D flat globe with a configurable projection. Rectangular projections
+         * are continuously scrolling longitudinally.
          */
         var Globe2D = function () {
             Globe.call(this, new ZeroElevationModel());
@@ -98,7 +99,7 @@ define([
              * @type {Sector}
              */
             projectionLimits: {
-                get: function() {
+                get: function () {
                     return this._projection.projectionLimits;
                 }
             },
@@ -136,16 +137,20 @@ define([
             }
         });
 
+        // Documented in superclass.
+        Globe2D.prototype.is2D = function () {
+            return true;
+        };
+
         /**
-         * Computes a Cartesian point from a specified position.
-         * The coordinate system used varies with the projection.
+         * Computes a Cartesian point from a specified position and using the current projection.
          * @param {Number} latitude The position's latitude.
          * @param {Number} longitude The position's longitude.
          * @param {Number} altitude The position's altitude.
-         * @param {Vec3} result A reference to a pre-allocated {@link Vec3} instance to contain the computed X,
+         * @param {Vec3} result A reference to a pre-allocated {@link Vec3} in which to return the computed X,
          * Y and Z Cartesian coordinates.
          * @returns {Vec3} The result argument.
-         * @throws {ArgumentError} If the specified result is null or undefined.
+         * @throws {ArgumentError} If the specified result argument is null or undefined.
          */
         Globe2D.prototype.computePointFromPosition = function (latitude, longitude, altitude, result) {
             if (!result) {
@@ -157,23 +162,21 @@ define([
         };
 
         // Documented in superclass.
-        Globe2D.prototype.computePointsForSector = function (sector, numLat, numLon, elevations,
-                                                             referencePoint, result) {
+        Globe2D.prototype.computePointsForGrid = function (sector, numLat, numLon, elevations, referencePoint, result) {
 
-            return this.projection.geographicToCartesianGrid(this, sector, numLat, numLon, elevations,
-                referencePoint, this.offsetVector, result);
+            return this.projection.geographicToCartesianGrid(this, sector, numLat, numLon, elevations, referencePoint,
+                this.offsetVector, result);
         };
 
         /**
-         * Computes a geographic position from a specified Cartesian point.
-         * The coordinate system used varies with the projection.
+         * Computes a geographic position from a specified Cartesian point and using the current projection.
          *
          * @param {Number} x The X coordinate.
          * @param {Number} y The Y coordinate.
          * @param {Number} z The Z coordinate.
          * @param {Position} result A pre-allocated {@link Position} instance in which to return the computed position.
          * @returns {Position} The specified result position.
-         * @throws {ArgumentError} If the specified result is null or undefined.
+         * @throws {ArgumentError} If the specified result argument is null or undefined.
          */
         Globe2D.prototype.computePositionFromPoint = function (x, y, z, result) {
             if (!result) {
@@ -247,9 +250,8 @@ define([
                 throw new ArgumentError(Logger.logMessage(Logger.LEVEL_SEVERE, "Globe2D",
                     "intersectsFrustum", "missingFrustum"));
             }
-            var bbox = new BoundingBox(Sector.FULL_SPHERE, this, this.elevationModel.minElevation,
-                this.elevationModel.maxElevation);
 
+            var bbox = new BoundingBox();
             bbox.setToSector(Sector.FULL_SPHERE, this, this.elevationModel.minElevation,
                 this.elevationModel.maxElevation);
 
@@ -279,7 +281,7 @@ define([
                 return false;
             }
 
-            t = - sz / vz; // intersection distance, simplified for the XY plane
+            t = -sz / vz; // intersection distance, simplified for the XY plane
             if (t < 0) { // intersection is behind the ray's origin
                 return false;
             }

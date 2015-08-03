@@ -35,23 +35,25 @@ define([
          * @alias TiledImageLayer
          * @constructor
          * @classdesc
-         * Provides a layer that displays multi-resolution imagery arranged as adjacent tiles. This is the primary World
-         * Wind base class for displaying imagery of this type. While it may be used as a stand-alone class,
-         * it is typically subclassed by classes that identify the remote image server and the local cache path.
+         * Provides a layer that displays multi-resolution imagery arranged as adjacent tiles in a pyramid.
+         * This is the primary World Wind base class for displaying imagery of this type. While it may be used as a
+         * stand-alone class, it is typically subclassed by classes that identify the remote image server.
          * <p>
          * While the image tiles for this class are typically drawn from a remote server such as a WMS server. The actual
-         * retrieval protocol is independent of this class and encapsulated by a class implementing the UrlBuilder
+         * retrieval protocol is independent of this class and encapsulated by a class implementing the {@link UrlBuilder}
          * interface and associated with instances of this class as a property.
          * <p>
          * There is no requirement that image tiles of this class be remote, they may be local or procedurally generated. For
-         * such cases the subclass overrides this class' retrieveTileImage method.
+         * such cases the subclass overrides this class' [retrieveTileImage]{@link TiledImageLayer#retrieveTileImage} method.
          * <p>
-         * Layers of this type are not pickable. Their pick-enabled flag is initialized to false.
+         * Layers of this type are by default not pickable. Their pick-enabled flag is initialized to false.
          *
+         * @augments Layer
          * @param {Sector} sector The sector this layer covers.
          * @param {Location} levelZeroDelta The size in latitude and longitude of level zero (lowest resolution) tiles.
-         * @param {Number} numLevels The number of levels to define for the layer. Each level is successively one power of two higher
-         * resolution than the next lower-numbered level. (0 is the lowest resolution level, 1 is twice that resolution, etc.)
+         * @param {Number} numLevels The number of levels to define for the layer. Each level is successively one power
+         * of two higher resolution than the next lower-numbered level. (0 is the lowest resolution level, 1 is twice
+         * that resolution, etc.)
          * Each level contains four times as many tiles as the next lower-numbered level, each 1/4 the geographic size.
          * @param {String} imageFormat The mime type of the image format for the layer's tiles, e.g., <em>image/png</em>.
          * @param {String} cachePath A string uniquely identifying this layer relative to other layers.
@@ -111,12 +113,14 @@ define([
             this.detailHint = 0;
             this.currentRetrievals = [];
             this.absentResourceList = new AbsentResourceList(3, 50e3);
+            this.mapAncestorToTile = true;
 
             this.pickEnabled = false;
         };
 
         TiledImageLayer.prototype = Object.create(Layer.prototype);
 
+        // Intentionally not documented.
         TiledImageLayer.prototype.createTile = function (sector, level, row, column) {
             var path = this.cachePath + "-layer/" + level.levelNumber + "/" + row + "/" + row + "_" + column + "."
                 + WWUtil.suffixForMimeType(this.retrievalImageFormat);
@@ -124,6 +128,7 @@ define([
             return new ImageTile(sector, level, row, column, path);
         };
 
+        // Documented in superclass.
         TiledImageLayer.prototype.doRender = function (dc) {
             if (!dc.terrain)
                 return;
@@ -134,8 +139,8 @@ define([
             if (this.currentTilesInvalid
                 || !this.lasTtMVP || !dc.navigatorState.modelviewProjection.equals(this.lasTtMVP)
                 || dc.globeStateKey != this.lastGlobeStateKey) {
-                this.assembleTiles(dc);
                 this.currentTilesInvalid = false;
+                this.assembleTiles(dc);
             }
 
             this.lasTtMVP = dc.navigatorState.modelviewProjection;
@@ -148,15 +153,18 @@ define([
             }
         };
 
+        // Documented in superclass.
         TiledImageLayer.prototype.isLayerInView = function (dc) {
-            return dc.terrain || dc.terrain.sector.intersects(this.levels.sector);
+            return dc.terrain && dc.terrain.sector && dc.terrain.sector.intersects(this.levels.sector);
         };
 
+        // Documented in superclass.
         TiledImageLayer.prototype.createTopLevelTiles = function (dc) {
             this.topLevelTiles = [];
             Tile.createTilesForLevel(this.levels.firstLevel(), this, this.topLevelTiles);
         };
 
+        // Intentionally not documented.
         TiledImageLayer.prototype.assembleTiles = function (dc) {
             this.currentTiles = [];
 
@@ -177,6 +185,7 @@ define([
             }
         };
 
+        // Intentionally not documented.
         TiledImageLayer.prototype.addTileOrDescendants = function (dc, tile) {
             if (this.tileMeetsRenderingCriteria(dc, tile)) {
                 this.addTile(dc, tile);
@@ -210,6 +219,7 @@ define([
             }
         };
 
+        // Intentionally not documented.
         TiledImageLayer.prototype.addTile = function (dc, tile) {
             tile.fallbackTile = null;
 
@@ -230,12 +240,21 @@ define([
 
             if (this.currentAncestorTile) {
                 if (this.isTileTextureInMemory(dc, this.currentAncestorTile)) {
-                    tile.fallbackTile = this.currentAncestorTile;
-                    this.currentTiles.push(tile);
+                    if (this.mapAncestorToTile) {
+                        // Set up to map the ancestor tile into the current one.
+                        tile.fallbackTile = this.currentAncestorTile;
+                        this.currentTiles.push(tile);
+                    } else {
+                        // Just enque the ancestor tile and don't enque the current one. This is necessary when the
+                        // texture coordinate mapping from the current tile to its ancestor is not straightforward,
+                        // as is the case for Mercator tiles.
+                        this.currentTiles.push(this.currentAncestorTile);
+                    }
                 }
             }
         };
 
+        // Intentionally not documented.
         TiledImageLayer.prototype.isTileVisible = function (dc, tile) {
             if (dc.globe.projectionLimits && !tile.sector.overlaps(dc.globe.projectionLimits)) {
                 return false;
@@ -244,18 +263,32 @@ define([
             return tile.extent.intersectsFrustum(dc.navigatorState.frustumInModelCoordinates);
         };
 
+        // Intentionally not documented.
         TiledImageLayer.prototype.tileMeetsRenderingCriteria = function (dc, tile) {
-            return tile.level.isLastLevel() || !tile.mustSubdivide(dc, this.detailHintOrigin + this.detailHint);
+            var s = this.detailHintOrigin + this.detailHint;
+            if (tile.sector.minLatitude >= 75 || tile.sector.maxLatitude <= -75) {
+                s *= 0.9;
+            }
+            return tile.level.isLastLevel() || !tile.mustSubdivide(dc, s);
         };
 
+        // Intentionally not documented.
         TiledImageLayer.prototype.isTileTextureInMemory = function (dc, tile) {
             return dc.gpuResourceCache.containsResource(tile.imagePath);
         };
 
+        // Intentionally not documented.
         TiledImageLayer.prototype.isTextureExpired = function (texture) {
             return this.expiration && this.expiration < new Date().getTime;
         };
 
+        /**
+         * Retrieves the image for the specified tile. Subclasses should override this method in order to retrieve,
+         * compute or otherwise create the image.
+         * @param {DrawContext} dc The current draw context.
+         * @param {ImageTile} tile The tile for which to retrieve the resource.
+         * @protected
+         */
         TiledImageLayer.prototype.retrieveTileImage = function (dc, tile) {
             if (this.currentRetrievals.indexOf(tile.imagePath) < 0) {
                 if (this.absentResourceList.isResourceAbsent(tile.imagePath)) {
@@ -266,25 +299,30 @@ define([
                     image = new Image(),
                     imagePath = tile.imagePath,
                     cache = dc.gpuResourceCache,
-                    gl = dc.currentGlContext,
+                    canvas = dc.currentGlContext.canvas,
                     layer = this;
 
-                if (!url)
+                if (!url) {
+                    this.currentTilesInvalid = true;
                     return;
+                }
 
                 image.onload = function () {
                     Logger.log(Logger.LEVEL_INFO, "Image retrieval succeeded: " + url);
-                    var texture = new Texture(gl, image);
-                    cache.putResource(imagePath, texture, texture.size);
-
+                    var texture = layer.createTexture(dc, tile, image);
                     layer.removeFromCurrentRetrievals(imagePath);
-                    layer.currentTilesInvalid = true;
-                    layer.absentResourceList.unmarkResourceAbsent(imagePath);
 
-                    // Send an event to request a redraw.
-                    var e = document.createEvent('Event');
-                    e.initEvent(WorldWind.REDRAW_EVENT_TYPE, true, true);
-                    dc.canvas.dispatchEvent(e);
+                    if (texture) {
+                        cache.putResource(imagePath, texture, texture.size);
+
+                        layer.currentTilesInvalid = true;
+                        layer.absentResourceList.unmarkResourceAbsent(imagePath);
+
+                        // Send an event to request a redraw.
+                        var e = document.createEvent('Event');
+                        e.initEvent(WorldWind.REDRAW_EVENT_TYPE, true, true);
+                        canvas.dispatchEvent(e);
+                    }
                 };
 
                 image.onerror = function () {
@@ -299,6 +337,12 @@ define([
             }
         };
 
+        // Intentionally not documented.
+        TiledImageLayer.prototype.createTexture = function (dc, tile, image) {
+            return  new Texture(dc.currentGlContext, image);
+        };
+
+        // Intentionally not documented.
         TiledImageLayer.prototype.removeFromCurrentRetrievals = function (imagePath) {
             var index = this.currentRetrievals.indexOf(imagePath);
             if (index > -1) {
@@ -306,6 +350,13 @@ define([
             }
         };
 
+        /**
+         * Returns the URL string for the resource.
+         * @param {ImageTile} tile The tile whose image is returned
+         * @param {String} imageFormat The mime type of the image format desired.
+         * @returns {String} The URL string, or null if the string can not be formed.
+         * @protected
+         */
         TiledImageLayer.prototype.resourceUrlForTile = function (tile, imageFormat) {
             if (this.urlBuilder) {
                 return this.urlBuilder.urlForTile(tile, imageFormat);

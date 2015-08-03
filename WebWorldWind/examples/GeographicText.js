@@ -9,7 +9,7 @@
  */
 
 requirejs(['../src/WorldWind',
-        './LayerManager/LayerManager'],
+        './LayerManager'],
     function (ww,
               LayerManager) {
         "use strict";
@@ -23,10 +23,21 @@ requirejs(['../src/WorldWind',
         /**
          * Added imagery layers.
          */
-        wwd.addLayer(new WorldWind.BMNGOneImageLayer());
-        wwd.addLayer(new WorldWind.BMNGLandsatLayer()); // Blue Marble + Landsat
-        wwd.addLayer(new WorldWind.BingWMSLayer()); // Bing
-        wwd.addLayer(new WorldWind.CompassLayer);
+        var layers = [
+            {layer: new WorldWind.BMNGLayer(), enabled: true},
+            {layer: new WorldWind.BMNGLandsatLayer(), enabled: false},
+            {layer: new WorldWind.BingAerialWithLabelsLayer(null), enabled: true},
+            {layer: new WorldWind.OpenStreetMapImageLayer(null), enabled: false},
+            {layer: new WorldWind.CompassLayer(), enabled: true},
+            {layer: new WorldWind.CoordinatesDisplayLayer(wwd), enabled: true},
+            {layer: new WorldWind.ViewControlsLayer(wwd), enabled: true}
+        ];
+
+        for (var l = 0; l < layers.length; l++) {
+            layers[l].layer.enabled = layers[l].enabled;
+            wwd.addLayer(layers[l].layer);
+        }
+
 
         // A list of prominent peaks in the U.S.
         // This list was mined from http://en.wikipedia.org/wiki/List_of_Ultras_of_the_United_States
@@ -937,6 +948,9 @@ requirejs(['../src/WorldWind',
         // Set up the common text attributes.
         textAttributes.color = WorldWind.Color.CYAN;
 
+        // Set the depth test property such that the terrain does not obscure the text.
+        textAttributes.depthTest = false;
+
         // For each peak, create a text shape.
         for (var i = 0, len = peaks.length; i < len; i++) {
             var peak = peaks[i],
@@ -954,9 +968,6 @@ requirejs(['../src/WorldWind',
         // Add the text layer to the World Window's layer list.
         wwd.addLayer(textLayer);
 
-        // Draw the World Window for the first time.
-        wwd.redraw();
-
         // Create a layer manager for controlling layer visibility.
-        var layerManger = new LayerManager('divLayerManager', wwd);
+        var layerManger = new LayerManager(wwd);
     });

@@ -25,25 +25,25 @@ define([
         var Color = function (red, green, blue, alpha) {
 
             /**
-             * This color's red component.
+             * This color's red component, a number between 0 and 1.
              * @type {Number}
              */
             this.red = red;
 
             /**
-             * This color's green component.
+             * This color's green component, a number between 0 and 1.
              * @type {Number}
              */
             this.green = green;
 
             /**
-             * This color's blue component.
+             * This color's blue component, a number between 0 and 1.
              * @type {Number}
              */
             this.blue = blue;
 
             /**
-             * This color's alpha component.
+             * This color's alpha component, a number between 0 and 1.
              * @type {Number}
              */
             this.alpha = alpha;
@@ -106,19 +106,19 @@ define([
         Color.MAGENTA = new Color(1, 0, 1, 1);
 
         /**
-         * A light gray.
+         * A light gray (75% white).
          * @type {Color}
          */
         Color.LIGHT_GRAY = new Color(0.75, 0.75, 0.75, 1);
 
         /**
-         * A medium gray.
+         * A medium gray (50% white).
          * @type {Color}
          */
         Color.MEDIUM_GRAY = new Color(0.5, 0.5, 0.5, 1);
 
         /**
-         * A dark gray.
+         * A dark gray (25% white).
          * @type {Color}
          */
         Color.DARK_GRAY = new Color(0.25, 0.25, 0.25, 1);
@@ -128,6 +128,43 @@ define([
          * @type {Color}
          */
         Color.TRANSPARENT = new Color(0, 0, 0, 0);
+
+        /**
+         * Assigns the components of this color.
+         * @param {Number} red The red component, a number between 0 and 1.
+         * @param {Number} green The green component, a number between 0 and 1.
+         * @param {Number} blue The blue component, a number between 0 and 1.
+         * @param {Number} alpha The alpha component, a number between 0 and 1.
+         * @returns {Color} This color with the specified components assigned.
+         */
+        Color.prototype.set = function (red, green, blue, alpha) {
+            this.red = red;
+            this.green = green;
+            this.blue = blue;
+            this.alpha = alpha;
+
+            return this;
+        };
+
+        /**
+         * Copies the components of a specified color to this color.
+         * @param {Color} color The color to copy.
+         * @returns {Color} This color set to the red, green, blue and alpha values of the specified color.
+         * @throws {ArgumentError} If the specified color is null or undefined.
+         */
+        Color.prototype.copy = function (color) {
+            if (!color) {
+                throw new ArgumentError(
+                    Logger.logMessage(Logger.LEVEL_SEVERE, "Color", "copy", "missingColor"));
+            }
+
+            this.red = color.red;
+            this.green = color.green;
+            this.blue = color.blue;
+            this.alpha = color.alpha;
+
+            return this;
+        };
 
         /**
          * Create a copy of this color.
@@ -155,8 +192,8 @@ define([
 
         /**
          * Construct a color from an array of color components expressed as byte values.
-         * @param {Uint8Array} bytes A four-element array containing the red, green, blue and alpha color components each in
-         * the range [0, 255];
+         * @param {Uint8Array} bytes A four-element array containing the red, green, blue and alpha color
+         * components each in the range [0, 255];
          * @returns {Color} The constructed color.
          */
         Color.colorFromByteArray = function (bytes) {
@@ -188,8 +225,11 @@ define([
             if (rb < 255) {
                 this.red = (rb + 1) / 255;
             } else if (gb < 255) {
+                this.red = 0;
                 this.green = (gb + 1) / 255;
             } else if (bb < 255) {
+                this.red = 0;
+                this.green = 0;
                 this.blue = (bb + 1) / 255;
             } else {
                 this.red = 1 / 255;
@@ -204,7 +244,7 @@ define([
          * Indicates whether this color is equal to a specified color after converting the floating-point component
          * values of each color to byte values.
          * @param {Color} color The color to test,
-         * @returns {boolean} <code>true</code> if the colors are equal, otherwise false.
+         * @returns {Boolean} true if the colors are equal, otherwise false.
          */
         Color.prototype.equals = function (color) {
             var rbA = Math.round(this.red * 255),
@@ -222,7 +262,7 @@ define([
         /**
          * Indicates whether this color is equal to another color expressed as an array of bytes.
          * @param {Uint8Array} bytes The red, green, blue and alpha color components.
-         * @returns {boolean} <code>true</code> if the colors are equal, otherwise false.
+         * @returns {Boolean} true if the colors are equal, otherwise false.
          */
         Color.prototype.equalsBytes = function (bytes) {
             var rb = Math.round(this.red * 255),
@@ -236,7 +276,7 @@ define([
         /**
          * Returns a string representation of this color, indicating the byte values corresponding to this color's
          * floating-point component values.
-         * @returns {string}
+         * @returns {String}
          */
         Color.prototype.toByteString = function () {
             var rb = Math.round(this.red * 255),
@@ -248,13 +288,13 @@ define([
         };
 
         /**
-         * Create a hex color string that CSS and SVG can use. Optionally, inhibit capturing alpha,
-         * because some uses don't like a four-component color specification.
-         * @param {boolean} isUsingAlpha Enable the use of an alpha component.
-         * @returns {string} A color string suitable for CSS and SVG.
+         * Create a hex color string that CSS can use. Optionally, inhibit capturing alpha,
+         * because some uses reject a four-component color specification.
+         * @param {Boolean} isUsingAlpha Enable the use of an alpha component.
+         * @returns {string} A color string suitable for CSS.
          */
         Color.prototype.toHexString = function(isUsingAlpha) {
-            // Use Math.ceil() to get 0.75 to map to 0xc0. This is important is the display is dithering.
+            // Use Math.ceil() to get 0.75 to map to 0xc0. This is important if the display is dithering.
             var redHex = Math.ceil(this.red * 255).toString(16),
                 greenHex = Math.ceil(this.green * 255).toString(16),
                 blueHex = Math.ceil(this.blue * 255).toString(16),

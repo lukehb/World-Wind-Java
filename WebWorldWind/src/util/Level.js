@@ -53,7 +53,7 @@ define([
 
             /**
              * The level set that this level is a member of.
-             * @type {WWLevelSet}
+             * @type {LevelSet}
              */
             this.parent = parent;
 
@@ -84,8 +84,8 @@ define([
 
         /**
          * Indicates whether this level is the lowest resolution level (level 0) within its parent's level set.
-         * @returns {boolean} <code>true</code> If this tile is the lowest resolution in the parent level set,
-         * otherwise <code>false</code>.
+         * @returns {Boolean} true If this tile is the lowest resolution in the parent level set,
+         * otherwise false.
          */
         Level.prototype.isFirstLevel = function () {
             return this.parent.firstLevel() == this;
@@ -93,8 +93,8 @@ define([
 
         /**
          * Indicates whether this level is the highest resolution level within its parent's level set.
-         * @returns {boolean} <code>true</code> If this tile is the highest resolution in the parent level set,
-         * otherwise <code>false</code>.
+         * @returns {Boolean} true If this tile is the highest resolution in the parent level set,
+         * otherwise false.
          */
         Level.prototype.isLastLevel = function () {
             return this.parent.lastLevel() == this;
@@ -121,8 +121,8 @@ define([
         /**
          * Compare this level's ordinal to that of a specified level.
          * @param {Level} that The level to compare this one to.
-         * @returns {Number} 0 if the two ordinals are equivalent. 1 if the specified level's ordinal is greater than
-         * this level's ordinal. -1 if the specified level's ordinal is less than this level's ordinal.
+         * @returns {Number} 0 if the two ordinals are equivalent. -1 if this level's ordinal is less than the specified
+         * level's ordinal. 1 if this level's ordinal is greater than the specified level's ordinal.
          * @throws {ArgumentError} If the specified level is null or undefined.
          */
         Level.prototype.compare = function (that) {
@@ -133,10 +133,10 @@ define([
             }
 
             if (this.levelNumber < that.levelNumber)
-                return 1;
+                return -1;
 
             if (this.levelNumber > that.levelNumber)
-                return -1;
+                return 1;
 
             return 0;
         };

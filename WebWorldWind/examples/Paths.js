@@ -9,7 +9,7 @@
  */
 
 requirejs(['../src/WorldWind',
-        './LayerManager/LayerManager'],
+        './LayerManager'],
     function (ww,
               LayerManager) {
         "use strict";
@@ -23,86 +23,56 @@ requirejs(['../src/WorldWind',
         /**
          * Added imagery layers.
          */
-        wwd.addLayer(new WorldWind.BMNGOneImageLayer());
-        wwd.addLayer(new WorldWind.BMNGLandsatLayer()); // Blue Marble + Landsat
-        wwd.addLayer(new WorldWind.BingWMSLayer()); // Bing
-        wwd.addLayer(new WorldWind.CompassLayer);
+        var layers = [
+            {layer: new WorldWind.BMNGLayer(), enabled: true},
+            {layer: new WorldWind.BMNGLandsatLayer(), enabled: false},
+            {layer: new WorldWind.BingAerialWithLabelsLayer(null), enabled: true},
+            {layer: new WorldWind.OpenStreetMapImageLayer(null), enabled: false},
+            {layer: new WorldWind.CompassLayer(), enabled: true},
+            {layer: new WorldWind.CoordinatesDisplayLayer(wwd), enabled: true},
+            {layer: new WorldWind.ViewControlsLayer(wwd), enabled: true}
+        ];
 
+        for (var l = 0; l < layers.length; l++) {
+            layers[l].layer.enabled = layers[l].enabled;
+            wwd.addLayer(layers[l].layer);
+        }
+
+        // Create the path's positions.
         var pathPositions = [];
         pathPositions.push(new WorldWind.Position(40, -100, 1e4));
         pathPositions.push(new WorldWind.Position(45, -110, 1e4));
         pathPositions.push(new WorldWind.Position(46, -122, 1e4));
-        var path = new WorldWind.Path(pathPositions);
+
+        // Create the path.
+        var path = new WorldWind.Path(pathPositions, null);
         path.altitudeMode = WorldWind.RELATIVE_TO_GROUND;
         path.followTerrain = true;
+        path.extrude = true; // make it a curtain
+        path.useSurfaceShapeFor2D = true; // use a surface shape in 2D mode
 
-        var pathAttributes = new WorldWind.PathAttributes(null);
+        // Create and assign the path's attributes.
+        var pathAttributes = new WorldWind.ShapeAttributes(null);
         pathAttributes.outlineColor = WorldWind.Color.BLUE;
         pathAttributes.interiorColor = new WorldWind.Color(0, 1, 1, 0.5);
+        pathAttributes.drawVerticals = path.extrude; // draw verticals only when extruding
         path.attributes = pathAttributes;
-        var highlightAttributes = new WorldWind.PathAttributes(pathAttributes);
+
+        // Create and assign the path's highlight attributes.
+        var highlightAttributes = new WorldWind.ShapeAttributes(pathAttributes);
         highlightAttributes.outlineColor = WorldWind.Color.RED;
         highlightAttributes.interiorColor = new WorldWind.Color(1, 1, 1, 0.5);
         path.highlightAttributes = highlightAttributes;
 
-        // Add the surface image to a layer and the layer to the World Window's layer list.
+        // Add the path to a layer and the layer to the World Window's layer list.
         var pathsLayer = new WorldWind.RenderableLayer();
         pathsLayer.displayName = "Paths";
         pathsLayer.addRenderable(path);
         wwd.addLayer(pathsLayer);
 
-        // Draw the World Window for the first time.
-        wwd.redraw();
-
         // Create a layer manager for controlling layer visibility.
-        var layerManger = new LayerManager('divLayerManager', wwd);
+        var layerManger = new LayerManager(wwd);
 
-        // Now set up to handle picking.
-
-        var highlightedItems = [];
-
-        // The pick-handling callback function.
-        var handlePick = function (o) {
-            // The input argument is either an Event or a TapRecognizer. Both have the same properties for determining
-            // the mouse or tap location.
-            var x = o.clientX,
-                y = o.clientY;
-
-            var redrawRequired = highlightedItems.length > 0; // must redraw if we de-highlight previously picked items
-
-            // De-highlight any previously highlighted placemarks.
-            for (var h = 0; h < highlightedItems.length; h++) {
-                highlightedItems[h].highlighted = false;
-            }
-            highlightedItems = [];
-
-            // Perform the pick. Must first convert from window coordinates to canvas coordinates, which are
-            // relative to the upper left corner of the canvas rather than the upper left corner of the page.
-            var pickList = wwd.pick(wwd.canvasCoordinates(x, y));
-            if (pickList.objects.length > 0) {
-                redrawRequired = true;
-            }
-
-            // Highlight the items picked by simply setting their highlight flag to true.
-            if (pickList.objects.length > 0) {
-                for (var p = 0; p < pickList.objects.length; p++) {
-                    pickList.objects[p].userObject.highlighted = true;
-
-                    // Keep track of highlighted items in order to de-highlight them later.
-                    highlightedItems.push(pickList.objects[p].userObject);
-                }
-            }
-
-            // Update the window if we changed anything.
-            if (redrawRequired) {
-                wwd.redraw(); // redraw to make the highlighting changes take effect on the screen
-            }
-        };
-
-        // Listen for mouse moves and highlight the placemarks that the cursor rolls over.
-        wwd.addEventListener("mousemove", handlePick);
-
-        // Listen for taps on mobile devices and highlight the placemarks that the user taps.
-        var tapRecognizer = new WorldWind.TapRecognizer(wwd);
-        tapRecognizer.addGestureListener(handlePick);
+        // Now set up to handle highlighting.
+        var highlightController = new WorldWind.HighlightController(wwd);
     });

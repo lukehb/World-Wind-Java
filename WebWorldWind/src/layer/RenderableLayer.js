@@ -17,26 +17,25 @@ define([
         "use strict";
 
         /**
-         * Constructs a layer that draws shapes and other renderables.
+         * Constructs a layer that contains shapes and other renderables.
          * @alias RenderableLayer
          * @constructor
          * @augments Layer
-         * @classdesc Provides a layer that draws shapes and other renderables.
+         * @classdesc Provides a layer that contains shapes and other renderables.
+         * @param {String} displayName This layer's display name.
          */
         var RenderableLayer = function (displayName) {
             Layer.call(this, displayName);
 
+            /**
+             * The array of renderables;
+             * @type {Array}
+             * @readonly
+             */
             this.renderables = [];
         };
 
         RenderableLayer.prototype = Object.create(Layer.prototype);
-
-        /**
-         * Removes all renderables from this layer. Does not call dispose on those renderables.
-         */
-        RenderableLayer.prototype.dispose = function () {
-            this.removeAllRenderables();
-        };
 
         /**
          * Adds a renderable to this layer.
@@ -58,6 +57,11 @@ define([
          * @throws {ArgumentError} If the specified renderables array is null or undefined.
          */
         RenderableLayer.prototype.addRenderables = function (renderables) {
+            if (!renderables) {
+                throw new ArgumentError(Logger.logMessage(Logger.LEVEL_SEVERE, "RenderableLayer", "addRenderables",
+                    "The renderables array is null or undefined."));
+            }
+
             for (var i = 0, len = renderables.length; i < len; i++) {
                 this.addRenderable(renderables[i]);
             }
@@ -66,22 +70,22 @@ define([
         /**
          * Removes a renderable from this layer.
          * @param {Renderable} renderable The renderable to remove.
-         * @throws {ArgumentError} If the specified renderable is null or undefined.
          */
         RenderableLayer.prototype.removeRenderable = function (renderable) {
             var index = this.renderables.indexOf(renderable);
             if (index >= 0) {
-                this.renderables.slice(index, 1);
+                this.renderables.splice(index, 1);
             }
         };
 
         /**
-         * Removes all renderables from this layer.
+         * Removes all renderables from this layer. Does not call dispose on those renderables.
          */
         RenderableLayer.prototype.removeAllRenderables = function () {
-            this.renderables.slice(0, this.renderables.length);
+            this.renderables = [];
         };
 
+        // Documented in superclass.
         RenderableLayer.prototype.doRender = function (dc) {
             var numOrderedRenderablesAtStart = dc.orderedRenderables.length;
 
@@ -90,7 +94,7 @@ define([
                     this.renderables[i].render(dc);
                 } catch (e) {
                     Logger.logMessage(Logger.LEVEL_SEVERE, "RenderableLayer", "doRender",
-                        "Error while rendering shape " + this.renderables[i].displayName + ".");
+                        "Error while rendering shape " + this.renderables[i].displayName + ".\n" + e.toString());
                     // Keep going. Render the rest of the shapes.
                 }
             }

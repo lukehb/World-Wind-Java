@@ -50,7 +50,7 @@ define([
         };
 
         /**
-         * Fill in a pre-existing rectangle.
+         * Sets all this rectangle's properties.
          * @param {Number} x The X coordinate of the rectangle's origin.
          * @param {Number} y The Y coordinate of the rectangle's origin.
          * @param {Number} width The rectangle's width.
@@ -98,8 +98,7 @@ define([
         /**
          * Indicates whether this rectangle contains a specified point.
          * @param {Vec2} point The point to test.
-         * @returns {boolean} <code>true</code> if this rectangle contains the specified point, otherwise
-         * <code>false</code>.
+         * @returns {Boolean} true if this rectangle contains the specified point, otherwise false.
          */
         Rectangle.prototype.containsPoint = function (point) {
             return point[0] >= this.x && point[0] <= (this.x + this.width)
@@ -109,8 +108,7 @@ define([
          *
          * Indicates whether this rectangle intersects a specified one.
          * @param {Rectangle} that The rectangle to test.
-         * @returns {boolean} <code>true</code> if this triangle and the specified one intersect,
-         * otherwise <code>false</code>.
+         * @returns {Boolean} true if this triangle and the specified one intersect, otherwise false.
          */
         Rectangle.prototype.intersects = function (that) {
             if ((that.x + that.width) < this.x)
@@ -127,6 +125,31 @@ define([
                 return false;
 
             return true;
+        };
+
+        /**
+         * Indicates whether this rectangle intersects any rectangle in a specified array of rectangles.
+         * @param {Rectangle[]} rectangles The rectangles to test intersection with.
+         * @returns {Boolean} true if this rectangle intersects any rectangle in the array, otherwise false.
+         */
+        Rectangle.prototype.intersectsRectangles = function (rectangles) {
+            if (rectangles) {
+                for (var i = 0; i < rectangles.length; i++){
+                    if (this.intersects(rectangles[i])) {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        };
+
+        /**
+         * Returns a string representation of this object.
+         * @returns {String} A string representation of this object.
+         */
+        Rectangle.prototype.toString = function () {
+            return this.x + ", " + this.y + ", " + this.width + ", " + this.height;
         };
 
         return Rectangle;

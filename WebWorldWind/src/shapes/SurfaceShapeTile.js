@@ -53,22 +53,22 @@ define([
             this.sector = sector;
 
             /**
-             * A collection of sectors that bounds this title, dealing potentially with the crossing of the dateline.
-             * @type {Array}
-             */
-            this.sectors = [];
-
-            /**
              * A string to use as a cache key.
              * @type {string}
              */
             this.cacheKey = null;
 
             /**
-             * Internal use only. Intentionally undocumented.
+             * Internal use only. Intentionally not documented.
              * @type {number}
              */
             this.pickSequence = 0;
+
+            // Internal use only. Intentionally not documented.
+            this.surfaceShapeStateKeys = [];
+
+            // Internal use only. Intentionally not documented.
+            this.prevSurfaceShapes = [];
 
             this.createCtx2D();
         };
@@ -79,7 +79,13 @@ define([
          * Clear all collected surface shapes.
          */
         SurfaceShapeTile.prototype.clearShapes = function() {
-            this.surfaceShapes.splice(0);
+            // Exchange previous and next surface shape lists to avoid allocating memory.
+            var swap = this.prevSurfaceShapes;
+            this.prevSurfaceShapes = this.surfaceShapes;
+            this.surfaceShapes = swap;
+
+            // Clear out next surface shape list.
+            this.surfaceShapes.splice(0, this.surfaceShapes.length);
         };
 
         /**
@@ -91,11 +97,19 @@ define([
         };
 
         /**
-         *
-         * @returns {SurfaceShape[]} The collection of surface shapes collected by this tile.
+         * Get all shapes that this tile references.
+         * @returns {SurfaceShape[]} The collection of surface shapes referenced by this tile.
          */
         SurfaceShapeTile.prototype.getShapes = function() {
             return this.surfaceShapes;
+        };
+
+        /**
+         * Set the shapes this tile should reference.
+         * @param {SurfaceShape[]} surfaceShapes The collection of surface shapes to be referenced by this tile.
+         */
+        SurfaceShapeTile.prototype.setShapes = function(surfaceShapes) {
+            this.surfaceShapes = surfaceShapes;
         };
 
         /**
@@ -112,6 +126,7 @@ define([
          */
         SurfaceShapeTile.prototype.addSurfaceShape = function(surfaceShape) {
             this.surfaceShapes.push(surfaceShape);
+            this.surfaceShapeStateKeys.push(surfaceShape.stateKey);
         };
 
         /**
@@ -119,7 +134,56 @@ define([
          * @param {SurfaceShape[]} shapes A collection of surface shapes to add to the collection of this tile.
          */
         SurfaceShapeTile.prototype.addAllSurfaceShapes = function(shapes) {
-            this.surfaceShapes.concat(shapes);
+            for (var idx = 0, len = shapes.length; idx < len; idx += 1) {
+                var shape = shapes[idx];
+                this.addAllSurfaceShapes(shape);
+            }
+        };
+
+        // Internal use only. Intentionally not documented.
+        SurfaceShapeTile.prototype.needsUpdate = function(dc) {
+            var idx, len, surfaceShape, surfaceShapeStateKey;
+
+            // If the number of shapes have changed, ... (cheap test)
+            if (this.prevSurfaceShapes.length != this.surfaceShapes.length) {
+                return true;
+            }
+
+            // If shapes have been removed since the previous iteration, ...
+            for (idx = 0, len = this.prevSurfaceShapes; idx < len; idx += 1) {
+                surfaceShape = this.prevSurfaceShapes[idx];
+
+                if (this.surfaceShapes.indexOf(surfaceShape) < 0) {
+                    return true;
+                }
+            }
+
+            // If shapes added since the previous iteration, ...
+            for (idx = 0, len = this.surfaceShapes; idx < len; idx += 1) {
+                surfaceShape = this.surfaceShapes[idx];
+
+                if (this.prevSurfaceShapes.indexOf(surfaceShape) < 0) {
+                    return true;
+                }
+            }
+
+            // If the state key of the shape is different than the saved state key for that shape, ...
+            for (idx = 0, len = this.surfaceShapes.length; idx < len; idx += 1) {
+                surfaceShape = this.surfaceShapes[idx];
+                surfaceShapeStateKey = this.surfaceShapeStateKeys[idx];
+
+                if (surfaceShapeStateKey != surfaceShape.stateKey) {
+                    return true;
+                }
+            }
+
+            // If a texture does not already exist, ...
+            if (!this.hasTexture(dc)) {
+                return true;
+            }
+
+            // If you get here, the texture can be reused.
+            return false;
         };
 
         /**
@@ -128,6 +192,10 @@ define([
          * @returns {boolean} True if the surface shape tile has a valid texture, else false.
          */
         SurfaceShapeTile.prototype.hasTexture = function(dc) {
+            if (dc.pickingMode) {
+                return false;
+            }
+
             var gpuResourceCache = dc.gpuResourceCache;
 
             if (!this.gpuCacheKey) {
@@ -136,28 +204,7 @@ define([
 
             var texture = gpuResourceCache.resourceForKey(this.gpuCacheKey);
 
-            return !texture ? false : true;
-        };
-
-        /**
-         * Return the texture for rendering this tile. If one does not exist, create a new texture.
-         * @param {DrawContext} dc The draw context
-         * @returns {Texture} The texture for displaying the tile.
-         */
-        SurfaceShapeTile.prototype.getTexture = function(dc) {
-            var gpuResourceCache = dc.gpuResourceCache;
-
-            if (!this.gpuCacheKey) {
-                this.gpuCacheKey = this.getCacheKey();
-            }
-
-            var texture = gpuResourceCache.resourceForKey(this.gpuCacheKey);
-
-            if (!texture) {
-                texture = this.updateTexture(dc);
-            }
-
-            return texture;
+            return !!texture;
         };
 
         /**
@@ -190,6 +237,7 @@ define([
 
             for (var idx = 0, len = this.surfaceShapes.length; idx < len; idx += 1) {
                 var shape = this.surfaceShapes[idx];
+                this.surfaceShapeStateKeys[idx] = shape.stateKey;
 
                 shape.renderToTexture(dc, ctx2D, xScale, yScale, xOffset, yOffset);
             }
@@ -212,13 +260,7 @@ define([
         SurfaceShapeTile.prototype.getCacheKey = function() {
             if (!this.cacheKey) {
                 this.cacheKey = "SurfaceShapeTile:" +
-                this.sector.minLatitude.toString() + "," +
-                this.sector.minLongitude.toString() + "," +
-                this.sector.maxLatitude.toString() + "," +
-                this.sector.maxLongitude.toString() + "," +
-                this.level.levelNumber.toString() + "," +
-                this.row.toString() + "," +
-                this.column.toString() + "," +
+                this.tileKey + "," +
                 this.pickSequence.toString();
             }
 

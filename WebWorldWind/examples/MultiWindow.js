@@ -13,8 +13,9 @@ requirejs(['../src/WorldWind'], function () {
 
     WorldWind.Logger.setLoggingLevel(WorldWind.Logger.LEVEL_WARNING);
 
+    // Make a layer that shows a Path and is shared among the World Windows.
     var makePathLayer = function () {
-        var pathAttributes = new WorldWind.PathAttributes(null);
+        var pathAttributes = new WorldWind.ShapeAttributes(null);
         pathAttributes.interiorColor = WorldWind.Color.CYAN;
         pathAttributes.outlineColor= WorldWind.Color.BLUE;
 
@@ -34,23 +35,29 @@ requirejs(['../src/WorldWind'], function () {
         return pathLayer;
     };
 
-    var pathLayer = makePathLayer();
+    // Create the shared shape layer and imagery layer
+    var pathLayer = makePathLayer(),
+        imageryLayer = new WorldWind.BingAerialWithLabelsLayer(null);
 
     var wwd1 = new WorldWind.WorldWindow("canvasOne");
-    wwd1.addLayer(new WorldWind.BMNGLandsatLayer());
-    wwd1.addLayer(new WorldWind.BingWMSLayer());
+    wwd1.addLayer(imageryLayer);
     wwd1.addLayer(pathLayer);
-    wwd1.redraw();
+    // Add a compass layer, view controls layer, and coordinates display layer. Each world window must have its own.
+    wwd1.addLayer(new WorldWind.CompassLayer());
+    wwd1.addLayer(new WorldWind.CoordinatesDisplayLayer(wwd1));
+    wwd1.addLayer(new WorldWind.ViewControlsLayer(wwd1));
 
     var wwd2 = new WorldWind.WorldWindow("canvasTwo");
-    wwd2.addLayer(new WorldWind.BMNGLandsatLayer());
-    wwd2.addLayer(new WorldWind.BingWMSLayer());
+    wwd2.addLayer(imageryLayer);
     wwd2.addLayer(pathLayer);
-    wwd2.redraw();
+    wwd2.addLayer(new WorldWind.CompassLayer());
+    wwd2.addLayer(new WorldWind.CoordinatesDisplayLayer(wwd2));
+    wwd2.addLayer(new WorldWind.ViewControlsLayer(wwd2));
 
     var wwd3 = new WorldWind.WorldWindow("canvasThree");
-    wwd3.addLayer(new WorldWind.BMNGLandsatLayer());
-    wwd3.addLayer(new WorldWind.BingWMSLayer());
+    wwd3.addLayer(imageryLayer);
     wwd3.addLayer(pathLayer);
-    wwd3.redraw();
+    wwd3.addLayer(new WorldWind.CompassLayer());
+    wwd3.addLayer(new WorldWind.CoordinatesDisplayLayer(wwd3));
+    wwd3.addLayer(new WorldWind.ViewControlsLayer(wwd3));
 });

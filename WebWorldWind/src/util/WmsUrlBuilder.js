@@ -15,7 +15,7 @@ define([
         "use strict";
 
         /**
-         * Constructs a URL builder.
+         * Constructs a WMS URL builder.
          * @alias WmsUrlBuilder
          * @constructor
          * @classdesc Provides a factory to create URLs for WMS Get Map requests.
@@ -24,10 +24,12 @@ define([
          * @param {String} styleNames The comma-separated list of names of the styles to retrieve. May be null.
          * @param {String} wmsVersion The version of the WMS server. May be null, in which case version 1.3.0 is
          * assumed.
+         * @param {String} timeString The time parameter included in GetMap requests.
+         * May be null, in which case no time parameter is included in the request.
          * @throws {ArgumentError} If the service address or layer names are null or empty.
          *
          */
-        var WmsUrlBuilder = function (serviceAddress, layerNames, styleNames, wmsVersion) {
+        var WmsUrlBuilder = function (serviceAddress, layerNames, styleNames, wmsVersion, timeString) {
             if (!serviceAddress || (serviceAddress.length === 0)) {
                 throw new ArgumentError(
                     Logger.logMessage(Logger.LEVEL_SEVERE, "WmsUrlBuilder", "constructor",
@@ -60,13 +62,13 @@ define([
 
             /**
              * Indicates whether the layer should be requested with transparency.
-             * @type {boolean}
+             * @type {Boolean}
              * @default true
              */
             this.transparent = true;
 
             /**
-             * The WMS version to use.
+             * The WMS version to specify when requesting resources.
              * @type {String}
              * @default 1.3.0
              */
@@ -75,10 +77,16 @@ define([
 
             /**
              * The coordinate reference system to use when requesting layers.
-             * @type {string}
+             * @type {String}
              * @default EPSG:4326
              */
             this.crs = "EPSG:4326";
+
+            /**
+             * The time parameter included in GetMap requests. If null, no time parameter is included in the requests.
+             * @type {String}
+             */
+            this.timeString = timeString;
         };
 
         /**
@@ -116,11 +124,20 @@ define([
             sb = sb + "&width=" + tile.tileWidth;
             sb = sb + "&height=" + tile.tileHeight;
 
+            if (this.timeString) {
+                sb = sb + "&time=" + this.timeString;
+            }
+
             if (this.isWms130OrGreater) {
                 sb = sb + "&crs=" + this.crs;
                 sb = sb + "&bbox=";
-                sb = sb + sector.minLatitude + "," + sector.minLongitude + ",";
-                sb = sb + sector.maxLatitude+ "," + sector.maxLongitude;
+                if (this.crs === "CRS:84") {
+                    sb = sb + sector.minLongitude + "," + sector.minLatitude + ",";
+                    sb = sb + sector.maxLongitude+ "," + sector.maxLatitude;
+                } else {
+                    sb = sb + sector.minLatitude + "," + sector.minLongitude + ",";
+                    sb = sb + sector.maxLatitude+ "," + sector.maxLongitude;
+                }
             } else {
                 sb = sb + "&srs=" + this.crs;
                 sb = sb + "&bbox=";
@@ -133,13 +150,7 @@ define([
             return sb;
         };
 
-        /**
-         * Determines whether a WMS service address is correctly formed and modifies it to be correctly formed if it
-         * is  not.
-         * @param {String} serviceAddress The WMS service address.
-         * @returns {String} The specified service address if it is already well-formed, or the modified address.
-         * @throws {ArgumentError} If the specified address is null or undefined.
-         */
+        // Intentionally not documented.
         WmsUrlBuilder.fixGetMapString = function (serviceAddress) {
             if (!serviceAddress) {
                 throw new ArgumentError(

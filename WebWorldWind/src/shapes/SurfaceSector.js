@@ -55,21 +55,33 @@ define([
              * This shape's sector.
              * @type {Sector}
              */
-            this.sector = sector;
+            this._sector = sector;
         };
 
         SurfaceSector.prototype = Object.create(SurfaceShape.prototype);
 
+        // Internal use only. Intentionally not documented.
+        SurfaceSector.staticStateKey = function(shape) {
+            var shapeStateKey = SurfaceShape.staticStateKey(shape);
+
+            return shapeStateKey;
+        };
+
+        // Internal use only. Intentionally not documented.
+        SurfaceSector.prototype.computeStateKey = function() {
+            return SurfaceSector.staticStateKey(this);
+        };
+
         // Internal. Intentionally not documented.
         SurfaceSector.prototype.computeBoundaries = function(dc) {
-            var sector = this.sector;
+            var sector = this._sector;
 
-            this.boundaries = new Array(4);
+            this._boundaries = new Array(4);
 
-            this.boundaries[0] = new Location(sector.minLatitude, sector.minLongitude);
-            this.boundaries[1] = new Location(sector.maxLatitude, sector.minLongitude);
-            this.boundaries[2] = new Location(sector.maxLatitude, sector.maxLongitude);
-            this.boundaries[3] = new Location(sector.minLatitude, sector.maxLongitude);
+            this._boundaries[0] = new Location(sector.minLatitude, sector.minLongitude);
+            this._boundaries[1] = new Location(sector.maxLatitude, sector.minLongitude);
+            this._boundaries[2] = new Location(sector.maxLatitude, sector.maxLongitude);
+            this._boundaries[3] = new Location(sector.minLatitude, sector.maxLongitude);
         };
 
         return SurfaceSector;

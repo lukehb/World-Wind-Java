@@ -89,30 +89,35 @@ define([
             /**
              * This program's vertex point location.
              * @type {Number}
+             * @readonly
              */
             this.vertexPointLocation = this.attributeLocation(gl, "vertexPoint");
 
             /**
              * This program's texture coordinate location.
              * @type {Number}
+             * @readonly
              */
             this.vertexTexCoordLocation = this.attributeLocation(gl, "vertexTexCoord");
 
             /**
              * This program's modelview-projection matrix location.
              * @type {WebGLUniformLocation}
+             * @readonly
              */
             this.mvpMatrixLocation = this.uniformLocation(gl, "mvpMatrix");
 
             /**
              * The WebGL location for this program's 'color' uniform.
              * @type {WebGLUniformLocation}
+             * @readonly
              */
             this.colorLocation = this.uniformLocation(gl, "color");
 
             /**
              * The WebGL location for this program's 'modulateColor' uniform.
              * @type {WebGLUniformLocation}
+             * @readonly
              */
             this.modulateColorLocation = this.uniformLocation(gl, "modulateColor");
 
@@ -125,6 +130,7 @@ define([
             /**
              * The WebGL location for this program's 'vertexTexCoord' attribute.
              * @type {Number}
+             * @readonly
              */
             this.vertexPointLocation = -1;
         };
@@ -152,7 +158,7 @@ define([
                         "missingMatrix"));
             }
 
-            GpuProgram.loadUniformMatrix(gl, matrix, this.mvpMatrixLocation);
+            this.loadUniformMatrix(gl, matrix, this.mvpMatrixLocation);
         };
 
         /**
@@ -169,7 +175,7 @@ define([
                         "missingMatrix"));
             }
 
-            GpuProgram.loadUniformMatrix(gl, matrix, this.texSamplerMatrixLocation);
+            this.loadUniformMatrix(gl, matrix, this.texSamplerMatrixLocation);
         };
 
         /**
@@ -186,7 +192,7 @@ define([
                         "missingMatrix"));
             }
 
-            GpuProgram.loadUniformMatrix(gl, matrix, this.texMaskMatrixLocation);
+            this.loadUniformMatrix(gl, matrix, this.texMaskMatrixLocation);
         };
 
         /**
@@ -195,7 +201,7 @@ define([
          * GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS - 1.
          *
          * @param {WebGLRenderingContext} gl The current WebGL context.
-         * @param {number} unit The unit ID to load.
+         * @param {Number} unit The unit ID to load.
          */
         SurfaceTileRendererProgram.prototype.loadTexSampler = function (gl, unit) {
             gl.uniform1i(this.texSamplerLocation, unit - WebGLRenderingContext.TEXTURE0);
@@ -205,7 +211,7 @@ define([
          * Loads the specified value as the value of this program's 'opacity' uniform variable.
          *
          * @param {WebGLRenderingContext} gl The current WebGL context.
-         * @param {number} opacity The opacity to load.
+         * @param {Number} opacity The opacity to load.
          */
         SurfaceTileRendererProgram.prototype.loadOpacity = function (gl, opacity) {
             gl.uniform1f(this.opacityLocation, opacity);
@@ -224,7 +230,7 @@ define([
                     Logger.logMessage(Logger.LEVEL_SEVERE, "SurfaceTileRendererProgram", "loadColor", "missingColor"));
             }
 
-            GpuProgram.loadUniformColor(gl, color, this.colorLocation);
+            this.loadUniformColor(gl, color, this.colorLocation);
         };
 
         /**
@@ -238,7 +244,7 @@ define([
          * @param {Boolean} enable <code>true</code> to enable modulation, <code>false</code> to disable modulation.
          */
         SurfaceTileRendererProgram.prototype.loadModulateColor = function (gl, enable) {
-            GpuProgram.loadUniformInteger(gl, enable ? 1 : 0, this.modulateColorLocation);
+            gl.uniform1i(this.modulateColorLocation, enable ? 1 : 0);
         };
 
         return SurfaceTileRendererProgram;

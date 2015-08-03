@@ -36,11 +36,14 @@ define([
          * @alias ElevationModel
          * @constructor
          * @classdesc Represents the elevations for an area, often but not necessarily the whole globe.
+         * <p>
+         *     While this class can be used as-is, it is intended to be a base class for more concrete elevation
+         *     models, such as {@link EarthElevationModel}.
          * @param {Sector} coverageSector The sector this elevation model spans.
          * @param {Location} levelZeroDelta The size of top-level tiles, in degrees.
          * @param {Number} numLevels The number of levels used to represent this elevation model's resolution pyramid.
          * @param {String} retrievalImageFormat The mime type of the elevation data retrieved by this elevation model.
-         * @param {String} cachePath A string unique to this elevation model relative to other elevation model used by
+         * @param {String} cachePath A string unique to this elevation model relative to other elevation models used by
          * the application.
          * @param {Number} tileWidth The number of intervals (cells) in the longitudinal direction of this elevation
          * model's elevation tiles.
@@ -87,23 +90,20 @@ define([
             }
 
             /**
-             * The sector this elevation model spans, as passed to the constructor. This property is intended to be
-             * read-only.
+             * The sector this elevation model spans.
              * @type {Sector}
              * @readonly
              */
             this.coverageSector = coverageSector;
 
             /**
-             * The mime type to use when retrieving elevations, as passed to the constructor.
-             * This property is intended to be read-only.
+             * The mime type to use when retrieving elevations.
              * @type {String}
              * @readonly
              */
             this.retrievalImageFormat = retrievalImageFormat;
 
-            /** A unique string identifying this elevation model, as passed to the constructor.
-             * This property is intended to be read-only.
+            /** A unique string identifying this elevation model relative to other elevation models in use.
              * @type {String}
              * @readonly
              */
@@ -118,36 +118,35 @@ define([
 
             /**
              * Indicates the last time this elevation model changed, in milliseconds since midnight Jan 1, 1970.
-             * @type {number}
+             * @type {Number}
              * @readonly
-             * @default Date.getTime() at construction
+             * @default Date.now() at construction
              */
             this.timestamp = Date.now();
 
             /**
-             * This elevation model's minimum elevation
-             * @type {number}
+             * This elevation model's minimum elevation in meters.
+             * @type {Number}
              * @default 0
              */
             this.minElevation = 0;
 
             /**
-             * This elevation model's maximum elevation.
-             * @type {number}
+             * This elevation model's maximum elevation in meters.
+             * @type {Number}
              */
             this.maxElevation = 0;
 
             /**
-             * Indicates whether the data associated with the elevation model is point data. A value of <code>false</code>
+             * Indicates whether the data associated with this elevation model is point data. A value of false
              * indicates that the data is area data (pixel is area).
-             * @type {boolean}
+             * @type {Boolean}
              * @default true
              */
             this.pixelIsPoint = true;
 
             /**
-             * The level set created during construction of this elevation model.
-             * This property is intended to be read-only.
+             * The {@link LevelSet} created during construction of this elevation model.
              * @type {LevelSet}
              * @readonly
              */
@@ -161,26 +160,19 @@ define([
             this.currentRetrievals = []; // Identifies elevation retrievals in progress
             this.absentResourceList = new AbsentResourceList(3, 5e3);
             this.id = ++ElevationModel.idPool;
-            this._stateKey = "elevationModel " + this.id.toString() + " ";
-        };
 
-        ElevationModel.idPool = 0; // Used to assign unique IDs to elevation models for use in their state key.
-
-        Object.defineProperties(ElevationModel.prototype, {
             /**
              * A string identifying this elevation model's current state. Used to compare states during rendering to
              * determine whether globe-state dependent cached values must be updated. Applications typically do not
-             * interact with this property.
+             * interact with this property. It is primarily used by shapes and terrain generators.
              * @memberof ElevationModel.prototype
              * @readonly
              * @type {String}
              */
-            stateKey: {
-                get: function () {
-                    return this._stateKey;
-                }
-            }
-        });
+            this.stateKey = "elevationModel " + this.id.toString() + " ";
+        };
+
+        ElevationModel.idPool = 0; // Used to assign unique IDs to elevation models for use in their state key.
 
         /**
          * Returns the minimum and maximum elevations within a specified sector.
@@ -242,14 +234,57 @@ define([
          * Returns the elevation at a specified location.
          * @param {Number} latitude The location's latitude in degrees.
          * @param {Number} longitude The location's longitude in degrees.
-         * @returns {Number} The elevation at the specified location. Returns zero if the location is outside the
-         * coverage area of this elevation model.
+         * @returns {Number} The elevation at the specified location, in meters. Returns zero if the location is
+         * outside the coverage area of this elevation model.
          */
         ElevationModel.prototype.elevationAtLocation = function (latitude, longitude) {
             if (!this.coverageSector.containsLocation(latitude, longitude)) {
                 return 0; // location is outside the elevation model's coverage
             }
 
+            return this.pointElevationForLocation(latitude, longitude);
+        };
+
+        /**
+         * Returns the elevations at locations within a specified sector.
+         * @param {Sector} sector The sector for which to determine the elevations.
+         * @param {Number} numLat The number of latitudinal sample locations within the sector.
+         * @param {Number} numLon The number of longitudinal sample locations within the sector.
+         * @param {Number} targetResolution The desired elevation resolution, in radians. (To compute radians from
+         * meters, divide the number of meters by the globe's radius.)
+         * @param {Number[]} result An array in which to return the requested elevations.
+         * @returns {Number} The resolution actually achieved, which may be greater than that requested if the
+         * elevation data for the requested resolution is not currently available.
+         * @throws {ArgumentError} If the specified sector or result array is null or undefined, or if either of the
+         * specified numLat or numLon values is less than one.
+         */
+        ElevationModel.prototype.elevationsForGrid = function (sector, numLat, numLon, targetResolution, result) {
+            if (!sector) {
+                throw new ArgumentError(
+                    Logger.logMessage(Logger.LEVEL_SEVERE, "ElevationModel", "elevationsForSector", "missingSector"));
+            }
+
+            if (!result) {
+                throw new ArgumentError(
+                    Logger.logMessage(Logger.LEVEL_SEVERE, "ElevationModel", "elevationsForSector", "missingResult"));
+            }
+
+            if (!numLat || !numLon || numLat < 1 || numLon < 1) {
+                throw new ArgumentError(
+                    Logger.logMessage(Logger.LEVEL_SEVERE, "ElevationModel", "constructor",
+                        "The specified number of latitudinal or longitudinal positions is less than one."));
+            }
+
+            var level = this.levels.levelForTexelSize(targetResolution);
+            if (this.pixelIsPoint) {
+                return this.pointElevationsForGrid(sector, numLat, numLon, level, result);
+            } else {
+                return this.areaElevationsForGrid(sector, numLat, numLon, level, result);
+            }
+        };
+
+        // Intentionally not documented.
+        ElevationModel.prototype.pointElevationForLocation = function (latitude, longitude) {
             var level = this.levels.lastLevel(),
                 deltaLat = level.tileDelta.latitude,
                 deltaLon = level.tileDelta.longitude,
@@ -259,7 +294,7 @@ define([
                 image = null;
 
             for (var i = level.levelNumber; i >= 0; i--) {
-                tile = this.tileCache.entryForKey(i.toString() + "." + r.toString() + "." + c.toString());
+                tile = this.tileCache.entryForKey(i + "." + r + "." + c);
                 if (tile) {
                     image = tile.image();
                     if (image) {
@@ -274,52 +309,12 @@ define([
             return 0; // did not find a tile with an image
         };
 
-        /**
-         * Returns the elevations at locations within a specified sector.
-         * @param {Sector} sector The sector for which to determine the elevations.
-         * @param {Number} numLatitude The number of latitudinal sample locations within the sector.
-         * @param {Number} numLongitude The number of longitudinal sample locations within the sector.
-         * @param {Number} targetResolution The desired elevation resolution.
-         * @param {Number} verticalExaggeration The vertical exaggeration to apply to the elevations.
-         * @param {Number[]} result An array in which to return the requested elevations.
-         * @returns {Number} The resolution actually achieved, which may be greater than that requested if the
-         * elevation data for the requested resolution is not currently available.
-         * @throws {ArgumentError} If the specified sector or result array is null or undefined, or if either of the
-         * specified numLatitude or numLongitude values is less than one.
-         */
-        ElevationModel.prototype.elevationsForSector = function (sector, numLatitude, numLongitude,
-                                                                 targetResolution, verticalExaggeration,
-                                                                 result) {
-            if (!sector) {
-                throw new ArgumentError(
-                    Logger.logMessage(Logger.LEVEL_SEVERE, "ElevationModel", "elevationsForSector", "missingSector"));
-            }
+        // Intentionally not documented.
+        ElevationModel.prototype.pointElevationsForGrid = function (sector, numLat, numLon, level, result) {
+            var maxResolution = 0,
+                resolution;
 
-            if (!result) {
-                throw new ArgumentError(
-                    Logger.logMessage(Logger.LEVEL_SEVERE, "ElevationModel", "elevationsForSector", "missingResult"));
-            }
-
-            if (!numLatitude || !numLongitude || numLatitude < 1 || numLongitude < 1) {
-                throw new ArgumentError(
-                    Logger.logMessage(Logger.LEVEL_SEVERE, "ElevationModel", "constructor",
-                        "The specified number of latitudinal or longitudinal positions is less than one."));
-            }
-
-            var level = this.levels.levelForTexelSize(targetResolution),
-                texelSize = level.texelSize * Angle.RADIANS_TO_DEGREES,
-                expandedSector = sector;
-
-            if (!this.pixelIsPoint) {
-                // Expand the sector in order to capture tiles adjacent to those required for pixel-is-point.
-                expandedSector = new Sector(
-                    Math.max(-90, sector.minLatitude - 2 * texelSize),
-                    Math.min(90, sector.maxLatitude + 2 * texelSize),
-                    Math.max(-180, sector.minLongitude - 2 * texelSize),
-                    Math.min(180, sector.maxLongitude + 2 * texelSize));
-            }
-
-            this.assembleTiles(level, expandedSector, true);
+            this.assembleTiles(level, sector, true);
             if (this.currentTiles.length === 0) {
                 return 0; // Sector is outside the elevation model's coverage area. Do not modify the results array.
             }
@@ -330,27 +325,12 @@ define([
                 return tileA.level.levelNumber - tileB.level.levelNumber;
             });
 
-            if (this.pixelIsPoint) {
-                return this.sectorElevationsFromPointElevations(sector, numLatitude, numLongitude, targetResolution,
-                    verticalExaggeration, result);
-            } else {
-                return this.sectorElevationsFromAreaElevations(sector, numLatitude, numLongitude, targetResolution,
-                    verticalExaggeration, result);
-            }
-        };
-
-        ElevationModel.prototype.sectorElevationsFromPointElevations = function (sector, numLatitude, numLongitude,
-                                                                                 targetResolution, verticalExaggeration,
-                                                                                 result) {
-            var maxResolution = 0,
-                resolution;
-
             for (var i = 0, len = this.currentTiles.length; i < len; i++) {
                 var tile = this.currentTiles[i],
                     image = tile.image();
 
                 if (image) {
-                    image.elevationsForSector(sector, numLatitude, numLongitude, verticalExaggeration, result);
+                    image.elevationsForGrid(sector, numLat, numLon, result);
                     resolution = tile.level.texelSize;
 
                     if (maxResolution < resolution) {
@@ -364,76 +344,125 @@ define([
             return maxResolution;
         };
 
-        ElevationModel.prototype.sectorElevationsFromAreaElevations = function (sector, numLatitude, numLongitude,
-                                                                                targetResolution, verticalExaggeration,
-                                                                                result) {
-            // For each lat/lon in sector
-            //  Compute the lat/lon of the four surrounding area pixels.
-            //  Look up the area elevations in the current-tiles list.
-            //  Interpolate the point elevation from those four area elevations.
+        // Internal. Returns elevations for a grid assuming pixel-is-area.
+        ElevationModel.prototype.areaElevationsForGrid = function (sector, numLat, numLon, level, result) {
+            var minLat = sector.minLatitude,
+                maxLat = sector.maxLatitude,
+                minLon = sector.minLongitude,
+                maxLon = sector.maxLongitude,
+                deltaLat = sector.deltaLatitude() / (numLat > 1 ? numLat - 1 : 1),
+                deltaLon = sector.deltaLongitude() / (numLon > 1 ? numLon - 1 : 1),
+                lat, lon, s, t,
+                latIndex, lonIndex, resultIndex = 0;
 
-            var deltaLat = sector.deltaLatitude() / (numLatitude > 1 ? numLatitude - 1 : 1),
-                deltaLon = sector.deltaLongitude() / (numLongitude > 1 ? numLongitude - 1 : 1),
-                lat, lon,
-                level = this.levels.levelForTexelSize(targetResolution),
-                texelSize = level.texelSize * Angle.RADIANS_TO_DEGREES,
-                index = 0,
-                swElevation = [], seElevation = [], neElevation = [], nwElevation = [];
-
-            for (var j = 0; j < numLatitude; j++) {
-                if (j === 0) {
-                    lat = sector.minLatitude;
-                } else if (j === numLatitude - 1) {
-                    lat = sector.maxLatitude;
-                } else {
-                    lat = sector.minLatitude + j * deltaLat;
+            for (latIndex = 0, lat = minLat; latIndex < numLat; latIndex += 1, lat += deltaLat) {
+                if (latIndex === numLat - 1) {
+                    lat = maxLat; // explicitly set the last lat to the max latitude ensure alignment
                 }
 
-                for (var i = 0; i < numLongitude; i++) {
-                    if (i === 0) {
-                        lon = sector.minLongitude;
-                    } else if (i === numLongitude - 1) {
-                        lon = sector.maxLongitude;
-                    } else {
-                        lon = sector.minLongitude + i * deltaLon;
+                for (lonIndex = 0, lon = minLon; lonIndex < numLon; lonIndex += 1, lon += deltaLon) {
+                    if (lonIndex === numLon - 1) {
+                        lon = maxLon; // explicitly set the last lon to the max longitude ensure alignment
                     }
 
-                    var minLat = Math.max(-90, lat - WWMath.fmod(WWMath.fabs(lat), texelSize)),
-                        minLon = Math.max(-180, lon - WWMath.fmod(WWMath.fabs(lon), texelSize)),
-                        maxLat = Math.min(90, minLat + texelSize),
-                        maxLon = Math.min(180, minLon + texelSize),
-                        sw = this.elevationFromAreaData(minLat, minLon, swElevation),
-                        se = this.elevationFromAreaData(minLat, maxLon, seElevation),
-                        ne = this.elevationFromAreaData(maxLat, maxLon, neElevation),
-                        nw = this.elevationFromAreaData(maxLat, minLon, nwElevation),
-                        yf = WWMath.fabs(lat - minLat) / WWMath.fabs(maxLat - minLat),
-                        xf = WWMath.fabs(lon - minLon) / WWMath.fabs(maxLon - minLon);
-
-                    if (sw && se && ne && nw) {
-                        result[index] = WWMath.interpolate(yf,
-                            WWMath.interpolate(xf, swElevation[0], seElevation[0]),
-                            WWMath.interpolate(xf, nwElevation[0], neElevation[0]));
+                    if (this.coverageSector.containsLocation(lat, lon)) { // ignore locations outside of the model
+                        s = (lon + 180) / 360;
+                        t = (lat + 90) / 180;
+                        this.areaElevationForCoord(s, t, level.levelNumber, result, resultIndex);
                     }
 
-                    index++;
+                    resultIndex++;
                 }
             }
 
             return level.texelSize; // TODO: return the actual achieved
         };
 
-        ElevationModel.prototype.elevationFromAreaData = function (lat, lon, result) {
-            for (var i = this.currentTiles.length - 1; i >= 0; i--) {
-                var tile = this.currentTiles[i],
-                    image = tile.image();
+        // Internal. Returns an elevation for a location assuming pixel-is-area.
+        ElevationModel.prototype.areaElevationForCoord = function (s, t, levelNumber, result, resultIndex) {
+            var level, levelWidth, levelHeight,
+                tMin, tMax,
+                u, v,
+                x0, x1, y0, y1,
+                xf, yf,
+                retrieveTiles,
+                pixels = new Float64Array(4);
 
-                if (tile.sector.containsLocation(lat, lon) && image) {
-                    result[0] = image.elevationAtLocation(lat, lon);
-                    return true;
+            for (var i = levelNumber; i >= 0; i--) {
+                level = this.levels.level(i);
+                levelWidth = Math.round(level.tileWidth * 360 / level.tileDelta.longitude);
+                levelHeight = Math.round(level.tileHeight * 180 / level.tileDelta.latitude);
+                tMin = 1 / (2 * levelHeight);
+                tMax = 1 - tMin;
+                u = levelWidth * WWMath.fract(s); // wrap the horizontal coordinate
+                v = levelHeight * WWMath.clamp(t, tMin, tMax); // clamp the vertical coordinate to the level edge
+                x0 = WWMath.mod(Math.floor(u - 0.5), levelWidth);
+                x1 = WWMath.mod((x0 + 1), levelWidth);
+                y0 = Math.floor(v - 0.5);
+                y1 = y0 + 1;
+                xf = WWMath.fract(u - 0.5);
+                yf = WWMath.fract(v - 0.5);
+                retrieveTiles = (i == levelNumber) || (i == 0);
+
+                if (this.lookupPixels(x0, x1, y0, y1, level, retrieveTiles, pixels)) {
+                    result[resultIndex] = (1 - xf) * (1 - yf) * pixels[0] +
+                    xf * (1 - yf) * pixels[1] +
+                    (1 - xf) * yf * pixels[2] +
+                    xf * yf * pixels[3];
+                    return;
                 }
+            }
+        };
+
+        // Internal. Bilinearly interpolates tile-image elevations.
+        ElevationModel.prototype.lookupPixels = function (x0, x1, y0, y1, level, retrieveTiles, result) {
+            var levelNumber = level.levelNumber,
+                tileWidth = level.tileWidth,
+                tileHeight = level.tileHeight,
+                row0 = Math.floor(y0 / tileHeight),
+                row1 = Math.floor(y1 / tileHeight),
+                col0 = Math.floor(x0 / tileWidth),
+                col1 = Math.floor(x1 / tileWidth),
+                r0c0, r0c1, r1c0, r1c1;
+
+            if (row0 == row1 && row0 == this.cachedRow && col0 == col1 && col0 == this.cachedCol) {
+                r0c0 = r0c1 = r1c0 = r1c1 = this.cachedImage; // use results from previous lookup
+            } else if (row0 == row1 && col0 == col1) {
+                r0c0 = this.lookupImage(levelNumber, row0, col0, retrieveTiles); // only need to lookup one image
+                r0c1 = r1c0 = r1c1 = r0c0; // re-use the single image
+                this.cachedRow = row0;
+                this.cachedCol = col0;
+                this.cachedImage = r0c0; // note the results for subsequent lookups
+            } else {
+                r0c0 = this.lookupImage(levelNumber, row0, col0, retrieveTiles);
+                r0c1 = this.lookupImage(levelNumber, row0, col1, retrieveTiles);
+                r1c0 = this.lookupImage(levelNumber, row1, col0, retrieveTiles);
+                r1c1 = this.lookupImage(levelNumber, row1, col1, retrieveTiles);
+            }
+
+            if (r0c0 && r0c1 && r1c0 && r1c1) {
+                result[0] = r0c0.pixel(x0 % tileWidth, y0 % tileHeight);
+                result[1] = r0c1.pixel(x1 % tileWidth, y0 % tileHeight);
+                result[2] = r1c0.pixel(x0 % tileWidth, y1 % tileHeight);
+                result[3] = r1c1.pixel(x1 % tileWidth, y1 % tileHeight);
+                return true;
             }
 
             return false;
+        };
+
+        // Internal. Intentionally not documented.
+        ElevationModel.prototype.lookupImage = function (levelNumber, row, column, retrieveTiles) {
+            var tile = this.tileForLevel(levelNumber, row, column),
+                image = tile.image();
+
+            // If the tile's elevations have expired, cause it to be re-retrieved. Note that the current,
+            // expired elevations are still used until the updated ones arrive.
+            if ((image == null || this.isTileImageExpired(tile) && retrieveTiles)) {
+                this.retrieveTileImage(tile);
+            }
+
+            return image;
         };
 
         // Intentionally not documented.
@@ -533,7 +562,7 @@ define([
 
         // Intentionally not documented.
         ElevationModel.prototype.tileForLevel = function (levelNumber, row, column) {
-            var tileKey = levelNumber.toString() + "." + row.toString() + "." + column.toString(),
+            var tileKey = levelNumber + "." + row + "." + column,
                 tile = this.tileCache.entryForKey(tileKey);
 
             if (tile) {
@@ -544,7 +573,7 @@ define([
                 sector = Tile.computeSector(level, row, column);
 
             tile = this.createTile(sector, level, row, column);
-            this.tileCache.putEntry(tileKey, tile, tile.size);
+            this.tileCache.putEntry(tileKey, tile, tile.size());
 
             return tile;
         };
@@ -626,6 +655,7 @@ define([
             }
         };
 
+        // Intentionally not documented.
         ElevationModel.prototype.removeFromCurrentRetrievals = function (imagePath) {
             var index = this.currentRetrievals.indexOf(imagePath);
             if (index > -1) {

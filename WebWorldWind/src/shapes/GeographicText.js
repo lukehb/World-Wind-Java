@@ -41,9 +41,21 @@ define([
 
             /**
              * This text's geographic position.
+             * The [TextAttributes.offset]{@link TextAttributes#offset} property indicates the relationship of the
+             * text string to this position.
              * @type {Position}
              */
             this.position = position;
+
+            /**
+             * Indicates the group ID of the declutter group to include this Text shape. This shape
+             * is decluttered relative to all other shapes within its group by the default
+             * [declutter filter]{@link WorldWindow#declutter}. To prevent decluttering of this shape, set its
+             * declutter group to 0.
+             * @type {Number}
+             * @default 1
+             */
+            this.declutterGroup = 1;
         };
 
         // Internal use only. Intentionally not documented.
@@ -64,6 +76,7 @@ define([
             return clone;
         };
 
+        // Documented in superclass.
         GeographicText.prototype.render = function (dc) {
             // Filter out instances outside any projection limits.
             if (dc.globe.projectionLimits
@@ -74,10 +87,15 @@ define([
             Text.prototype.render.call(this, dc);
         };
 
+        // Documented in superclass.
         GeographicText.prototype.computeScreenPointAndEyeDistance = function (dc) {
             // Compute the text's model point and corresponding distance to the eye point.
-            dc.terrain.surfacePointForMode(this.position.latitude, this.position.longitude, this.position.altitude,
+            dc.surfacePointForMode(this.position.latitude, this.position.longitude, this.position.altitude,
                 this.altitudeMode, GeographicText.placePoint);
+
+            if (!dc.navigatorState.frustumInModelCoordinates.containsPoint(GeographicText.placePoint)) {
+                return false;
+            }
 
             this.eyeDistance = this.alwaysOnTop ? 0 : dc.navigatorState.eyePoint.distanceTo(GeographicText.placePoint);
 
@@ -87,8 +105,10 @@ define([
             // yet as a screen element the text is expected to be visible. We adjust its depth values rather than moving
             // the text itself to avoid obscuring its actual position.
             if (!dc.navigatorState.projectWithDepth(GeographicText.placePoint, this.depthOffset, this.screenPoint)) {
-                return null;
+                return false;
             }
+
+            return true;
         };
 
         return GeographicText;

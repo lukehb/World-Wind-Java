@@ -20,7 +20,7 @@ define([
          * Constructs a texture for a specified image.
          * @alias Texture
          * @constructor
-         * @classdesc Represents a WebGL texture.
+         * @classdesc Represents a WebGL texture. Applications typically do not interact with this class.
          * @param {WebGLRenderingContext} gl The current WebGL rendering context.
          * @param {Image} image The texture's image.
          * @throws {ArgumentError} If the specified WebGL context or image is null or undefined.
@@ -36,18 +36,14 @@ define([
                     "missingImage"));
             }
 
+            var textureId = gl.createTexture(),
+                isPowerOfTwo = (WWMath.isPowerOfTwo(image.width) && WWMath.isPowerOfTwo(image.height));
+
             this.imageWidth = image.width;
-
             this.imageHeight = image.height;
-
             this.size = image.width * image.height * 4;
-
-            var isPowerOfTwo = (WWMath.isPowerOfTwo(this.imageWidth) && WWMath.isPowerOfTwo(this.imageHeight));
-
             this.originalImageWidth = this.imageWidth;
             this.originalImageHeight = this.imageHeight;
-
-            var textureId = gl.createTexture();
 
             gl.bindTexture(WebGLRenderingContext.TEXTURE_2D, textureId);
             gl.texParameteri(WebGLRenderingContext.TEXTURE_2D, WebGLRenderingContext.TEXTURE_MIN_FILTER,
@@ -58,6 +54,15 @@ define([
                 WebGLRenderingContext.CLAMP_TO_EDGE);
             gl.texParameteri(WebGLRenderingContext.TEXTURE_2D, WebGLRenderingContext.TEXTURE_WRAP_T,
                 WebGLRenderingContext.CLAMP_TO_EDGE);
+
+            // Setup 4x anisotropic texture filtering when this feature is available.
+            // https://www.khronos.org/registry/webgl/extensions/EXT_texture_filter_anisotropic
+            var ext = (
+                gl.getExtension("EXT_texture_filter_anisotropic") ||
+                gl.getExtension("WEBKIT_EXT_texture_filter_anisotropic"));
+            if (ext) {
+                gl.texParameteri(WebGLRenderingContext.TEXTURE_2D, ext.TEXTURE_MAX_ANISOTROPY_EXT, 4);
+            }
 
             gl.pixelStorei(WebGLRenderingContext.UNPACK_PREMULTIPLY_ALPHA_WEBGL, 1);
             gl.texImage2D(WebGLRenderingContext.TEXTURE_2D, 0,

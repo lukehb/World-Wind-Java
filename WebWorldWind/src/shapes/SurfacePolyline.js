@@ -51,13 +51,25 @@ define([
              * This shape's locations, specified as an array locations.
              * @type {Array}
              */
-            this.boundaries = locations;
+            this._boundaries = locations;
 
             // Internal use only.
-            this.isInteriorInhibited = true;
+            this._isInteriorInhibited = true;
         };
 
         SurfacePolyline.prototype = Object.create(SurfaceShape.prototype);
+
+        // Internal use only. Intentionally not documented.
+        SurfacePolyline.staticStateKey = function(shape) {
+            var shapeStateKey = SurfaceShape.staticStateKey(shape);
+
+            return shapeStateKey;
+        };
+
+        // Internal use only. Intentionally not documented.
+        SurfacePolyline.prototype.computeStateKey = function() {
+            return SurfacePolyline.staticStateKey(this);
+        };
 
         return SurfacePolyline;
     });

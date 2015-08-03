@@ -142,6 +142,7 @@ define([
          * Compute a location along a great circle path at a specified distance between two specified locations.
          * @param {Number} amount The fraction of the path between the two locations at which to compute the new
          * location. This number should be between 0 and 1. If not, it is clamped to the nearest of those values.
+         * This function uses a spherical model, not elliptical.
          * @param {Location} location1 The starting location.
          * @param {Location} location2 The ending location.
          * @param {Location} result A Location in which to return the result.
@@ -175,6 +176,7 @@ define([
          * Computes the azimuth angle (clockwise from North) that points from the first location to the second location.
          * This angle can be used as the starting azimuth for a great circle arc that begins at the first location, and
          * passes through the second location.
+         * This function uses a spherical model, not elliptical.
          * @param {Location} location1 The starting location.
          * @param {Location} location2 The ending location.
          * @returns {Number} The computed azimuth, in degrees.
@@ -216,6 +218,7 @@ define([
          * angle between the two positions. In radians, this angle is the arc length of the segment between the two
          * positions. To compute a distance in meters from this value, multiply the return value by the radius of the
          * globe.
+         * This function uses a spherical model, not elliptical.
          *
          * @param {Location} location1 The starting location.
          * @param {Location} location2 The ending location.
@@ -253,6 +256,7 @@ define([
         /**
          * Computes the location on a great circle path corresponding to a given starting location, azimuth, and
          * arc distance.
+         * This function uses a spherical model, not elliptical.
          *
          * @param {Location} location The starting location.
          * @param {Number} greatCircleAzimuthDegrees The azimuth in degrees.
@@ -304,6 +308,7 @@ define([
 
         /**
          * Compute a location along a rhumb path at a specified distance between two specified locations.
+         * This function uses a spherical model, not elliptical.
          * @param {Number} amount The fraction of the path between the two locations at which to compute the new
          * location. This number should be between 0 and 1. If not, it is clamped to the nearest of those values.
          * @param {Location} location1 The starting location.
@@ -339,6 +344,7 @@ define([
          * Computes the azimuth angle (clockwise from North) that points from the first location to the second location.
          * This angle can be used as the azimuth for a rhumb arc that begins at the first location, and
          * passes through the second location.
+         * This function uses a spherical model, not elliptical.
          * @param {Location} location1 The starting location.
          * @param {Location} location2 The ending location.
          * @returns {Number} The computed azimuth, in degrees.
@@ -380,6 +386,7 @@ define([
          * angle between the two positions in radians. This angle is the arc length of the segment between the two
          * positions. To compute a distance in meters from this value, multiply the return value by the radius of the
          * globe.
+         * This function uses a spherical model, not elliptical.
          *
          * @param {Location} location1 The starting location.
          * @param {Location} location2 The ending location.
@@ -427,6 +434,7 @@ define([
 
         /**
          * Computes the location on a rhumb arc with the given starting location, azimuth, and arc distance.
+         * This function uses a spherical model, not elliptical.
          *
          * @param {Location} location The starting location.
          * @param {Number} azimuthDegrees The azimuth in degrees.
@@ -824,17 +832,16 @@ define([
             var lat0 = location.latitude;
             var az = azimuth * Angle.DEGREES_TO_RADIANS;
 
-            // Derived by solving the function for longitude on a great circle against the desired longitude. We start with
-            // the equation in "Map Projections - A Working Manual", page 31, equation 5-5:
+            // Derived by solving the function for longitude on a great circle against the desired longitude. We start
+            // with the equation in "Map Projections - A Working Manual", page 31, equation 5-5:
             //
-            // lat = asin( sin(lat0) * cos(c) + cos(lat0) * sin(c) * cos(Az) )
+            //     lat = asin( sin(lat0) * cos(C) + cos(lat0) * sin(C) * cos(Az) )
             //
             // Where (lat0, lon) are the starting coordinates, c is the angular distance along the great circle from the
-            // starting coordinate, and Az is the azimuth. All values are in radians.
+            // starting coordinate, and Az is the azimuth. All values are in radians. Solving for angular distance gives
+            // distance to the equator:
             //
-            // Solving for angular distance gives distance to the equator:
-            //
-            // tan(c) = -tan(lat0) / cos(Az)
+            //     tan(C) = -tan(lat0) / cos(Az)
             //
             // The great circle is by definition centered about the Globe's origin. Therefore intersections with the
             // equator will be antipodal (exactly 180 degrees opposite each other), as will be the extreme latitudes.
@@ -847,58 +854,13 @@ define([
             var tanDistance = -Math.tan(lat0) / Math.cos(az);
             var distance = Math.atan(tanDistance);
 
-            var extremeDistance1 = (distance + (Math.PI / 2.0)) * Angle.RADIANS_TO_DEGREES;
-            var extremeDistance2 = (distance - (Math.PI / 2.0)) * Angle.RADIANS_TO_DEGREES;
+            var extremeDistance1 = distance + (Math.PI / 2.0);
+            var extremeDistance2 = distance - (Math.PI / 2.0);
 
             return [
-                Location.greatCircleEndPosition(location, azimuth, extremeDistance1),
-                Location.greatCircleEndPosition(location, azimuth, extremeDistance2)
+                Location.greatCircleLocation(location, azimuth, extremeDistance1, new Location(0, 0)),
+                Location.greatCircleLocation(location, azimuth, extremeDistance2, new Location(0,0))
             ];
-        };
-
-        /**
-         * Computes the location on a great circle arc with the given starting location, azimuth, and arc distance.
-         *
-         * @param {Location} p          Location of the starting location.
-         * @param {number} azimuth      Great circle azimuth angle (clockwise from North) in degrees.
-         * @param {number} pathLength   Angular arc distance to travel indegrees
-         *
-         * @return {Location} Location on the great circle arc.
-         */
-        Location.greatCircleEndPosition = function(p, azimuth, pathLength) {
-            if (!p) {
-                throw new ArgumentError(
-                    Logger.logMessage(Logger.LEVEL_SEVERE, "Location", "greatCircleEndPosition", "missingLocation"));
-            }
-
-            var azimuthRadians = azimuth * Angle.DEGREES_TO_RADIANS;
-            var latRadians = p.latitude * Angle.DEGREES_TO_RADIANS;
-            var lonRadians = p.longitude * Angle.DEGREES_TO_RADIANS;
-            var distance = pathLength * Angle.DEGREES_TO_RADIANS;
-
-            if (distance == 0) {
-                return p;
-            }
-
-            // Taken from "Map Projections - A Working Manual", page 31, equation 5-5 and 5-6.
-            var endLatRadians =
-                Math.asin(Math.sin(latRadians) * Math.cos(distance) +
-                Math.cos(latRadians) * Math.sin(distance) * Math.cos(azimuthRadians));
-            var endLonRadians =
-                lonRadians +
-                Math.atan2(
-                    Math.sin(distance) * Math.sin(azimuthRadians),
-                    Math.cos(latRadians) * Math.cos(distance) -
-                        Math.sin(latRadians) * Math.sin(distance) * Math.cos(azimuthRadians)
-                );
-
-            if (isNaN(endLatRadians) || isNaN(endLonRadians)) {
-                return p;
-            }
-
-            return new Location(
-                Angle.normalizedDegreesLatitude(endLatRadians * Angle.RADIANS_TO_DEGREES),
-                Angle.normalizedDegreesLongitude(endLonRadians * Angle.RADIANS_TO_DEGREES));
         };
 
         /**

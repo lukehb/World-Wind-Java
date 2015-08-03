@@ -22,10 +22,13 @@ define([
          * @constructor
          * @classdesc Holds elevation values for an elevation tile.
          * This class is typically not used directly by applications.
-         * @param {String} imagePath A string uniquely identifying this elevation image relative to other elevation images.
+         * @param {String} imagePath A string uniquely identifying this elevation image relative to other elevation
+         * images.
          * @param {Sector} sector The sector spanned by this elevation image.
          * @param {Number} imageWidth The number of longitudinal sample points in this elevation image.
          * @param {Number} imageHeight The number of latitudinal sample points in this elevation image.
+         * @throws {ArgumentError} If the specified image path is null, undefined or empty, or the specified
+         * sector is null or undefined.
          */
         var ElevationImage = function (imagePath, sector, imageWidth, imageHeight) {
             if (!imagePath || (imagePath.length < 1)) {
@@ -34,17 +37,74 @@ define([
                         "The specified image path is null, undefined or zero length."));
             }
 
+            if (!sector) {
+                throw new ArgumentError(
+                    Logger.logMessage(Logger.LEVEL_SEVERE, "ElevationImage", "constructor", "missingSector"));
+            }
+
+            /**
+             * The sector spanned by this elevation image.
+             * @type {Sector}
+             * @readonly
+             */
             this.sector = sector;
+
+            /**
+             * A string uniquely identifying this elevation image.
+             * @type {String}
+             * @readonly
+             */
             this.imagePath = imagePath;
+
+            /**
+             * The number of longitudinal sample points in this elevation image.
+             * @type {Number}
+             * @readonly
+             */
             this.imageWidth = imageWidth;
+
+            /**
+             * The number of latitudinal sample points in this elevation image.
+             * @type {Number}
+             * @readonly
+             */
             this.imageHeight = imageHeight;
+
+            /**
+             * The size in bytes of this elevation image.
+             * @type {number}
+             * @readonly
+             */
             this.size = this.imageWidth * this.imageHeight;
         };
 
         /**
-         * Returns the elevation at a specified location.
-         * @param {number} latitude The location's latitude.
-         * @param {number} longitude The location's longitude.
+         * Returns the pixel value at a specified coordinate in this elevation image. The coordinate origin is the
+         * image's lower left corner, so (0, 0) indicates the lower left pixel and (imageWidth-1, imageHeight-1)
+         * indicates the upper right pixel. This returns 0 if the coordinate indicates a pixel outside of this elevation
+         * image.
+         * @param x The pixel's X coordinate.
+         * @param y The pixel's Y coordinate.
+         * @returns {Number} The pixel value at the specified coordinate in this elevation image.
+         * Returns 0 if the coordinate indicates a pixel outside of this elevation image.
+         */
+        ElevationImage.prototype.pixel = function (x, y) {
+            if (x < 0 || x >= this.imageWidth) {
+                return 0;
+            }
+
+            if (y < 0 || y >= this.imageHeight) {
+                return 0;
+            }
+
+            y = this.imageHeight - y - 1; // flip the y coordinate origin to the lower left corner
+            return this.imageData[x + y * this.imageWidth];
+        };
+
+        /**
+         * Returns the elevation at a specified geographic location.
+         * @param {Number} latitude The location's latitude.
+         * @param {Number} longitude The location's longitude.
          * @returns {Number} The elevation at the specified location.
          */
         ElevationImage.prototype.elevationAtLocation = function (latitude, longitude) {
@@ -66,20 +126,22 @@ define([
                 xf = x - x0,
                 yf = y - y0;
 
-            return WWMath.interpolate(yf, WWMath.interpolate(xf, x0y0, x1y0), WWMath.interpolate(xf, x0y1, x1y1));
+            return (1 - xf) * (1 - yf) * x0y0 +
+                xf * (1 - yf) * x1y0 +
+                (1 - xf) * yf * x0y1 +
+                xf * yf * x1y1;
         };
 
         /**
-         * Returns the elevations for a specified sector.
+         * Returns elevations for a specified sector.
          * @param {Sector} sector The sector for which to return the elevations.
-         * @param {number} numLat The number of sample points in the longitudinal direction.
-         * @param {number} numLon The number of sample points in the latitudinal direction.
-         * @param {number} verticalExaggeration The vertical exaggeration to apply to the elevations.
+         * @param {Number} numLat The number of sample points in the longitudinal direction.
+         * @param {Number} numLon The number of sample points in the latitudinal direction.
          * @param {Number[]} result An array in which to return the computed elevations.
          * @throws {ArgumentError} If either the specified sector or result argument is null or undefined, or if the
          * specified number of sample points in either direction is less than 1.
          */
-        ElevationImage.prototype.elevationsForSector = function (sector, numLat, numLon, verticalExaggeration, result) {
+        ElevationImage.prototype.elevationsForGrid = function (sector, numLat, numLon, result) {
             if (!sector) {
                 throw new ArgumentError(
                     Logger.logMessage(Logger.LEVEL_SEVERE, "ElevationImage", "elevationsForSector", "missingSector"));
@@ -102,26 +164,19 @@ define([
                 maxLonSelf = this.sector.maxLongitude,
                 deltaLatSelf = maxLatSelf - minLatSelf,
                 deltaLonSelf = maxLonSelf - minLonSelf,
-                minLatOther = sector.minLatitude,
-                maxLatOther = sector.maxLatitude,
-                minLonOther = sector.minLongitude,
-                maxLonOther = sector.maxLongitude,
-                deltaLatOther = (maxLatOther - minLatOther) / (numLat > 1 ? numLat - 1 : 1),
-                deltaLonOther = (maxLonOther - minLonOther) / (numLon > 1 ? numLon - 1 : 1),
-                lat = minLatOther,
-                lon = minLonOther,
-                index = 0,
+                minLat = sector.minLatitude,
+                maxLat = sector.maxLatitude,
+                minLon = sector.minLongitude,
+                maxLon = sector.maxLongitude,
+                deltaLat = (maxLat - minLat) / (numLat > 1 ? numLat - 1 : 1),
+                deltaLon = (maxLon - minLon) / (numLon > 1 ? numLon - 1 : 1),
+                lat, lon,
+                i, j, index = 0,
                 pixels = this.imageData;
 
-            for (var j = 0; j < numLat; j++) {
-                // Explicitly set the first and last row to minLat and maxLat, respectively, rather than using the
-                // accumulated lat value, in order to ensure that the Cartesian points of adjacent sectors match perfectly.
-                if (j == 0) {
-                    lat = minLatOther;
-                } else if (j === numLat - 1) {
-                    lat = maxLatOther;
-                } else {
-                    lat += deltaLatOther;
+            for (j = 0, lat = minLat; j < numLat; j += 1, lat += deltaLat) {
+                if (j === numLat - 1) {
+                    lat = maxLat; // explicitly set the last lat to the max latitude to ensure alignment
                 }
 
                 if (lat >= minLatSelf && lat <= maxLatSelf) {
@@ -131,15 +186,9 @@ define([
                         y1 = Math.floor(WWMath.clamp(y0 + 1, 0, this.imageHeight - 1)),
                         yf = y - y0;
 
-                    for (var i = 0; i < numLon; i++) {
-                        // Explicitly set the first and last row to minLon and maxLon, respectively, rather than using the
-                        // accumulated lon value, in order to ensure that the Cartesian points of adjacent sectors match perfectly.
-                        if (i == 0) {
-                            lon = minLonOther;
-                        } else if (i === numLon - 1) {
-                            lon = maxLonOther;
-                        } else {
-                            lon += deltaLonOther;
+                    for (i = 0, lon = minLon; i < numLon; i += 1, lon += deltaLon) {
+                        if (i === numLon - 1) {
+                            lon = maxLon; // explicitly set the last lon to the max longitude to ensure alignment
                         }
 
                         if (lon >= minLonSelf && lon <= maxLonSelf) {
@@ -154,11 +203,10 @@ define([
                                 x0y1 = pixels[x0 + y1 * this.imageWidth],
                                 x1y1 = pixels[x1 + y1 * this.imageWidth];
 
-                            result[index] = WWMath.interpolate(yf,
-                                WWMath.interpolate(xf, x0y0, x1y0), WWMath.interpolate(xf, x0y1, x1y1));
-                            result[index] *= verticalExaggeration;
-                            //if (isNaN(result[index]))
-                            //    console.log(result[index]);
+                            result[index] = (1 - xf) * (1 - yf) * x0y0 +
+                            xf * (1 - yf) * x1y0 +
+                            (1 - xf) * yf * x0y1 +
+                            xf * yf * x1y1;
                         }
 
                         index++;
@@ -171,20 +219,18 @@ define([
 
         /**
          * Returns the minimum and maximum elevations within a specified sector.
-         * @param {Sector} sector The sector of interest.
-         * @returns {Number[]} An array containing the minimum and maximum elevations with the specified sector,
+         * @param {Sector} sector The sector of interest. If null or undefined, the minimum and maximum elevations
+         * for the sector associated with this tile are returned.
+         * @returns {Number[]} An array containing the minimum and maximum elevations within the specified sector,
          * or null if the specified sector does not include this elevation image's coverage sector.
-         * @throws {ArgumentError} If either the specified sector or result argument is null or undefined.
          */
         ElevationImage.prototype.minAndMaxElevationsForSector = function (sector) {
-            if (!sector) {
-                throw new ArgumentError(
-                    Logger.logMessage(Logger.LEVEL_SEVERE, "ElevationImage", "minAndMaxElevationsForSector", "missingSector"));
-            }
-
             var result = [];
 
-            if (sector.contains(this.sector)) { // The specified sector completely contains this image; return the image min and max.
+            if (!sector) { // the sector is this sector
+                result[0] = this.minElevation;
+                result[1] = this.maxElevation;
+            } else if (sector.contains(this.sector)) { // The specified sector completely contains this image; return the image min and max.
                 if (result[0] > this.minElevation) {
                     result[0] = this.minElevation;
                 }
@@ -245,8 +291,8 @@ define([
         };
 
         /**
-         * Determines the minimum and maximum elevation within this elevation image and stores those values within
-         * this object.
+         * Determines the minimum and maximum elevations within this elevation image and stores those values within
+         * this object. See [minAndMaxElevationsForSector]{@link ElevationImage#minAndMaxElevationsForSector}
          */
         ElevationImage.prototype.findMinAndMaxElevation = function () {
             if (this.imageData && (this.imageData.length > 0)) {

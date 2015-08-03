@@ -20,27 +20,31 @@ define([
 
         /**
          * Constructs a GPU program with specified source code for vertex and fragment shaders.
+         * This constructor is intended to be called only by subclasses.
          * <p>
-         * This constructor creates WebGL shaders for the specified shader sources and attaches them to a new GLSL program. The
-         * method compiles the shaders and then links the program if compilation is successful. Use the [bind]{@link GpuProgram#bind}
-         * function to make the program current during rendering.
+         * This constructor creates WebGL shaders for the specified shader sources and attaches them to a new GLSL
+         * program. The method compiles the shaders and then links the program if compilation is successful. Use the
+         * [DrawContext.bindProgram]{@link DrawContext#bindProgram} function to make the program current during rendering.
          *
          * @alias GpuProgram
          * @constructor
          * @classdesc
-         * Represents an OpenGL shading language (GLSL) shader program and provides methods for identifying and accessing shader
-         * variables. Shader programs are created by instances of this class and made current when the instance's bind
-         * method is invoked.
+         * Represents an OpenGL shading language (GLSL) shader program and provides methods for identifying and
+         * accessing shader variables. Shader programs are created by instances of this class and made current when the
+         * DrawContext.bindProgram function is invoked.
          * <p>
          * This is an abstract class and not intended to be created directly.
          *
          * @param {WebGLRenderingContext} gl The current WebGL context.
          * @param {String} vertexShaderSource The source code for the vertex shader.
          * @param {String} fragmentShaderSource The source code for the fragment shader.
+         * @param {String[]} attributeBindings An array of attribute variable names whose bindings are to be explicitly
+         * specified. Each name is bound to its corresponding index in the array. May be null, in which case the
+         * linker determines all the bindings.
          * @throws {ArgumentError} If either source is null or undefined, the shaders cannot be compiled, or linking of
          * the compiled shaders into a program fails.
          */
-        var GpuProgram = function (gl, vertexShaderSource, fragmentShaderSource) {
+        var GpuProgram = function (gl, vertexShaderSource, fragmentShaderSource, attributeBindings) {
             if (!vertexShaderSource || !fragmentShaderSource) {
                 throw new ArgumentError(Logger.logMessage(Logger.LEVEL_SEVERE, "GpuProgram", "constructor",
                     "The specified shader source is null or undefined."));
@@ -69,6 +73,12 @@ define([
             gl.attachShader(program, vShader.shaderId);
             gl.attachShader(program, fShader.shaderId);
 
+            if (attributeBindings) {
+                for (var i = 0, len = attributeBindings.length; i < len; i++) {
+                    gl.bindAttribLocation(program, i, attributeBindings[i]);
+                }
+            }
+
             if (!this.link(gl, program)) {
                 // Get the info log before deleting the program.
                 var infoLog = gl.getProgramInfoLog(program);
@@ -83,24 +93,28 @@ define([
                     "Unable to link shader program: " + infoLog));
             }
 
-            // These will be filled in as attribute locations are requested.
+            /**
+             * Indicates the WebGL program object associated with this GPU program.
+             * @type {WebGLProgram}
+             * @readonly
+             */
+            this.programId = program;
+
+            // Internal. Intentionally not documented. These will be filled in as attribute locations are requested.
             this.attributeLocations = {};
             this.uniformLocations = {};
 
-            this.programId = program;
+            // Internal. Intentionally not documented.
             this.vertexShader = vShader;
+
+            // Internal. Intentionally not documented.
             this.fragmentShader = fShader;
 
+            // Internal. Intentionally not documented.
             this.size = vertexShaderSource.length + fragmentShaderSource.length;
-        };
 
-        /**
-         * Makes this program the current program in the specified WebGL context.
-         *
-         * @param {WebGLRenderingContext} gl The current WebGL context.
-         */
-        GpuProgram.prototype.bind = function (gl) {
-            gl.useProgram(this.programId);
+            // Internal. Intentionally not documented.
+            this.scratchArray = new Float32Array(16);
         };
 
         /**
@@ -190,7 +204,8 @@ define([
          *
          * @param {WebGLRenderingContext} gl The current WebGL context.
          * @param {WebGLProgram} program The WebGL program.
-         * @returns {Boolean} <code>true</code> if linking was successful, otherwise <code>false</code>.
+         * @returns {Boolean} true if linking was successful, otherwise false.
+         * @protected
          */
         GpuProgram.prototype.link = function (gl, program) {
             gl.linkProgram(program);
@@ -204,19 +219,19 @@ define([
          * This functions converts the matrix into column-major order prior to loading its components into the GLSL
          * uniform variable, but does not modify the specified matrix.
          *
-         *
          * @param {WebGLRenderingContext} gl The current WebGL context.
          * @param {Matrix} matrix The matrix to load.
          * @param {WebGLUniformLocation} location The location of the uniform variable in the currently bound GLSL program.
          * @throws {ArgumentError} If the specified matrix is null or undefined.
          */
-        GpuProgram.loadUniformMatrix = function (gl, matrix, location) {
+        GpuProgram.prototype.loadUniformMatrix = function (gl, matrix, location) {
             if (!matrix) {
                 throw new ArgumentError(Logger.logMessage(Logger.LEVEL_SEVERE, "GpuProgram", "loadUniformMatrix",
                     "missingMatrix"));
             }
 
-            gl.uniformMatrix4fv(location, false, matrix.columnMajorComponents(new Float32Array(16)));
+            var columnMajorArray = matrix.columnMajorComponents(this.scratchArray);
+            gl.uniformMatrix4fv(location, false, columnMajorArray);
         };
 
         /**
@@ -230,50 +245,32 @@ define([
          * @param {WebGLUniformLocation} location The location of the uniform variable in the currently bound GLSL program.
          * @throws {ArgumentError} If the specified color is null or undefined.
          */
-        GpuProgram.loadUniformColor = function (gl, color, location) {
+        GpuProgram.prototype.loadUniformColor = function (gl, color, location) {
             if (!color) {
                 throw new ArgumentError(Logger.logMessage(Logger.LEVEL_SEVERE, "GpuProgram", "loadUniformColor",
                     "missingColor"));
             }
 
-            // TODO: investigate - WebGL throws an exception when using uniform4fv
-            var premul = color.premultipliedComponents(new Float32Array(4));
-            //gl.uniform4fv(location, 1, color.premultipliedComponents(new Float32Array(4)));
+            var premul = color.premultipliedComponents(this.scratchArray);
             gl.uniform4f(location, premul[0], premul[1], premul[2], premul[3]);
         };
 
         /**
-         * Loads a specified pick color to a specified uniform location.
+         * Loads the specified RGBA color components as the value of a GLSL vec4 uniform variable with the specified
+         * location.
+         * <p>
+         * This function multiplies the red, green and blue components by the alpha component prior to loading the color
+         * in the GLSL uniform variable.
          *
          * @param {WebGLRenderingContext} gl The current WebGL context.
-         * @param {Color} color The color to load.
-         * @param {WebGLUniformLocation} location The uniform location to store the color to.
+         * @param {Number} red The red component, a number between 0 and 1.
+         * @param {Number} green The green component, a number between 0 and 1.
+         * @param {Number} blue The blue component, a number between 0 and 1.
+         * @param {Number} alpha The alpha component, a number between 0 and 1.
+         * @param {WebGLUniformLocation} location The location of the uniform variable in the currently bound GLSL program.
          */
-        GpuProgram.loadUniformPickColor = function (gl, color, location) {
-            gl.uniform4f(location, color.red, color.green, color.blue, color.alpha);
-
-        };
-
-        /**
-         * Loads a specified floating-point value to a specified uniform location.
-         *
-         * @param {WebGLRenderingContext} gl The current WebGL context.
-         * @param {Number} value The value to load.
-         * @param {WebGLUniformLocation} location The uniform location to store the value to.
-         */
-        GpuProgram.loadUniformFloat = function (gl, value, location) {
-            gl.uniform1f(location, value);
-        };
-
-        /**
-         * Loads a specified integer value to a specified uniform location.
-         *
-         * @param {WebGLRenderingContext} gl The current WebGL context.
-         * @param {Number} value The value to load.
-         * @param {WebGLUniformLocation} location The uniform location to store the value to.
-         */
-        GpuProgram.loadUniformInteger = function (gl, value, location) {
-            gl.uniform1i(location, value);
+        GpuProgram.prototype.loadUniformColorComponents = function (gl, red, green, blue, alpha, location) {
+            gl.uniform4f(location, red * alpha, green * alpha, blue * alpha, alpha);
         };
 
         return GpuProgram;

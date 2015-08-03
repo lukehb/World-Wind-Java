@@ -11,15 +11,21 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         './error/ArgumentError',
         './shaders/BasicProgram',
         './shaders/BasicTextureProgram',
+        './layer/BingAerialLayer',
+        './layer/BingAerialWithLabelsLayer',
+        './layer/BingRoadsLayer',
         './layer/BingWMSLayer',
+        './layer/BlueMarbleLayer',
         './layer/BMNGLandsatLayer',
         './layer/BMNGLayer',
         './layer/BMNGOneImageLayer',
         './layer/BMNGRestLayer',
         './geom/BoundingBox',
+        './gesture/ClickRecognizer',
         './util/Color',
         './shapes/Compass',
         './layer/CompassLayer',
+        './layer/CoordinatesDisplayLayer',
         './gesture/DragRecognizer',
         './render/DrawContext',
         './globe/EarthElevationModel',
@@ -27,15 +33,23 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         './globe/ElevationModel',
         './util/Font',
         './util/FrameStatistics',
+        './layer/FrameStatisticsLayer',
+        './render/FramebufferTexture',
+        './render/FramebufferTile',
+        './render/FramebufferTileController',
         './geom/Frustum',
+        './shapes/GeographicMesh',
         './projections/GeographicProjection',
         './shapes/GeographicText',
         './gesture/GestureRecognizer',
         './globe/Globe',
         './globe/Globe2D',
+        './util/GoToAnimator',
         './shaders/GpuProgram',
         './cache/GpuResourceCache',
         './shaders/GpuShader',
+        './util/HighlightController',
+        './util/ImageSource',
         './render/ImageTile',
         './layer/LandsatRestLayer',
         './layer/Layer',
@@ -49,19 +63,23 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         './geom/Matrix',
         './cache/MemoryCache',
         './cache/MemoryCacheListener',
+        './layer/MercatorTiledImageLayer',
         './navigate/Navigator',
         './navigate/NavigatorState',
+        './util/NominatimGeocoder',
         './error/NotYetImplementedError',
         './util/Offset',
+        './layer/OpenStreetMapImageLayer',
         './gesture/PanRecognizer',
         './shapes/Path',
-        './shapes/PathAttributes',
+        './util/PeriodicTimeSequence',
         './pick/PickedObject',
         './pick/PickedObjectList',
         './gesture/PinchRecognizer',
         './shapes/Placemark',
         './shapes/PlacemarkAttributes',
         './geom/Plane',
+        './shapes/Polygon',
         './geom/Position',
         './projections/ProjectionEquirectangular',
         './projections/ProjectionMercator',
@@ -75,14 +93,15 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         './shapes/ScreenText',
         './geom/Sector',
         './shapes/ShapeAttributes',
+        './formats/shapefile/Shapefile',
         './layer/ShowTessellationLayer',
-        './error/SingletonError',
         './shapes/SurfaceImage',
         './shapes/SurfaceCircle',
         './shapes/SurfaceEllipse',
         './shapes/SurfacePolygon',
         './shapes/SurfacePolyline',
         './shapes/SurfaceRectangle',
+        './render/SurfaceRenderable',
         './shapes/SurfaceSector',
         './shapes/SurfaceShape',
         './shapes/SurfaceShapeTile',
@@ -104,9 +123,15 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         './layer/TiledImageLayer',
         './util/TileFactory',
         './gesture/TiltRecognizer',
+        './gesture/Touch',
         './error/UnsupportedOperationError',
         './geom/Vec2',
         './geom/Vec3',
+        './layer/ViewControlsLayer',
+        './ogc/WmsCapabilities',
+        './layer/WmsLayer',
+        './ogc/WmsLayerCapabilities',
+        './layer/WmsTimeDimensionedLayer',
         './util/WmsUrlBuilder',
         './WorldWindow',
         './util/WWMath',
@@ -117,15 +142,21 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
               ArgumentError,
               BasicProgram,
               BasicTextureProgram,
+              BingAerialLayer,
+              BingAerialWithLabelsLayer,
+              BingRoadsLayer,
               BingWMSLayer,
+              BlueMarbleLayer,
               BMNGLandsatLayer,
               BMNGLayer,
               BMNGOneImageLayer,
               BMNGRestLayer,
               BoundingBox,
+              ClickRecognizer,
               Color,
               Compass,
               CompassLayer,
+              CoordinatesDisplayLayer,
               DragRecognizer,
               DrawContext,
               EarthElevationModel,
@@ -133,15 +164,23 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
               ElevationModel,
               Font,
               FrameStatistics,
+              FrameStatisticsLayer,
+              FramebufferTexture,
+              FramebufferTile,
+              FramebufferTileController,
               Frustum,
+              GeographicMesh,
               GeographicProjection,
               GeographicText,
               GestureRecognizer,
               Globe,
               Globe2D,
+              GoToAnimator,
               GpuProgram,
               GpuResourceCache,
               GpuShader,
+              HighlightController,
+              ImageSource,
               ImageTile,
               LandsatRestLayer,
               Layer,
@@ -155,19 +194,23 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
               Matrix,
               MemoryCache,
               MemoryCacheListener,
+              MercatorTiledImageLayer,
               Navigator,
               NavigatorState,
+              NominatimGeocoder,
               NotYetImplementedError,
               Offset,
+              OpenStreetMapImageLayer,
               PanRecognizer,
               Path,
-              PathAttributes,
+              PeriodicTimeSequence,
               PickedObject,
               PickedObjectList,
               PinchRecognizer,
               Placemark,
               PlacemarkAttributes,
               Plane,
+              Polygon,
               Position,
               ProjectionEquirectangular,
               ProjectionMercator,
@@ -181,14 +224,15 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
               ScreenText,
               Sector,
               ShapeAttributes,
+              Shapefile,
               ShowTessellationLayer,
-              SingletonError,
               SurfaceImage,
               SurfaceCircle,
               SurfaceEllipse,
               SurfacePolygon,
               SurfacePolyline,
               SurfaceRectangle,
+              SurfaceRenderable,
               SurfaceSector,
               SurfaceShape,
               SurfaceShapeTile,
@@ -210,9 +254,15 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
               TiledImageLayer,
               TileFactory,
               TiltRecognizer,
+              Touch,
               UnsupportedOperationError,
               Vec2,
               Vec3,
+              ViewControlsLayer,
+              WmsCapabilities,
+              WmsLayer,
+              WmsLayerCapabilities,
+              WmsTimeDimensionedLayer,
               WmsUrlBuilder,
               WorldWindow,
               WWMath,
@@ -238,6 +288,18 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
              * @constant
              */
             ABSOLUTE: "absolute",
+
+            /**
+             * Indicates that a redraw callback has been called immediately after a redraw.
+             * @constant
+             */
+            AFTER_REDRAW: "afterRedraw",
+
+            /**
+             * Indicates that a redraw callback has been called immediately before a redraw.
+             * @constant
+             */
+            BEFORE_REDRAW: "beforeRedraw",
 
             /**
              * The BEGAN gesture recognizer state. Continuous gesture recognizers transition to this state from the
@@ -267,6 +329,18 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
             CLAMP_TO_GROUND: "clampToGround",
 
             /**
+             * The radius of Earth.
+             * @constant
+             */
+            EARTH_RADIUS: 6371e3,
+
+            /**
+             * Indicates the cardinal direction east.
+             * @constant
+             */
+            EAST: "east",
+
+            /**
              * The ENDED gesture recognizer state. Continuous gesture recognizers transition to this state from either
              * the BEGAN state or the CHANGED state when the current input no longer represents the gesture.
              * @constant
@@ -293,6 +367,23 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
             LINEAR: "linear",
 
             /**
+             * Indicates a multi-point shape, typically within a shapefile.
+             */
+            MULTI_POINT: "multiPoint",
+
+            /**
+             * Indicates the cardinal direction north.
+             * @constant
+             */
+            NORTH: "north",
+
+            /**
+             * Indicates a null shape, typically within a shapefile.
+             * @constant
+             */
+            NULL: "null",
+
+            /**
              * Indicates that the associated parameters are fractional values of the virtual rectangle's width or
              * height in the range [0, 1], where 0 indicates the rectangle's origin and 1 indicates the corner
              * opposite its origin.
@@ -315,6 +406,21 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
             OFFSET_PIXELS: "pixels",
 
             /**
+             * Indicates a point shape, typically within a shapefile.
+             */
+            POINT: "point",
+
+            /**
+             * Indicates a polyline shape, typically within a shapefile.
+             */
+            POLYLINE: "polyline",
+
+            /**
+             * Indicates a polygon shape, typically within a shapefile.
+             */
+            POLYGON: "polygon",
+
+            /**
              * The POSSIBLE gesture recognizer state. Gesture recognizers in this state are idle when there is no input
              * event to evaluate, or are evaluating input events to determine whether or not to transition into another
              * state.
@@ -335,16 +441,40 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
             REDRAW_EVENT_TYPE: "WorldWindRedraw",
 
             /**
+             * Indicates that the related value is specified relative to the globe.
+             * @constant
+             */
+            RELATIVE_TO_GLOBE: "relativeToGlobe",
+
+            /**
              * Indicates an altitude mode relative to the terrain.
              * @constant
              */
             RELATIVE_TO_GROUND: "relativeToGround",
 
             /**
+             * Indicates that the related value is specified relative to the plane of the screen.
+             * @constant
+             */
+            RELATIVE_TO_SCREEN: "relativeToScreen",
+
+            /**
              * Indicates a rhumb path -- a path of constant bearing.
              * @constant
              */
-            RHUMB_LINE: "rhumbLine"
+            RHUMB_LINE: "rhumbLine",
+
+            /**
+             * Indicates the cardinal direction south.
+             * @constant
+             */
+            SOUTH: "south",
+
+            /**
+             * Indicates the cardinal direction west.
+             * @constant
+             */
+            WEST: "west"
         };
 
         WorldWind['AbstractError'] = AbstractError;
@@ -352,15 +482,21 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         WorldWind['ArgumentError'] = ArgumentError;
         WorldWind['BasicProgram'] = BasicProgram;
         WorldWind['BasicTextureProgram'] = BasicTextureProgram;
+        WorldWind['BingAerialLayer'] = BingAerialLayer;
+        WorldWind['BingAerialWithLabelsLayer'] = BingAerialWithLabelsLayer;
+        WorldWind['BingRoadsLayer'] = BingRoadsLayer;
         WorldWind['BingWMSLayer'] = BingWMSLayer;
+        WorldWind['BlueMarbleLayer'] = BlueMarbleLayer;
         WorldWind['BMNGLandsatLayer'] = BMNGLandsatLayer;
         WorldWind['BMNGLayer'] = BMNGLayer;
         WorldWind['BMNGOneImageLayer'] = BMNGOneImageLayer;
         WorldWind['BMNGRestLayer'] = BMNGRestLayer;
         WorldWind['BoundingBox'] = BoundingBox;
+        WorldWind['ClickRecognizer'] = ClickRecognizer;
         WorldWind['Color'] = Color;
         WorldWind['Compass'] = Compass;
         WorldWind['CompassLayer'] = CompassLayer;
+        WorldWind['CoordinatesDisplayLayer'] = CoordinatesDisplayLayer;
         WorldWind['DragRecognizer'] = DragRecognizer;
         WorldWind['DrawContext'] = DrawContext;
         WorldWind['EarthElevationModel'] = EarthElevationModel;
@@ -368,15 +504,23 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         WorldWind['ElevationModel'] = ElevationModel;
         WorldWind['Font'] = Font;
         WorldWind['FrameStatistics'] = FrameStatistics;
+        WorldWind['FrameStatisticsLayer'] = FrameStatisticsLayer;
+        WorldWind['FramebufferTexture'] = FramebufferTexture;
+        WorldWind['FramebufferTile'] = FramebufferTile;
+        WorldWind['FramebufferTileController'] = FramebufferTileController;
         WorldWind['Frustum'] = Frustum;
+        WorldWind['GeographicMesh'] = GeographicMesh;
         WorldWind['GeographicProjection'] = GeographicProjection;
         WorldWind['GeographicText'] = GeographicText;
         WorldWind['GestureRecognizer'] = GestureRecognizer;
         WorldWind['Globe'] = Globe;
         WorldWind['Globe2D'] = Globe2D;
+        WorldWind['GoToAnimator'] = GoToAnimator;
         WorldWind['GpuProgram'] = GpuProgram;
         WorldWind['GpuResourceCache'] = GpuResourceCache;
         WorldWind['GpuShader'] = GpuShader;
+        WorldWind['HighlightController'] = HighlightController;
+        WorldWind['ImageSource'] = ImageSource;
         WorldWind['ImageTile'] = ImageTile;
         WorldWind['LandsatRestLayer'] = LandsatRestLayer;
         WorldWind['Layer'] = Layer;
@@ -390,19 +534,23 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         WorldWind['Matrix'] = Matrix;
         WorldWind['MemoryCache'] = MemoryCache;
         WorldWind['MemoryCacheListener'] = MemoryCacheListener;
+        WorldWind['MercatorTiledImageLayer'] = MercatorTiledImageLayer;
         WorldWind['Navigator'] = Navigator;
         WorldWind['NavigatorState'] = NavigatorState;
+        WorldWind['NominatimGeocoder'] = NominatimGeocoder;
         WorldWind['NotYetImplementedError'] = NotYetImplementedError;
         WorldWind['Offset'] = Offset;
+        WorldWind['OpenStreetMapImageLayer'] = OpenStreetMapImageLayer;
         WorldWind['PanRecognizer'] = PanRecognizer;
         WorldWind['Path'] = Path;
-        WorldWind['PathAttributes'] = PathAttributes;
+        WorldWind['PeriodicTimeSequence'] = PeriodicTimeSequence;
         WorldWind['PickedObject'] = PickedObject;
         WorldWind['PickedObjectList'] = PickedObjectList;
         WorldWind['PinchRecognizer'] = PinchRecognizer;
         WorldWind['Placemark'] = Placemark;
         WorldWind['PlacemarkAttributes'] = PlacemarkAttributes;
         WorldWind['Plane'] = Plane;
+        WorldWind['Polygon'] = Polygon;
         WorldWind['Position'] = Position;
         WorldWind['ProjectionEquirectangular'] = ProjectionEquirectangular;
         WorldWind['ProjectionMercator'] = ProjectionMercator;
@@ -416,14 +564,15 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         WorldWind['ScreenImage'] = ScreenImage;
         WorldWind['Sector'] = Sector;
         WorldWind['ShapeAttributes'] = ShapeAttributes;
+        WorldWind['Shapefile'] = Shapefile;
         WorldWind['ShowTessellationLayer'] = ShowTessellationLayer;
-        WorldWind['SingletonError'] = SingletonError;
         WorldWind['SurfaceImage'] = SurfaceImage;
         WorldWind['SurfaceCircle'] = SurfaceCircle;
         WorldWind['SurfaceEllipse'] = SurfaceEllipse;
         WorldWind['SurfacePolygon'] = SurfacePolygon;
         WorldWind['SurfacePolyline'] = SurfacePolyline;
         WorldWind['SurfaceRectangle'] = SurfaceRectangle;
+        WorldWind['SurfaceRenderable'] = SurfaceRenderable;
         WorldWind['SurfaceSector'] = SurfaceSector;
         WorldWind['SurfaceShape'] = SurfaceShape;
         WorldWind['SurfaceShapeTile'] = SurfaceShapeTile;
@@ -445,9 +594,15 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         WorldWind['TiledImageLayer'] = TiledImageLayer;
         WorldWind['TileFactory'] = TileFactory;
         WorldWind['TiltRecognizer'] = TiltRecognizer;
+        WorldWind['Touch'] = Touch;
         WorldWind['UnsupportedOperationError'] = UnsupportedOperationError;
         WorldWind['Vec2'] = Vec2;
         WorldWind['Vec3'] = Vec3;
+        WorldWind['ViewControlsLayer'] = ViewControlsLayer;
+        WorldWind['WmsCapabilities'] = WmsCapabilities;
+        WorldWind['WmsLayer'] = WmsLayer;
+        WorldWind['WmsLayerCapabilities'] = WmsLayerCapabilities;
+        WorldWind['WmsTimeDimensionedLayer'] = WmsTimeDimensionedLayer;
         WorldWind['WmsUrlBuilder'] = WmsUrlBuilder;
         WorldWind['WWMath'] = WWMath;
         WorldWind['WWUtil'] = WWUtil;
@@ -458,18 +613,26 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
          * Holds configuration parameters for World Wind. Applications may modify these parameters prior to creating
          * their first World Wind objects. Configuration properties are:
          * <ul>
-         *     <li><code>gpuCacheSize</code>: A number indicating the size in bytes to allocate from GPU memory for
-         *     resources such as textures, GLSL programs and buffer objects. Default is 250e6 (250 MB).
+         *     <li><code>gpuCacheSize</code>: A Number indicating the size in bytes to allocate from GPU memory for
+         *     resources such as textures, GLSL programs and buffer objects. Default is 250e6 (250 MB).</li>
+         *     <li><code>baseUrl</code>: The URL of the directory containing the World Wind Library and its resources.</li>
          * </ul>
          * @type {{gpuCacheSize: number}}
          */
         WorldWind.configuration = {
-            gpuCacheSize: 250e6
+            gpuCacheSize: 250e6,
+            baseUrl: (WWUtil.worldwindlibLocation()) || (WWUtil.currentUrlSansFilePart() + '/../')
         };
+
+        /**
+         * Indicates the Bing Maps key to use when requesting Bing Maps resources.
+         * @type {String}
+         * @default null
+         */
+        WorldWind.BingMapsKey = null;
 
         window.WorldWind = WorldWind;
 
         return WorldWind;
     }
-)
-;
+);

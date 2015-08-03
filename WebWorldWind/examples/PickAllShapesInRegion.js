@@ -15,8 +15,10 @@ requirejs(['../src/WorldWind',
         WorldWind.Logger.setLoggingLevel(WorldWind.Logger.LEVEL_WARNING);
 
         var wwd = new WorldWind.WorldWindow("canvasOne");
+        wwd.addLayer(new WorldWind.BMNGOneImageLayer());
         wwd.addLayer(new WorldWind.BMNGLandsatLayer());
         wwd.addLayer(new WorldWind.BingWMSLayer());
+        wwd.addLayer(new WorldWind.CompassLayer);
 
         var images = [
             "plain-black.png",
@@ -42,7 +44,7 @@ requirejs(['../src/WorldWind',
             "castshadow-white.png"
         ];
 
-        var pinLibrary = "http://worldwindserver.net/webworldwind/images/pushpins/",
+        var pinLibrary = WorldWind.WWUtil.currentUrlSansFilePart() + "/../images/pushpins/", // location of the image files
             placemark,
             placemarkAttributes = new WorldWind.PlacemarkAttributes(null),
             highlightAttributes,
@@ -77,20 +79,16 @@ requirejs(['../src/WorldWind',
 
         var layerManger = new LayerManager('divLayerManager', wwd);
 
-        var canvas = document.getElementById("canvasOne"),
-            highlightedItems = [];
+        // Now set up to handle picking.
 
-        canvas.addEventListener("mousemove", function (e) {
-            handlePick(e.clientX, e.clientY);
-        }, false);
+        var highlightedItems = [];
 
-        var tapRecognizer = new WorldWind.TapRecognizer(canvas);
-        tapRecognizer.addGestureListener(function (recognizer) {
-            var location = recognizer.location();
-            handlePick(location[0], location[1]);
-        });
+        var handlePick = function (o) {
+            // The input argument is either an Event or a TapRecognizer. Both have the same properties for determining
+            // the mouse or tap location.
+            var x = o.clientX,
+                y = o.clientY;
 
-        var handlePick = function (x, y) {
             var redrawRequired = highlightedItems.length > 0;
 
             // De-highlight any highlighted placemarks.
@@ -99,7 +97,8 @@ requirejs(['../src/WorldWind',
             }
             highlightedItems = [];
 
-            // Perform the pick.
+            // Perform the pick. Must first convert from window coordinates to canvas coordinates, which are
+            // relative to the upper left corner of the canvas rather than the upper left corner of the page.
             var rectRadius = 50,
                 pickPoint = wwd.canvasCoordinates(x, y),
                 pickRectangle = new WorldWind.Rectangle(pickPoint[0] - rectRadius, pickPoint[1] + rectRadius,
@@ -124,4 +123,10 @@ requirejs(['../src/WorldWind',
             }
         };
 
+        // Listen for mouse moves and highlight the placemarks that the cursor rolls over.
+        wwd.addEventListener("mousemove", handlePick);
+
+        // Listen for taps on mobile devices and highlight the placemarks that the user taps.
+        var tapRecognizer = new WorldWind.TapRecognizer(wwd);
+        tapRecognizer.addGestureListener(handlePick);
     });

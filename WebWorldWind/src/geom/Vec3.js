@@ -42,6 +42,12 @@ define([
         Vec3.prototype = new Float64Array(Vec3.NUM_ELEMENTS);
 
         /**
+         * A vector corresponding to the origin.
+         * @type {Vec3}
+         */
+        Vec3.ZERO = new Vec3(0, 0, 0);
+
+        /**
          * Computes the average of a specified array of points.
          * @param {Vec3[]} points The points whose average to compute.
          * @param {Vec3} result A pre-allocated Vec3 in which to return the computed average.
@@ -72,6 +78,39 @@ define([
                 result[0] += vec[0] / count;
                 result[1] += vec[1] / count;
                 result[2] += vec[2] / count;
+            }
+
+            return result;
+        };
+
+        /**
+         * Computes the average of a specified array of points.
+         * @param {Float32Array} points The points whose average to compute.
+         * @param {Vec3} result A pre-allocated Vec3 in which to return the computed average.
+         * @returns {Vec3} The result argument set to the average of the specified lists of points.
+         * @throws {ArgumentError} If the specified array of points or the result argument is null or undefined..
+         */
+        Vec3.averageOfBuffer = function (points, result) {
+            if (!points || points.length < 1) {
+                throw new ArgumentError(
+                    Logger.logMessage(Logger.LEVEL_SEVERE, "Vec3", "averageBuffer", "missingArray"));
+            }
+
+            if (!result) {
+                throw new ArgumentError(
+                    Logger.logMessage(Logger.LEVEL_SEVERE, "Vec3", "averageBuffer", "missingResult"));
+            }
+
+            var count = points.length / 3;
+
+            result[0] = 0;
+            result[1] = 0;
+            result[2] = 0;
+
+            for (var i = 0; i < count; i++) {
+                result[0] += points[i * 3] / count;
+                result[1] += points[i * 3 + 1] / count;
+                result[2] += points[i * 3 + 2] / count;
             }
 
             return result;

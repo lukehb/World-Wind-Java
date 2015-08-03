@@ -125,7 +125,7 @@ define([
              * A key that uniquely identifies this tile within a level set.
              * @type {string}
              */
-             this.tileKey = this.level.levelNumber.toString() + "." + this.row.toString() + "." + this.column.toString();
+            this.tileKey = this.level.levelNumber.toString() + "." + this.row.toString() + "." + this.column.toString();
 
             /**
              * Describes the tiles in the immediate neighborhood of this tile.
@@ -134,7 +134,7 @@ define([
              * doesn't generate any tile in that direction. If that is the case, the tile in that direction will be 'undefined'.
              * @type {{north: undefined, south: undefined, east: undefined, west: undefined}}
              */
-            this.neighbor = { 'north': undefined, 'south': undefined, 'east': undefined, 'west': undefined };
+            this.neighbor = {'north': undefined, 'south': undefined, 'east': undefined, 'west': undefined};
 
             this.extentTimestamp = undefined;
             this.extentVerticalExaggeration = undefined;
@@ -310,15 +310,17 @@ define([
         Tile.prototype.update = function (dc) {
             var globe = dc.globe,
                 elevationTimestamp = globe.elevationTimestamp(),
-                verticalExaggeration = dc.verticalExaggeration;
+                verticalExaggeration = dc.verticalExaggeration,
+                globeStateKey = dc.globeStateKey;
 
-            if (!this.extentTimestamp ||
-                this.extentTimestamp != elevationTimestamp || !this.extentVerticalExaggeration ||
-                this.extentVerticalExaggeration != verticalExaggeration) {
+            if (!this.extentTimestamp || this.extentTimestamp != elevationTimestamp
+                || this.extentVerticalExaggeration != verticalExaggeration
+                || this.extentGlobeStateKey != globeStateKey) {
                 // Compute the minimum and maximum elevations for this tile's sector, or use zero if the globe has no elevations
                 // in this tile's coverage area. In the latter case the globe does not modify the result parameter.
-                var extremes = [0, 0];
-                globe.minAndMaxElevationsForSector(this.sector, extremes);
+                var extremes = globe.minAndMaxElevationsForSector(this.sector);
+                if (extremes === null)
+                    extremes = [0, 0];
                 this.minElevation = extremes[0];
                 this.maxElevation = extremes[1];
 
@@ -346,6 +348,7 @@ define([
                 // the geometry timestamp can be reliably compared to the elevation timestamp in subsequent frames.
                 this.extentTimestamp = elevationTimestamp;
                 this.extentVerticalExaggeration = verticalExaggeration;
+                this.extentGlobeStateKey = globeStateKey;
 
                 dc.frameStatistics.incrementTileUpdateCount(1);
             }

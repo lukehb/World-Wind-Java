@@ -23,8 +23,9 @@ define([
         '../geom/Position',
         '../geom/Rectangle',
         '../geom/Sector',
+        '../shapes/SurfaceShapeTileBuilder',
         '../render/SurfaceTileRenderer',
-        '../render/TextRenderer',
+        '../render/TextSupport',
         '../geom/Vec2',
         '../geom/Vec3',
         '../util/WWMath'
@@ -45,8 +46,9 @@ define([
               Position,
               Rectangle,
               Sector,
+              SurfaceShapeTileBuilder,
               SurfaceTileRenderer,
-              TextRenderer,
+              TextSupport,
               Vec2,
               Vec3,
               WWMath) {
@@ -64,7 +66,7 @@ define([
              * The starting time of the current frame, in milliseconds.
              * @type {Number}
              */
-            this.timestamp = new Date().getTime();
+            this.timestamp = Date.now();
 
             /**
              * The globe being rendered.
@@ -91,12 +93,6 @@ define([
             this.terrain = null;
 
             /**
-             * The maximum geographic area currently in view.
-             * @type {Sector}
-             */
-            this.visibleSector = null;
-
-            /**
              * The current GPU program.
              * @type {GpuProgram}
              */
@@ -118,7 +114,7 @@ define([
              * The GPU resource cache, which tracks WebGL resources.
              * @type {GpuResourceCache}
              */
-            this.gpuResourceCache = new GpuResourceCache();
+            this.gpuResourceCache = null;
 
             /**
              * The current eye position.
@@ -235,17 +231,29 @@ define([
             this.orderedRenderablesCounter = 0;
 
             /**
-             * A string used to identify this draw context's unit quad VBO in the GPU resource cache.
-             * @type {string}
+             * A shared TextSupport instance.
+             * @type {TextSupport}
              */
-            this.unitQuadKey = "DrawContextUnitQuadKey";
+            this.textSupport = new TextSupport();
 
             /**
-             * The singleton text renderer which is on the WorldWindow prototype.
-             * @type {TextRenderer}
+             * A copy of the current globe's state key. Provided here to avoid having to recompute it every time
+             * it's needed.
+             * @type {String}
              */
-            this.textRenderer = null;
+            this.globeStateKey = null;
+
+            /**
+             * A surface shape tile builder that is inserted into the draw context whenever a layer might need to
+             * render surface shapes. The entry in the draw context must be reset to null after the layer completes.
+             * @type {SurfaceShapeTileBuilder}
+             */
+            this.surfaceShapeTileBuilder = null;
         };
+
+        // Internal use. Intentionally not documented.
+        DrawContext.unitQuadKey = "DrawContextUnitQuadKey";
+        DrawContext.unitQuadKey3 = "DrawContextUnitQuadKey3";
 
         /**
          * Prepare this draw context for the drawing of a new frame.
@@ -273,16 +281,9 @@ define([
         DrawContext.prototype.update = function () {
             var eyePoint = this.navigatorState.eyePoint;
 
+            this.globeStateKey = this.globe.stateKey;
             this.globe.computePositionFromPoint(eyePoint[0], eyePoint[1], eyePoint[2], this.eyePosition);
             this.screenProjection.setToScreenProjection(this.navigatorState.viewport);
-        };
-
-        /**
-         * Indicates whether terrain exists.
-         * @returns {boolean} <code>true</code> if there is terrain, otherwise <code>false</code>.
-         */
-        DrawContext.prototype.hasTerrain = function () {
-            return this.terrain && this.terrain.surfaceGeometry && (this.terrain.surfaceGeometry.length > 0);
         };
 
         /**
@@ -317,14 +318,14 @@ define([
                         "The specified program constructor is null or undefined."));
             }
 
-            var program = this.gpuResourceCache.programForKey(programConstructor);
+            var program = this.gpuResourceCache.resourceForKey(programConstructor.key);
             if (program) {
                 this.bindProgram(gl, program);
             } else {
                 try {
                     program = new programConstructor(gl);
                     this.bindProgram(gl, program);
-                    this.gpuResourceCache.putResource(gl, programConstructor, program, WorldWind.GPU_PROGRAM, program.size);
+                    this.gpuResourceCache.putResource(programConstructor.key, program, program.size);
                 } catch (e) {
                     Logger.log(Logger.LEVEL_SEVERE, "Error attempting to create GPU program.")
                 }
@@ -340,8 +341,18 @@ define([
          */
         DrawContext.prototype.addOrderedRenderable = function (orderedRenderable) {
             if (orderedRenderable) {
-                orderedRenderable.insertionOrder = this.orderedRenderablesCounter++;
-                this.orderedRenderables.push(orderedRenderable);
+                var ore = {
+                    orderedRenderable: orderedRenderable,
+                    insertionOrder: this.orderedRenderablesCounter++,
+                    eyeDistance: orderedRenderable.eyeDistance,
+                    globeStateKey: this.globeStateKey
+                };
+
+                if (this.globe.continuous) {
+                    ore.globeOffset = this.globe.offset;
+                }
+
+                this.orderedRenderables.push(ore);
             }
         };
 
@@ -352,9 +363,18 @@ define([
          */
         DrawContext.prototype.addOrderedRenderableToBack = function (orderedRenderable) {
             if (orderedRenderable) {
-                orderedRenderable.insertionOrder = this.orderedRenderablesCounter++;
-                orderedRenderable.eyeDistance = Number.MAX_VALUE;
-                this.orderedRenderables.push(orderedRenderable);
+                var ore = {
+                    orderedRenderable: orderedRenderable,
+                    insertionOrder: this.orderedRenderablesCounter++,
+                    eyeDistance: Number.MAX_VALUE,
+                    globeStateKey: this.globeStateKey
+                };
+
+                if (this.globe.continuous) {
+                    ore.globeOffset = this.globe.offset;
+                }
+
+                this.orderedRenderables.push(ore);
             }
         };
 
@@ -365,7 +385,7 @@ define([
          */
         DrawContext.prototype.peekOrderedRenderable = function () {
             if (this.orderedRenderables.length > 0) {
-                return this.orderedRenderables[this.orderedRenderables.length - 1];
+                return this.orderedRenderables[this.orderedRenderables.length - 1].orderedRenderable;
             } else {
                 return null;
             }
@@ -378,7 +398,15 @@ define([
          */
         DrawContext.prototype.popOrderedRenderable = function () {
             if (this.orderedRenderables.length > 0) {
-                return this.orderedRenderables.pop();
+                var ore = this.orderedRenderables.pop();
+                this.globeStateKey = ore.globeStateKey;
+
+                if (this.globe.continuous) {
+                    // Restore the globe state to that when the ordered renderable was created.
+                    this.globe.offset = ore.globeOffset;
+                }
+
+                return ore.orderedRenderable;
             } else {
                 return null;
             }
@@ -392,17 +420,17 @@ define([
             // renderable peek and pop access the back of the ordered renderable list, thereby causing ordered renderables to
             // be processed from back to front.
 
-            this.orderedRenderables.sort(function (orA, orB) {
-                var eA = orA.eyeDistance,
-                    eB = orB.eyeDistance;
+            this.orderedRenderables.sort(function (oreA, oreB) {
+                var eA = oreA.eyeDistance,
+                    eB = oreB.eyeDistance;
 
                 if (eA < eB) { // orA is closer to the eye than orB; sort orA before orB
                     return -1;
                 } else if (eA > eB) { // orA is farther from the eye than orB; sort orB before orA
                     return 1;
                 } else { // orA and orB are the same distance from the eye; sort them based on insertion time
-                    var tA = orA.insertionOrder,
-                        tB = orB.insertionOrder;
+                    var tA = oreA.insertionOrder,
+                        tB = oreB.insertionOrder;
 
                     if (tA > tB) {
                         return -1;
@@ -422,7 +450,7 @@ define([
          * @returns {Color} The color at the pick point.
          */
         DrawContext.prototype.readPickColor = function (pickPoint) {
-            var glPickPoint = this.navigatorState.convertPointToViewport(pickPoint, new Vec2(0, 0, 0)),
+            var glPickPoint = this.navigatorState.convertPointToViewport(pickPoint, new Vec2(0, 0)),
                 colorBytes = new Uint8Array(4);
 
             this.currentGlContext.readPixels(glPickPoint[0], glPickPoint[1], 1, 1, WebGLRenderingContext.RGBA,
@@ -477,8 +505,6 @@ define([
          * @returns {null}
          */
         DrawContext.prototype.resolvePick = function (pickableObject) {
-            pickableObject.pickPoint = this.pickPoint;
-
             if (this.deepPicking && !this.regionPicking) {
                 var color = this.readPickColor(this.pickPoint);
                 if (!color) { // getPickColor returns null if the pick point selects the clear color
@@ -651,13 +677,31 @@ define([
         };
 
         /**
-         * Returns the VBO ID of a buffer containing a unit quadrilateral expressed as four vertices at (0, 1), (0, 0),
+         * Indicates whether an extent is smaller than a specified number of pixels.
+         * @param {BoundingBox} extent The extent to test.
+         * @param {Number} numPixels The number of pixels below which the extent is considered small.
+         * @returns {Boolean} True if the extent is smaller than the specified number of pixels, otherwise false.
+         * Returns false if the extent is null or undefined.
+         */
+        DrawContext.prototype.isSmall = function (extent, numPixels) {
+            if (!extent) {
+                return false;
+            }
+
+            var distance = this.navigatorState.eyePoint.distanceTo(extent.center),
+                pixelSize = this.navigatorState.pixelSizeAtDistance(distance);
+
+            return (2 * extent.radius) < (numPixels * pixelSize); // extent diameter less than size of num pixels
+        };
+
+        /**
+         * Returns the VBO ID of a buffer containing a unit quadrilateral expressed as four 2D vertices at (0, 1), (0, 0),
          * (1, 1) and (1, 0). The four vertices are in the order required by a triangle strip. The buffer is created
          * on first use and cached. Subsequent calls to this method return the cached buffer.
          * @returns {Object} The VBO ID identifying the vertex buffer.
          */
         DrawContext.prototype.unitQuadBuffer = function () {
-            var vboId = this.gpuResourceCache.resourceForKey(this.unitQuadKey);
+            var vboId = this.gpuResourceCache.resourceForKey(DrawContext.unitQuadKey);
 
             if (!vboId) {
                 var gl = this.currentGlContext,
@@ -676,8 +720,48 @@ define([
                 gl.bindBuffer(WebGLRenderingContext.ARRAY_BUFFER, vboId);
                 gl.bufferData(WebGLRenderingContext.ARRAY_BUFFER, points, WebGLRenderingContext.STATIC_DRAW);
                 gl.bindBuffer(WebGLRenderingContext.ARRAY_BUFFER, null);
+                this.frameStatistics.incrementVboLoadCount(1);
 
-                this.gpuResourceCache.putResource(gl, this.unitQuadKey, vboId, WorldWind.GPU_BUFFER, points.length * 4);
+                this.gpuResourceCache.putResource(DrawContext.unitQuadKey, vboId, points.length * 4);
+            }
+
+            return vboId;
+        };
+
+        /**
+         * Returns the VBO ID of a buffer containing a unit quadrilateral expressed as four 3D vertices at (0, 1, 0),
+         * (0, 0, 0), (1, 1, 0) and (1, 0, 0).
+         * The four vertices are in the order required by a triangle strip. The buffer is created
+         * on first use and cached. Subsequent calls to this method return the cached buffer.
+         * @returns {Object} The VBO ID identifying the vertex buffer.
+         */
+        DrawContext.prototype.unitQuadBuffer3 = function () {
+            var vboId = this.gpuResourceCache.resourceForKey(DrawContext.unitQuadKey3);
+
+            if (!vboId) {
+                var gl = this.currentGlContext,
+                    points = new Float32Array(12);
+
+                points[0] = 0; // upper left corner
+                points[1] = 1;
+                points[2] = 0;
+                points[3] = 0; // lower left corner
+                points[4] = 0;
+                points[5] = 0;
+                points[6] = 1; // upper right corner
+                points[7] = 1;
+                points[8] = 0;
+                points[9] = 1; // lower right corner
+                points[10] = 0;
+                points[11] = 0;
+
+                vboId = gl.createBuffer();
+                gl.bindBuffer(WebGLRenderingContext.ARRAY_BUFFER, vboId);
+                gl.bufferData(WebGLRenderingContext.ARRAY_BUFFER, points, WebGLRenderingContext.STATIC_DRAW);
+                gl.bindBuffer(WebGLRenderingContext.ARRAY_BUFFER, null);
+                this.frameStatistics.incrementVboLoadCount(1);
+
+                this.gpuResourceCache.putResource(DrawContext.unitQuadKey3, vboId, points.length * 4);
             }
 
             return vboId;

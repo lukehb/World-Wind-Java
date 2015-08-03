@@ -9,19 +9,11 @@
 define([
         '../shaders/BasicProgram',
         '../util/Color',
-        '../render/DrawContext',
-        '../layer/Layer',
-        '../globe/Terrain',
-        '../globe/TerrainTile',
-        '../globe/Tessellator'
+        '../layer/Layer'
     ],
     function (BasicProgram,
               Color,
-              DrawContext,
-              Layer,
-              Terrain,
-              TerrainTile,
-              Tessellator) {
+              Layer) {
         "use strict";
 
         /**
@@ -53,7 +45,7 @@ define([
         };
 
         ShowTessellationLayer.prototype.doRender = function (dc) {
-            if (!dc.hasTerrain() || !dc.terrain.tessellator)
+            if (!dc.terrain || !dc.terrain.tessellator)
                 return;
 
             var terrain = dc.terrain,

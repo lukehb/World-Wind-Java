@@ -31,14 +31,7 @@ define([],
             this.color = color;
 
             /**
-             * The pick point used to select this picked object.
-             * @type {Vec2}
-             * @default null
-             */
-            this.pickPoint = null;
-
-            /**
-             * An optional object associated with this picked object.
+             * The picked shape.
              * @type {Object}
              */
             this.userObject = userObject;

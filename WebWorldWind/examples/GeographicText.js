@@ -3,22 +3,34 @@
  * National Aeronautics and Space Administration. All Rights Reserved.
  */
 /**
+ * Illustrates how to display text at geographic positions.
+ *
  * @version $Id$
  */
 
-requirejs(['../src/WorldWind'], function () {
-    "use strict";
+requirejs(['../src/WorldWind',
+        './LayerManager/LayerManager'],
+    function (ww,
+              LayerManager) {
+        "use strict";
 
-    WorldWind.Logger.setLoggingLevel(WorldWind.Logger.LEVEL_WARNING);
+        // Tell World Wind to log only warnings.
+        WorldWind.Logger.setLoggingLevel(WorldWind.Logger.LEVEL_WARNING);
 
-    var wwd = new WorldWind.WorldWindow("canvasOne");
-    wwd.addLayer(new WorldWind.BMNGLandsatLayer());
-    wwd.addLayer(new WorldWind.BingWMSLayer());
+        // Create the World Window.
+        var wwd = new WorldWind.WorldWindow("canvasOne");
 
-    // A list of "ultra-prominent" peaks in the US.
-    // This list was mined from:
-    //      http://en.wikipedia.org/wiki/List_of_Ultras_of_the_United_States
-    var peaks =
+        /**
+         * Added imagery layers.
+         */
+        wwd.addLayer(new WorldWind.BMNGOneImageLayer());
+        wwd.addLayer(new WorldWind.BMNGLandsatLayer()); // Blue Marble + Landsat
+        wwd.addLayer(new WorldWind.BingWMSLayer()); // Bing
+        wwd.addLayer(new WorldWind.CompassLayer);
+
+        // A list of prominent peaks in the U.S.
+        // This list was mined from http://en.wikipedia.org/wiki/List_of_Ultras_of_the_United_States
+        var peaks =
             [
                 {
                     'name': "Mount McKinley\n(Denali)", // Mount McKinley
@@ -916,37 +928,35 @@ requirejs(['../src/WorldWind'], function () {
                     'latitude': 21.1065,
                     'longitude': -156.8682
                 }
-            ]
-        ;
-    var states = {};
+            ];
 
-    var placenameLayer = new WorldWind.PlacenameLayer();
-    wwd.addLayer(placenameLayer);
+        var text,
+            textAttributes = new WorldWind.TextAttributes(null),
+            textLayer = new WorldWind.RenderableLayer("U.S.A. Peaks");
 
-    var font = new WorldWind.Font(48);
-    font.family = WorldWind.Font.families.monospace;
-    font.variant = WorldWind.Font.variants.default;
-    font.horizontalAlignment = WorldWind.Font.horizontalAlignments.center;
-    font.verticalAlignment = WorldWind.Font.verticalAlignments.bottom;
-    font.weight = WorldWind.Font.weights.normal;
-    font.color = WorldWind.Color.BLACK;
-    font.backgroundColor = WorldWind.Color.WHITE;
+        // Set up the common text attributes.
+        textAttributes.color = WorldWind.Color.CYAN;
 
-    for (var idx = 0, len = peaks.length; idx < len; idx += 1) {
-        var peak = peaks[idx];
+        // For each peak, create a text shape.
+        for (var i = 0, len = peaks.length; i < len; i++) {
+            var peak = peaks[i],
+                peakPosition = new WorldWind.Position(peak.latitude, peak.longitude, peak.elevation);
 
-        // Only display the first peak in any given state.
-        var state = peak.state;
-        if (!states.hasOwnProperty(state)) {
-            var text = new WorldWind.UserFacingText(
-                peak.name,
-                new WorldWind.Position(peak.latitude, peak.longitude, peak.elevation + 1000),
-                font
-            );
-            placenameLayer.addPlacename(text);
-            states[peak.state] = true;
+            text = new WorldWind.GeographicText(peakPosition, peak.name + "\n" + peak.state);
+
+            // Set the text attributes for this shape.
+            text.attributes = textAttributes;
+
+            // Add the text to the layer.
+            textLayer.addRenderable(text);
         }
-    }
 
-    wwd.redraw();
-});
+        // Add the text layer to the World Window's layer list.
+        wwd.addLayer(textLayer);
+
+        // Draw the World Window for the first time.
+        wwd.redraw();
+
+        // Create a layer manager for controlling layer visibility.
+        var layerManger = new LayerManager('divLayerManager', wwd);
+    });

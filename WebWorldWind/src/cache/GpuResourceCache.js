@@ -7,12 +7,14 @@
  * @version $Id$
  */
 define([
+        '../util/AbsentResourceList',
         '../error/ArgumentError',
         '../util/Logger',
         '../cache/MemoryCache',
         '../render/Texture'
     ],
-    function (ArgumentError,
+    function (AbsentResourceList,
+              ArgumentError,
               Logger,
               MemoryCache,
               Texture) {
@@ -29,47 +31,27 @@ define([
          * @throws {ArgumentError} If the specified capacity is 0 or negative or the low-water value is negative.
          */
         var GpuResourceCache = function (capacity, lowWater) {
-            if (capacity < 1) {
+            if (!capacity || capacity < 1) {
                 throw new ArgumentError(
                     Logger.logMessage(Logger.LEVEL_SEVERE, "GpuResourceCache", "constructor",
-                        "Specified cache capacity is 0 or negative."));
+                        "Specified cache capacity is undefined, 0 or negative."));
             }
 
-            if (lowWater < 0) {
+            if (!lowWater || lowWater < 0) {
                 throw new ArgumentError(
                     Logger.logMessage(Logger.LEVEL_SEVERE, "GpuResourceCache", "constructor",
-                        "Specified cache low-water value is negative."));
+                        "Specified cache low-water value is undefined or negative."));
             }
 
             this.entries = new MemoryCache(capacity, lowWater);
-            this.entries.addCacheListener(this);
 
+            this.cacheKeyPool = 0;
             this.currentRetrievals = {};
+            this.absentResourceList = new AbsentResourceList(3, 60e3);
         };
 
-        /**
-         * Function called when a resource is removed from the underlying memory cache. This function disposes of the
-         * associated WebGL resource.
-         * @param {String} key The resource's key.
-         * @param {Object} entry The memory cache entry removed.
-         * @protected
-         */
-        GpuResourceCache.prototype.entryRemoved = function (key, entry) { // MemoryCacheListener method
-            if (typeof entry.resource.dispose === 'function') {
-                entry.resource.dispose(entry.gl);
-            } else if (entry.resourceType === WorldWind.GPU_BUFFER) {
-                entry.gl.deleteBuffer(entry.resource);
-            }
-        };
-
-        /**
-         * Function called when an error occurs while removing a resource from the underlying memory cache.
-         * @param {Error} error The error that occurred.
-         * @param {String} key The resource's key.
-         * @param {Object} entry The memory cache entry removed.
-         */
-        GpuResourceCache.prototype.removalError = function (error, key, entry) { // MemoryCacheListener method
-            Logger.logMessage(Logger.LEVEL_WARNING, "GpuResourceCahce", "removalError", key + "\n" + error.message);
+        GpuResourceCache.prototype.generateCacheKey = function () {
+            return "GpuResourceCache " + ++this.cacheKeyPool;
         };
 
         /**
@@ -93,7 +75,7 @@ define([
          * @returns {Number} The number of unused bytes in this cache.
          */
         GpuResourceCache.prototype.freeCapacity = function () {
-            return this.entries.freeCapacity();
+            return this.entries.freeCapacity;
         };
 
         /**
@@ -139,18 +121,13 @@ define([
         /**
          * Adds a specified resource to this cache. Replaces the existing resource for the specified key if the
          * cache currently contains a resource for that key.
-         * @param {WebGLRenderingContext} gl The current WebGL context.
          * @param {String} key The key of the resource to add.
          * @param {Object} resource The resource to add to the cache.
-         * @param {String} resourceType The type of resource. Recognized values are
-         * [WorldWind.GPU_PROGRAM]{@link WorldWind#GPU_PROGRAM},
-         * [WorldWind.GPU_TEXTURE]{@link WorldWind#GPU_TEXTURE}
-         * and [WorldWind.GPU_BUFFER]{@link WorldWind#GPU_BUFFER}.
          * @param {Number} size The resource's size in bytes. Must be greater than 0.
-         * @throws {ArgumentError} If any of the key, resource or resource-type arguments is null or undefined
-         * or the specified size is less than 1.
+         * @throws {ArgumentError} If either the key or resource arguments is null or undefined
+         * or if the specified size is less than 1.
          */
-        GpuResourceCache.prototype.putResource = function (gl, key, resource, resourceType, size) {
+        GpuResourceCache.prototype.putResource = function (key, resource, size) {
             if (!key) {
                 throw new ArgumentError(
                     Logger.logMessage(Logger.LEVEL_SEVERE, "GpuResourceCache", "putResource", "missingKey."));
@@ -161,12 +138,6 @@ define([
                     Logger.logMessage(Logger.LEVEL_SEVERE, "GpuResourceCache", "putResource", "missingResource."));
             }
 
-            if (!resourceType) {
-                throw new ArgumentError(
-                    Logger.logMessage(Logger.LEVEL_SEVERE, "GpuResourceCache", "putResource",
-                        "The specified resource type is null or undefined."));
-            }
-
             if (size < 1) {
                 throw new ArgumentError(
                     Logger.logMessage(Logger.LEVEL_SEVERE, "GpuResourceCache", "putResource",
@@ -174,9 +145,7 @@ define([
             }
 
             var entry = {
-                gl: gl,
-                resource: resource,
-                resourceType: resourceType
+                resource: resource
             };
 
             this.entries.putEntry(key, entry, size);
@@ -192,30 +161,6 @@ define([
             var entry = this.entries.entryForKey(key);
 
             return entry ? entry.resource : null;
-        };
-
-        /**
-         * Returns the GPU program associated with a specified key.
-         * @param {String} key The key of the resource to find.
-         * @returns {GpuProgram} The GPU program associated with the specified key, or null if the GPU program is not in
-         * this cache, the specified key is null or undefined or the resource for that key is  not a GPU program.
-         */
-        GpuResourceCache.prototype.programForKey = function (key) {
-            var entry = this.entries.entryForKey(key);
-
-            return entry && entry.resourceType === WorldWind.GPU_PROGRAM ? entry.resource : null;
-        };
-
-        /**
-         * Returns the texture associated with a specified key.
-         * @param {String} key The key of the resource to find.
-         * @returns {Texture} The texture associated with the specified key, or null if the texture is not in this
-         * cache, the specified key is null or undefined or the resource associated with the key is not a texture.
-         */
-        GpuResourceCache.prototype.textureForKey = function (key) {
-            var entry = this.entries.entryForKey(key);
-
-            return entry && entry.resourceType === WorldWind.GPU_TEXTURE ? entry.resource : null;
         };
 
         /**
@@ -251,7 +196,7 @@ define([
          * @param {String} imageUrl The URL of the image.
          */
         GpuResourceCache.prototype.retrieveTexture = function (gl, imageUrl) {
-            if (!imageUrl || this.currentRetrievals[imageUrl]) {
+            if (!imageUrl || this.currentRetrievals[imageUrl] || this.absentResourceList.isResourceAbsent(imageUrl)) {
                 return;
             }
 
@@ -263,9 +208,10 @@ define([
 
                 var texture = new Texture(gl, image);
 
-                cache.putResource(gl, imageUrl, texture, WorldWind.GPU_TEXTURE, texture.size);
+                cache.putResource(imageUrl, texture, texture.size);
 
                 delete cache.currentRetrievals[imageUrl];
+                cache.absentResourceList.unmarkResourceAbsent(imageUrl);
 
                 // Send an event to request a redraw.
                 var e = document.createEvent('Event');
@@ -275,6 +221,7 @@ define([
 
             image.onerror = function () {
                 delete cache.currentRetrievals[imageUrl];
+                cache.absentResourceList.markResourceAbsent(imageUrl);
                 Logger.log(Logger.LEVEL_WARNING, "Image retrieval failed: " + imageUrl);
             };
 

@@ -27,14 +27,14 @@ define([
          * or equal to the capacity.
          */
         var MemoryCache = function (capacity, lowWater) {
-            if (capacity < 1) {
+            if (!capacity || capacity < 1) {
                 throw new ArgumentError(Logger.logMessage(Logger.LEVEL_SEVERE, "MemoryCache", "constructor",
-                    "The specified capacity is zero or negative"));
+                    "The specified capacity is undefined, zero or negative"));
             }
 
-            if (lowWater >= capacity) {
+            if (!lowWater || lowWater >= capacity) {
                 throw new ArgumentError(Logger.logMessage(Logger.LEVEL_SEVERE, "MemoryCache", "constructor",
-                    "The specified low-water value is greater than or equal to the capacity"));
+                    "The specified low-water value is undefined, greater than or equal to the capacity"));
             }
 
             /**
@@ -239,8 +239,7 @@ define([
         MemoryCache.prototype.addCacheListener = function (listener) {
             if (!listener) {
                 throw new ArgumentError(
-                    Logger.logMessage(Logger.LEVEL_SEVERE, "MemoryCache", "addCacheListener",
-                        "The specified listener is null or undefined."));
+                    Logger.logMessage(Logger.LEVEL_SEVERE, "MemoryCache", "addCacheListener", "missingListener"));
             }
 
             if (typeof listener.entryRemoved != "function" || typeof listener.removalError != "function") {
@@ -260,8 +259,7 @@ define([
         MemoryCache.prototype.removeCacheListener = function (listener) {
             if (!listener) {
                 throw new ArgumentError(
-                    Logger.logMessage(Logger.LEVEL_SEVERE, "MemoryCache", "removeCacheListener",
-                        "The specified listener is null or undefined."));
+                    Logger.logMessage(Logger.LEVEL_SEVERE, "MemoryCache", "removeCacheListener", "missingListener"));
             }
 
             var index = this.listeners.indexOf(listener);

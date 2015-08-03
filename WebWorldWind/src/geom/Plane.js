@@ -8,10 +8,12 @@
  */
 define([
         '../error/ArgumentError',
+        '../geom/Line',
         '../util/Logger',
         '../geom/Vec3'
     ],
     function (ArgumentError,
+              Line,
               Logger,
               Vec3) {
         "use strict";
@@ -23,11 +25,11 @@ define([
          * @constructor
          * @classdesc Represents a plane in Cartesian coordinates.
          * The plane's X, Y and Z components indicate the plane's normal vector. The distance component
-         * indicates the negative of the plane's distance from the origin. The components are expected to be normalized.
+         * indicates the plane's distance from the origin relative to its normal. The components are expected to be normalized.
          * @param {Number} x The X coordinate of the plane's unit normal vector.
          * @param {Number} y The Y coordinate of the plane's unit normal vector.
          * @param {Number} z The Z coordinate of the plane's unit normal vector.
-         * @param {Number} distance The negative of the plane's distance from the origin.
+         * @param {Number} distance The plane's distance from the origin.
          */
         var Plane = function (x, y, z, distance) {
             /**
@@ -41,6 +43,36 @@ define([
              * @type {Number}
              */
             this.distance = distance;
+        };
+
+        /**
+         * Returns the plane that passes through the specified three points. The plane's normal is the cross product of the
+         * two vectors from pb to pa and pc to pa, respectively. The
+         * returned plane is undefined if any of the specified points are colinear.
+         *
+         * @param {Vec3} pa The first point.
+         * @param {Vec3} pb The second point.
+         * @param {Vec3} pc The third point.
+         *
+         * @return {Plane} A plane passing through the specified points.
+         *
+         * @throws {ArgumentError} if pa, pb, or pc is null.
+         */
+        Plane.fromPoints = function(pa, pb, pc) {
+            if (!pa || !pb || !pc) {
+                throw new ArgumentError(
+                    Logger.logMessage(Logger.LEVEL_SEVERE, "Plane", "fromPoints", "missingVector"));
+            }
+
+            var vab = new Vec3(pb[0], pb[1], pb[2]);
+            vab.subtract(pa);
+            var vac = new Vec3(pc[0], pc[1], pc[2]);
+            vac.subtract(pa);
+            vab.cross(vac);
+            vab.normalize();
+            var d = -vab.dot(pa);
+
+            return new Plane(vab[0], vab[1], vab[2], d);
         };
 
         /**
@@ -189,6 +221,60 @@ define([
                 return 1;
 
             return 0;
+        };
+
+        /**
+         * Clip a line segment to this plane.
+         * @param {Vec3} pointA The first line segment endpoint.
+         * @param {Vec3} pointB The second line segment endpoint.
+         *
+         * @returns {Vec3[]}  An array of two points both on the positive side of the plane. If the direction of the line formed by the
+         *         two points is positive with respect to this plane's normal vector, the first point in the array will be
+         *         the intersection point on the plane, and the second point will be the original segment end point. If the
+         *         direction of the line is negative with respect to this plane's normal vector, the first point in the
+         *         array will be the original segment's begin point, and the second point will be the intersection point on
+         *         the plane. If the segment does not intersect the plane, null is returned. If the segment is coincident
+         *         with the plane, the input points are returned, in their input order.
+         *
+         * @throws {ArgumentError} if either point is null or undefined.
+         */
+        Plane.prototype.clip = function (pointA, pointB) {
+            if (!pointA || !pointB) {
+                throw new ArgumentError(
+                    Logger.logMessage(Logger.LEVEL_SEVERE, "Plane", "clip", "missingPoint"));
+            }
+
+            if (pointA.equals(pointB)) {
+                return null;
+            }
+
+            // Get the projection of the segment onto the plane.
+            var line = Line.fromSegment(pointA, pointB),
+                lDotV = this.normal.dot(line.direction),
+                lDotS, t, p;
+
+            // Are the line and plane parallel?
+            if (lDotV === 0) { // line and plane are parallel and may be coincident.
+                lDotS = this.dot(line.origin);
+                if (lDotS === 0) {
+                    return [pointA, pointB]; // line is coincident with the plane
+                } else {
+                    return null; // line is not coincident with the plane.
+                }
+            }
+
+            // Not parallel so the line intersects. But does the segment intersect?
+            t = -this.dot(line.origin) / lDotV; // lDotS / lDotV
+            if (t < 0 || t > 1) { // segment does not intersect
+                return null;
+            }
+
+            p = line.pointAt(t, new Vec3(0, 0, 0));
+            if (lDotV > 0) {
+                return [p, pointB];
+            } else {
+                return [pointA, p];
+            }
         };
 
         return Plane;

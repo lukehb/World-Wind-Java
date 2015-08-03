@@ -12,30 +12,30 @@ define([
         './globe/EarthElevationModel',
         './util/FrameStatistics',
         './globe/Globe',
+        './globe/Globe2D',
         './cache/GpuResourceCache',
         './util/Logger',
         './navigate/LookAtNavigator',
         './navigate/NavigatorState',
         './geom/Rectangle',
         './geom/Sector',
+        './shapes/SurfaceShapeTileBuilder',
         './globe/Terrain',
-        './globe/Tessellator',
-        './render/TextRenderer',
         './geom/Vec2'],
     function (ArgumentError,
               DrawContext,
               EarthElevationModel,
               FrameStatistics,
               Globe,
+              Globe2D,
               GpuResourceCache,
               Logger,
               LookAtNavigator,
               NavigatorState,
               Rectangle,
               Sector,
+              SurfaceShapeTileBuilder,
               Terrain,
-              Tessellator,
-              TextRenderer,
               Vec2) {
         "use strict";
 
@@ -72,10 +72,10 @@ define([
             function handleContextRestored(event) {
             }
 
-            var gl = this.canvas.getContext("webgl");
-            if (!gl) {
-                gl = this.canvas.getContext("experimental-webgl");
-            }
+            var gl = this.getWebGLContext();
+
+            // Internal. Intentionally not documented. Must be initialized before the navigator is created.
+            this.eventListeners = {};
 
             /**
              * The number of bits in the depth buffer associated with this World Window.
@@ -113,12 +113,6 @@ define([
             this.navigator = new LookAtNavigator(this);
 
             /**
-             * The tessellator used to create the globe's terrain.
-             * @type {Tessellator}
-             */
-            this.tessellator = new Tessellator();
-
-            /**
              * The vertical exaggeration to apply to the terrain.
              * @type {Number}
              */
@@ -148,14 +142,13 @@ define([
             this.redrawCallbacks = [];
 
             // Internal. Intentionally not documented.
-            this.gpuResourceCache = new GpuResourceCache();
+            this.gpuResourceCache = new GpuResourceCache(WorldWind.configuration.gpuCacheSize,
+                0.8 * WorldWind.configuration.gpuCacheSize);
 
             // Internal. Intentionally not documented.
             this.drawContext = new DrawContext();
             this.drawContext.canvas = this.canvas;
-
-            // Internal. Intentionally not documented.
-            this.drawContext.textRenderer = WorldWindow.textRender;
+            this.drawContext.gpuResourceCache = this.gpuResourceCache;
 
             // Internal. Intentionally not documented.
             this.pickingFrameBuffer = null;
@@ -164,17 +157,24 @@ define([
             this.drawContext.canvas2D = document.createElement("canvas");
             this.drawContext.ctx2D = this.drawContext.canvas2D.getContext("2d");
 
-            // Set up to handle redraw requests sent to the canvas. Imagery uses this target because images are
-            // generally specific to the WebGL context associated with the canvas.
-            this.canvas.addEventListener(WorldWind.REDRAW_EVENT_TYPE, function (event) {
-                thisWindow.redraw();
-            }, false);
+            // Internal. Intentionally not documented.
+            this.frameRequested = false;
+            this.frameRequestCallback = null;
 
-            // Set up to handel redraw requests sent to the global window. Elevation models use this target because
-            // they can be shared among world windows.
-            window.addEventListener(WorldWind.REDRAW_EVENT_TYPE, function (event) {
+            /**
+             * Create a surface shape tile builder to accumulate and render surface shapes.
+             * @type {SurfaceShapeTileBuilder}
+             */
+            this.surfaceShapeTileBuilder = new SurfaceShapeTileBuilder();
+
+            // Set up to handle redraw requests sent to the canvas and the global window. Imagery uses the canvas
+            // because images are generally specific to the WebGL context associated with the canvas. Elevation models
+            // use the global window because they can be shared among world windows.
+            var redrawEventListener = function () {
                 thisWindow.redraw();
-            }, false);
+            };
+            this.canvas.addEventListener(WorldWind.REDRAW_EVENT_TYPE, redrawEventListener, false);
+            window.addEventListener(WorldWind.REDRAW_EVENT_TYPE, redrawEventListener, false);
         };
 
         /**
@@ -192,9 +192,119 @@ define([
         };
 
         /**
-         * Redraws the window.
+         * Registers an event listener for the specified event type on this World Window's canvas. This function
+         * delegates the processing of events to the World Window's canvas. For details on this function and its
+         * arguments, see the W3C [EventTarget]{@link http://www.w3.org/TR/DOM-Level-2-Events/events.html#Events-EventTarget}
+         * documentation.
+         *
+         * Registering event listeners using this function enables applications to prevent the World Window's default
+         * navigation behavior. To prevent default navigation behavior, call the [Event]{@link http://www.w3.org/TR/DOM-Level-2-Events/events.html#Events-Event}'s
+         * preventDefault method from within an event listener for any events the navigator should not respond to.
+         *
+         * When an event occurs, this calls the registered event listeners in order of reverse registration. Since the
+         * World Window registers its navigator event listeners first, application event listeners are called before
+         * navigator event listeners.
+         *
+         * @param type The event type to listen for.
+         * @param listener The function to call when the event occurs.
+         * @throws {ArgumentError} If any argument is null or undefined.
+         */
+        WorldWindow.prototype.addEventListener = function (type, listener) {
+            if (!type) {
+                throw new ArgumentError(
+                    Logger.logMessage(Logger.LEVEL_SEVERE, "WorldWindow", "addEventListener", "missingType"));
+            }
+
+            if (!listener) {
+                throw new ArgumentError(
+                    Logger.logMessage(Logger.LEVEL_SEVERE, "WorldWindow", "addEventListener", "missingListener"));
+            }
+
+            var thisWorldWindow = this;
+            var entry = this.eventListeners[type];
+            if (!entry) {
+                entry = {
+                    listeners: [],
+                    callback: function (event) { // calls listeners in reverse registration order
+                        for (var i = entry.listeners.length - 1; i >= 0; i--) {
+                            event.worldWindow = thisWorldWindow;
+                            entry.listeners[i](event);
+                        }
+                    }
+                };
+                this.eventListeners[type] = entry;
+            }
+
+            var index = entry.listeners.indexOf(listener);
+            if (index == -1) { // suppress duplicate listeners
+                entry.listeners.push(listener); // add the listener to the list
+
+                if (entry.listeners.length == 1) { // first listener added, add the event listener callback
+                    this.canvas.addEventListener(type, entry.callback, false);
+                }
+            }
+        };
+
+        /**
+         * Removes an event listener for the specified event type from this World Window's canvas. The listener must be
+         * the same object passed to addEventListener. Calling removeEventListener with arguments that do not identify a
+         * currently registered listener has no effect.
+         *
+         * @param type Indicates the event type the listener registered for.
+         * @param listener The listener to remove. Must be the same function object passed to addEventListener.
+         * @throws {ArgumentError} If any argument is null or undefined.
+         */
+        WorldWindow.prototype.removeEventListener = function (type, listener) {
+            if (!type) {
+                throw new ArgumentError(
+                    Logger.logMessage(Logger.LEVEL_SEVERE, "WorldWindow", "removeEventListener", "missingType"));
+            }
+
+            if (!listener) {
+                throw new ArgumentError(
+                    Logger.logMessage(Logger.LEVEL_SEVERE, "WorldWindow", "removeEventListener", "missingListener"));
+            }
+
+            var entry = this.eventListeners[type];
+            if (!entry) {
+                return; // no entry for the specified type
+            }
+
+            var index = entry.listeners.indexOf(listener);
+            if (index != -1) {
+                entry.listeners.splice(index, 1); // remove the listener from the list
+
+                if (entry.listeners.length == 0) { // last listener removed, remove the event listener callback
+                    this.canvas.removeEventListener(type, entry.callback, false);
+                }
+            }
+        };
+
+        /**
+         * Causes a redraw event for this World Window to be enqueued with the browser. The redraw occurs on the main
+         * thread at a time of the browser's discretion. Applications should call redraw after changing the World
+         * Window's state, but should not expect that change to be reflected on screen immediately after this function
+         * returns. This is the preferred method for requesting a redraw of the World Window.
          */
         WorldWindow.prototype.redraw = function () {
+            if (this.frameRequested) {
+                return; // coalesce redundant redraw requests
+            }
+
+            if (!this.frameRequestCallback) {
+                var self = this;
+                this.frameRequestCallback = function () {
+                    self.doRedraw();
+                };
+            }
+
+            window.requestAnimationFrame(this.frameRequestCallback);
+            this.frameRequested = true;
+        };
+
+        WorldWindow.prototype.doRedraw = function () {
+            this.frameRequested = false;
+
             try {
                 this.resetDrawContext();
                 this.drawFrame();
@@ -290,6 +400,7 @@ define([
             var dc = this.drawContext;
 
             dc.reset();
+            this.globe.offset = 0;
             dc.globe = this.globe;
             dc.layers = this.layers;
             dc.navigatorState = this.navigator.currentState();
@@ -329,10 +440,7 @@ define([
         WorldWindow.prototype.drawFrame = function () {
             this.drawContext.frameStatistics.beginFrame();
 
-            var gl = this.canvas.getContext("webgl");
-            if (!gl) {
-                gl = this.canvas.getContext("experimental-webgl");
-            }
+            var gl = this.getWebGLContext();
 
             // uncomment to debug WebGL
             //var gl = WebGLDebugUtils.makeDebugContext(this.canvas.getContext("webgl"),
@@ -354,14 +462,10 @@ define([
 
             try {
                 this.beginFrame(this.drawContext, this.viewport);
-                this.createTerrain(this.drawContext);
-                this.clearFrame(this.drawContext);
-                if (this.drawContext.pickingMode) {
-                    if (this.drawContext.makePickFrustum()) {
-                        this.doPick(this.drawContext);
-                    }
+                if (this.drawContext.globe instanceof Globe2D && this.drawContext.globe.continuous) {
+                    this.do2DContiguousRepaint(this.drawContext);
                 } else {
-                    this.doDraw(this.drawContext);
+                    this.doNormalRepaint(this.drawContext);
                 }
             } finally {
                 this.endFrame(this.drawContext);
@@ -372,16 +476,50 @@ define([
             }
         };
 
+        WorldWindow.prototype.getWebGLContext = function () {
+            // Request a WebGL context with antialiasing is disabled. Antialiasing causes gaps to appear at the edges of
+            // terrain tiles.
+            var glAttrs = {antialias: false},
+                gl = this.canvas.getContext("webgl", glAttrs);
+            if (!gl) {
+                gl = this.canvas.getContext("experimental-webgl", glAttrs);
+            }
+
+            return gl;
+        };
+
+        WorldWindow.prototype.doNormalRepaint = function (dc) {
+            this.createTerrain(this.drawContext);
+            this.clearFrame(this.drawContext);
+            if (this.drawContext.pickingMode) {
+                if (this.drawContext.makePickFrustum()) {
+                    this.doPick(this.drawContext);
+                }
+            } else {
+                this.doDraw(this.drawContext);
+            }
+        };
+
+        WorldWindow.prototype.do2DContiguousRepaint = function (dc) {
+            this.createTerrain2DContiguous(this.drawContext);
+            this.clearFrame(this.drawContext);
+            if (this.drawContext.pickingMode) {
+                if (this.drawContext.makePickFrustum()) {
+                    this.pick2DContiguous(this.drawContext);
+                }
+            } else {
+                this.draw2DContiguous(this.drawContext);
+            }
+        };
+
         // Internal function. Intentionally not documented.
         WorldWindow.prototype.beginFrame = function (dc, viewport) {
             var gl = dc.currentGlContext;
 
             gl.viewport(viewport.x, viewport.y, viewport.width, viewport.height);
 
-            if (!dc.pickingMode) {
-                gl.enable(WebGLRenderingContext.BLEND);
-                gl.blendFunc(WebGLRenderingContext.ONE, WebGLRenderingContext.ONE_MINUS_SRC_ALPHA);
-            }
+            gl.enable(WebGLRenderingContext.BLEND);
+            gl.blendFunc(WebGLRenderingContext.ONE, WebGLRenderingContext.ONE_MINUS_SRC_ALPHA);
 
             gl.enable(WebGLRenderingContext.CULL_FACE);
             gl.enable(WebGLRenderingContext.DEPTH_TEST);
@@ -410,8 +548,16 @@ define([
 
         // Internal function. Intentionally not documented.
         WorldWindow.prototype.doDraw = function (dc) {
+            this.drawContext.surfaceShapeTileBuilder = this.surfaceShapeTileBuilder;
+            this.surfaceShapeTileBuilder.clear();
+
             this.drawLayers();
-            this.drawOrderedRenderables();
+
+            this.surfaceShapeTileBuilder.doRender(dc);
+
+            if (!this.deferOrderedRendering) {
+                this.drawOrderedRenderables();
+            }
         };
 
         // Internal function. Intentionally not documented.
@@ -419,8 +565,16 @@ define([
             dc.terrain.pick(dc);
 
             if (!this.pickTerrainOnly) {
+                this.drawContext.surfaceShapeTileBuilder = this.surfaceShapeTileBuilder;
+                this.surfaceShapeTileBuilder.clear();
+
                 this.drawLayers();
-                this.drawOrderedRenderables();
+
+                this.surfaceShapeTileBuilder.doRender(dc);
+
+                if (!this.deferOrderedRendering) {
+                    this.drawOrderedRenderables();
+                }
             }
 
             if (this.drawContext.regionPicking) {
@@ -432,17 +586,97 @@ define([
 
         // Internal function. Intentionally not documented.
         WorldWindow.prototype.createTerrain = function (dc) {
-            // TODO: Implement Tessellator to return a Terrain rather than synthesizing this copy here.
-            dc.terrain = new Terrain(); // TODO: have Tessellator.tessellate() return a filled out one of these
-            dc.terrain.surfaceGeometry = this.tessellator.tessellate(dc).tileArray;
-            dc.terrain.globe = dc.globe;
-            dc.terrain.tessellator = this.tessellator;
-            dc.terrain.verticalExaggeration = dc.verticalExaggeration;
-            dc.terrain.sector = Sector.FULL_SPHERE;
+            dc.terrain = this.globe.tessellator.tessellate(dc);
 
-            dc.frameStatistics.setTerrainTileCount(
-                this.drawContext.terrain && this.drawContext.terrain.surfaceGeometry ?
-                    this.drawContext.terrain.surfaceGeometry.length : 0);
+            dc.frameStatistics.setTerrainTileCount(dc.terrain ? dc.terrain.surfaceGeometry.length : 0);
+        };
+
+        WorldWindow.prototype.makeCurrent = function (dc, offset) {
+            dc.globe.offset = offset;
+            dc.globeStateKey = dc.globe.stateKey;
+
+            switch (offset) {
+                case -1:
+                    dc.terrain = this.terrainLeft;
+                    break;
+
+                case 0:
+                    dc.terrain = this.terrainCenter;
+                    break;
+
+                case 1:
+                    dc.terrain = this.terrainRight;
+                    break;
+            }
+        };
+
+        WorldWindow.prototype.createTerrain2DContiguous = function (dc) {
+            this.terrainCenter = null;
+            dc.globe.offset = 0;
+            if (dc.globe.intersectsFrustum(dc.navigatorState.frustumInModelCoordinates)) {
+                this.terrainCenter = dc.globe.tessellator.tessellate(dc);
+            }
+
+            this.terrainRight = null;
+            dc.globe.offset = 1;
+            if (dc.globe.intersectsFrustum(dc.navigatorState.frustumInModelCoordinates)) {
+                this.terrainRight = dc.globe.tessellator.tessellate(dc);
+            }
+
+            this.terrainLeft = null;
+            dc.globe.offset = -1;
+            if (dc.globe.intersectsFrustum(dc.navigatorState.frustumInModelCoordinates)) {
+                this.terrainLeft = dc.globe.tessellator.tessellate(dc);
+            }
+        };
+
+        WorldWindow.prototype.draw2DContiguous = function (dc) {
+            var drawing = "";
+
+            if (this.terrainCenter) {
+                drawing += " 0 ";
+                this.makeCurrent(dc, 0);
+                this.deferOrderedRendering = this.terrainLeft || this.terrainRight;
+                this.doDraw(dc);
+            }
+
+            if (this.terrainRight) {
+                drawing += " 1 ";
+                this.makeCurrent(dc, 1);
+                this.deferOrderedRendering = this.terrainLeft || this.terrainLeft;
+                this.doDraw(dc);
+            }
+
+            this.deferOrderedRendering = false;
+
+            if (this.terrainLeft) {
+                drawing += " -1 ";
+                this.makeCurrent(dc, -1);
+                this.doDraw(dc);
+            }
+            //
+            //console.log(drawing);
+        };
+
+        WorldWindow.prototype.pick2DContiguous = function (dc) {
+            if (this.terrainCenter) {
+                this.makeCurrent(dc, 0);
+                this.deferOrderedRendering = this.terrainLeft || this.terrainRight;
+                this.doPick(dc);
+            }
+
+            if (this.terrainRight) {
+                this.makeCurrent(dc, 1);
+                this.deferOrderedRendering = this.terrainLeft || this.terrainLeft;
+                this.doPick(dc);
+            }
+
+            this.deferOrderedRendering = false;
+
+            if (this.terrainLeft) {
+                this.makeCurrent(dc, -1);
+                this.doPick(dc);
+            }
         };
 
         // Internal function. Intentionally not documented.
@@ -607,10 +841,12 @@ define([
                         if (topObject) {
                             pickedObjects.add(topObject);
                         }
-                        if (terrainObject) {
+                        if (terrainObject && terrainObject != topObject) {
                             pickedObjects.add(terrainObject);
                         }
                     }
+                } else {
+                    pickedObjects.clear();
                 }
             }
         };
@@ -636,9 +872,6 @@ define([
                 }
             }
         };
-
-        // Construct the text renderer singleton and make it a property of the WorldWindow class.
-        WorldWindow.textRender = new TextRenderer();
 
         return WorldWindow;
     }

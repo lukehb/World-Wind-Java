@@ -7,27 +7,17 @@
  * @version $Id$
  */
 define([
-        '../geom/Angle',
         '../error/ArgumentError',
-        '../render/DrawContext',
         '../util/Logger',
         '../geom/Matrix',
-        '../error/NotYetImplementedError',
-        '../render/SurfaceTile',
-        '../shaders/SurfaceTileRendererProgram',
-        '../globe/Terrain',
-        '../globe/Tessellator'
+        '../shapes/SurfaceShapeTile',
+        '../shaders/SurfaceTileRendererProgram'
     ],
-    function (Angle,
-              ArgumentError,
-              DrawContext,
+    function (ArgumentError,
               Logger,
               Matrix,
-              NotYetImplementedError,
-              SurfaceTile,
-              SurfaceTileRendererProgram,
-              Terrain,
-              Tesselator) {
+              SurfaceShapeTile,
+              SurfaceTileRendererProgram) {
         "use strict";
 
         /**
@@ -43,7 +33,8 @@ define([
             this.texMaskMatrix = Matrix.fromIdentity();
             this.texSamplerMatrix = Matrix.fromIdentity();
 
-            this.uvToTexelMatrix = Matrix.fromIdentity();
+            // Internal. Intentionally not documented.
+            this.isSurfaceShapeTileRendering = false;
         };
 
         /**
@@ -63,16 +54,20 @@ define([
                 return;
 
             var terrain = dc.terrain,
-                tileCount = 0, // for frame statistics
+                gl = dc.currentGlContext,
+                tileCount = 0,// for frame statistics,
+                program,
                 terrainTile,
                 terrainTileSector,
                 surfaceTile;
 
-            if (!terrain || !terrain.surfaceGeometry)
+            if (!terrain)
                 return;
 
+            this.isSurfaceShapeTileRendering = surfaceTiles[0] instanceof SurfaceShapeTile;
+
             // For each terrain tile, render it for each overlapping surface tile.
-            this.beginRendering(dc, opacity);
+            program = this.beginRendering(dc, opacity);
             terrain.beginRendering(dc);
             try {
                 for (var i = 0, ttLen = terrain.surfaceGeometry.length; i < ttLen; i++) {
@@ -86,17 +81,34 @@ define([
                             surfaceTile = surfaceTiles[j];
                             if (surfaceTile.sector.overlaps(terrainTileSector)) {
                                 if (surfaceTile.bind(dc)) {
+                                    if (dc.pickingMode) {
+                                        if (surfaceTile.pickColor) {
+                                            program.loadColor(gl, surfaceTile.pickColor);
+                                        } else {
+                                            // Surface shape tiles don't use a pick color. Pick colors are encoded into
+                                            // the colors of the individual shapes drawn into the tile.
+                                        }
+                                    }
+
                                     this.applyTileState(dc, terrainTile, surfaceTile);
                                     terrain.renderTile(dc, terrainTile);
                                     ++tileCount;
                                 }
                             }
                         }
-                    } finally {
+                    }
+                    catch (e) {
+                        console.log(e);
+                    }
+                    finally {
                         terrain.endRenderingTile(dc, terrainTile);
                     }
                 }
-            } finally {
+            }
+            catch (e) {
+                console.log(e);
+            }
+            finally {
                 terrain.endRendering(dc);
                 this.endRendering(dc);
                 dc.frameStatistics.incrementRenderedTileCount(tileCount);
@@ -107,7 +119,15 @@ define([
             var gl = dc.currentGlContext,
                 program = dc.findAndBindProgram(gl, SurfaceTileRendererProgram);
             program.loadTexSampler(gl, WebGLRenderingContext.TEXTURE0);
-            program.loadOpacity(gl, opacity);
+
+            if (dc.pickingMode && !this.isSurfaceShapeTileRendering) {
+                program.loadModulateColor(gl, true);
+            } else {
+                program.loadModulateColor(gl, false);
+                program.loadOpacity(gl, opacity);
+            }
+
+            return program;
         };
 
         SurfaceTileRenderer.prototype.endRendering = function (dc) {
@@ -131,40 +151,12 @@ define([
                 sTrans = -(surfaceSector.minLongitude - terrainSector.minLongitude) / surfaceDeltaLon,
                 tTrans = -(surfaceSector.minLatitude - terrainSector.minLatitude) / surfaceDeltaLat;
 
-            // Texels occur in discrete units and have discrete locations. For a texture map of linear size N,
-            //      the first texel extends from 0 to 1, and
-            //      the last texel extends from N-1 to N.
-            // We want to map UV coordinates to the middle of texel so that it is sampled correctly. Therefore,
-            //      UV = 0  => texel center at 0.5, and
-            //      UV = 1  => texel center at N - 0.5.
-            // So the offset of UV to texel is 0.5 / N, and
-            // the scale of UV to texel is (N - 1) / N.
-            var cache = dc.gpuResourceCache,
-                texture = cache.resourceForKey(surfaceTile.imagePath);
-
-            if (!texture) {
-                texture = cache.resourceForKey(surfaceTile.fallbackTile.imagePath);
-            }
-
-            var width = texture.imageWidth * sScale,
-                height = texture.imageHeight * tScale;
-
-            this.uvToTexelMatrix.set(
-                (width - 1) / width, 0, 0, 0.5 / width,
-                0, (height - 1) / height, 0, 0.5 / height,
-                0, 0, 1, 0,
-                0, 0, 0, 1
-            );
-
             this.texMaskMatrix.set(
                 sScale, 0, 0, sTrans,
                 0, tScale, 0, tTrans,
                 0, 0, 1, 0,
                 0, 0, 0, 1
             );
-
-            // TODO: factor uvToTexelMatrix directly into texMaskMatrix
-            this.texMaskMatrix.multiplyMatrix(this.uvToTexelMatrix);
 
             this.texSamplerMatrix.setToUnitYFlip();
             surfaceTile.applyInternalTransform(dc, this.texSamplerMatrix);

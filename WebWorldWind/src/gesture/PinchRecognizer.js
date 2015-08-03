@@ -6,9 +6,7 @@
  * @exports PinchRecognizer
  * @version $Id$
  */
-define([
-        '../gesture/GestureRecognizer'
-    ],
+define(['../gesture/GestureRecognizer'],
     function (GestureRecognizer) {
         "use strict";
 
@@ -21,23 +19,20 @@ define([
         var PinchRecognizer = function (target) {
             GestureRecognizer.call(this, target);
 
-            /**
-             *
-             * @type {number}
-             */
-            this.scale = 1;
+            // Internal use only. Intentionally not documented.
+            this._scale = 1;
 
             // Internal use only. Intentionally not documented.
-            this.scaleOffset = 1;
+            this._offsetScale = 1;
 
             // Internal use only. Intentionally not documented.
-            this.threshold = 10;
+            this.referenceDistance = 0;
 
             // Internal use only. Intentionally not documented.
-            this.distance = 0;
+            this.threshold = 20;
 
             // Internal use only. Intentionally not documented.
-            this.startDistance = 0;
+            this.weight = 0.4;
 
             // Internal use only. Intentionally not documented.
             this.touchIds = [];
@@ -45,16 +40,37 @@ define([
 
         PinchRecognizer.prototype = Object.create(GestureRecognizer.prototype);
 
+        Object.defineProperties(PinchRecognizer.prototype, {
+            scale: {
+                get: function () {
+                    return this._scale * this._offsetScale;
+                }
+            }
+        });
+
+        /**
+         * @param newState
+         * @protected
+         */
+        PinchRecognizer.prototype.didTransitionToState = function (newState) {
+            GestureRecognizer.prototype.didTransitionToState.call(this, newState);
+
+            if (newState == WorldWind.BEGAN) {
+                this.gestureBegan();
+            } else if (newState == WorldWind.CHANGED) {
+                this.gestureChanged();
+            }
+        };
+
         /**
          * @protected
          */
         PinchRecognizer.prototype.reset = function () {
             GestureRecognizer.prototype.reset.call(this);
 
-            this.scale = 1;
-            this.scaleOffset = 1;
-            this.distance = 0;
-            this.startDistance = 0;
+            this._scale = 1;
+            this._offsetScale = 1;
+            this.referenceDistance = 0;
             this.touchIds = [];
         };
 
@@ -85,11 +101,7 @@ define([
                 }
 
                 if (this.touchIds.length == 2) {
-                    var index0 = this.indexOfTouch(this.touchIds[0]),
-                        index1 = this.indexOfTouch(this.touchIds[1]);
-                    this.distance = this.touchDistance(index0, index1);
-                    this.startDistance = this.distance;
-                    this.scaleOffset = this.scale;
+                    this.touchesStarted();
                 }
             }
         };
@@ -103,13 +115,8 @@ define([
             GestureRecognizer.prototype.touchMove.call(this, event);
 
             if (this.touchIds.length == 2) {
-                var index0 = this.indexOfTouch(this.touchIds[0]),
-                    index1 = this.indexOfTouch(this.touchIds[1]);
-                this.distance = this.touchDistance(index0, index1);
-                this.scale = this.computeScale();
-
                 if (this.state == WorldWind.POSSIBLE) {
-                    if (this.shouldRecognize()) {
+                    if (this.shouldRecognizeTouches()) {
                         this.transitionToState(WorldWind.BEGAN);
                     }
                 } else if (this.state == WorldWind.BEGAN || this.state == WorldWind.CHANGED) {
@@ -143,12 +150,52 @@ define([
         };
 
         /**
+         * @protected
+         */
+        PinchRecognizer.prototype.touchesStarted = function () {
+            var index0 = this.indexOfTouch(this.touchIds[0]),
+                index1 = this.indexOfTouch(this.touchIds[1]);
+
+            this.referenceDistance = this.touchDistance(index0, index1);
+            this._offsetScale *= this._scale;
+            this._scale = 1;
+        };
+
+        /**
          *
          * @returns {boolean}
          * @protected
          */
-        PinchRecognizer.prototype.shouldRecognize = function () {
-            return Math.abs(this.distance - this.startDistance) > this.threshold
+        PinchRecognizer.prototype.shouldRecognizeTouches = function () {
+            var index0 = this.indexOfTouch(this.touchIds[0]),
+                index1 = this.indexOfTouch(this.touchIds[1]),
+                distance = this.touchDistance(index0, index1);
+
+            return Math.abs(distance - this.referenceDistance) > this.threshold
+        };
+
+        /**
+         * @protected
+         */
+        PinchRecognizer.prototype.gestureBegan = function () {
+            var index0 = this.indexOfTouch(this.touchIds[0]),
+                index1 = this.indexOfTouch(this.touchIds[1]);
+
+            this.referenceDistance = this.touchDistance(index0, index1);
+            this._scale = 1;
+        };
+
+        /**
+         * @protected
+         */
+        PinchRecognizer.prototype.gestureChanged = function () {
+            var index0 = this.indexOfTouch(this.touchIds[0]),
+                index1 = this.indexOfTouch(this.touchIds[1]),
+                distance = this.touchDistance(index0, index1),
+                newScale = Math.abs(distance / this.referenceDistance),
+                w = this.weight;
+
+            this._scale = this._scale * (1 - w) + newScale * w;
         };
 
         /**
@@ -162,15 +209,6 @@ define([
             var pointA = this.touches[indexA].clientLocation,
                 pointB = this.touches[indexB].clientLocation;
             return pointA.distanceTo(pointB);
-        };
-
-        /**
-         *
-         * @returns {number}
-         * @protected
-         */
-        PinchRecognizer.prototype.computeScale = function() {
-            return (this.distance / this.startDistance) * this.scaleOffset;
         };
 
         return PinchRecognizer;

@@ -9,23 +9,23 @@
 define([
         '../util/AbsentResourceList',
         '../error/ArgumentError',
+        '../render/ImageTile',
         '../layer/Layer',
         '../util/LevelSet',
         '../util/Logger',
         '../cache/MemoryCache',
         '../render/Texture',
-        '../render/TextureTile',
         '../util/Tile',
         '../util/WWUtil'
     ],
     function (AbsentResourceList,
               ArgumentError,
+              ImageTile,
               Layer,
               LevelSet,
               Logger,
               MemoryCache,
               Texture,
-              TextureTile,
               Tile,
               WWUtil) {
         "use strict";
@@ -121,23 +121,25 @@ define([
             var path = this.cachePath + "-layer/" + level.levelNumber + "/" + row + "/" + row + "_" + column + "."
                 + WWUtil.suffixForMimeType(this.retrievalImageFormat);
 
-            return new TextureTile(sector, level, row, column, path);
+            return new ImageTile(sector, level, row, column, path);
         };
 
         TiledImageLayer.prototype.doRender = function (dc) {
-            if (!dc.terrain.surfaceGeometry)
+            if (!dc.terrain)
                 return;
 
             if (this.expiration && (new Date().getTime() > this.expiration.getTime()))
                 this.currentTilesInvalid = true;
 
-            if (this.currentTilesInvalid || !this.lasTtMVP
-                || !dc.navigatorState.modelviewProjection.equals(this.lasTtMVP)) {
+            if (this.currentTilesInvalid
+                || !this.lasTtMVP || !dc.navigatorState.modelviewProjection.equals(this.lasTtMVP)
+                || dc.globeStateKey != this.lastGlobeStateKey) {
                 this.assembleTiles(dc);
                 this.currentTilesInvalid = false;
             }
 
             this.lasTtMVP = dc.navigatorState.modelviewProjection;
+            this.lastGlobeStateKey = dc.globeStateKey;
 
             if (this.currentTiles.length > 0) {
                 dc.surfaceTileRenderer.renderTiles(dc, this.currentTiles, this.opacity);
@@ -147,7 +149,7 @@ define([
         };
 
         TiledImageLayer.prototype.isLayerInView = function (dc) {
-            return !dc.visibleSector || dc.visibleSector.intersects(this.levels.sector);
+            return dc.terrain || dc.terrain.sector.intersects(this.levels.sector);
         };
 
         TiledImageLayer.prototype.createTopLevelTiles = function (dc) {
@@ -235,10 +237,8 @@ define([
         };
 
         TiledImageLayer.prototype.isTileVisible = function (dc, tile) {
-            var visibleSector = dc.visibleSector;
-
-            if (visibleSector && visibleSector.intersects(tile.sector)) {
-                return true;
+            if (dc.globe.projectionLimits && !tile.sector.overlaps(dc.globe.projectionLimits)) {
+                return false;
             }
 
             return tile.extent.intersectsFrustum(dc.navigatorState.frustumInModelCoordinates);
@@ -275,7 +275,7 @@ define([
                 image.onload = function () {
                     Logger.log(Logger.LEVEL_INFO, "Image retrieval succeeded: " + url);
                     var texture = new Texture(gl, image);
-                    cache.putResource(gl, imagePath, texture, WorldWind.GPU_TEXTURE, texture.size);
+                    cache.putResource(imagePath, texture, texture.size);
 
                     layer.removeFromCurrentRetrievals(imagePath);
                     layer.currentTilesInvalid = true;

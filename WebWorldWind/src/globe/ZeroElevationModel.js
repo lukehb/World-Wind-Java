@@ -9,10 +9,14 @@
 define([
         '../error/ArgumentError',
         '../globe/ElevationModel',
-        '../util/Logger'],
+        '../geom/Location',
+        '../util/Logger',
+        '../geom/Sector'],
     function (ArgumentError,
               ElevationModel,
-              Logger) {
+              Location,
+              Logger,
+              Sector) {
         "use strict";
 
         /**
@@ -23,7 +27,7 @@ define([
          * @augments ElevationModel
          */
         var ZeroElevationModel = function () {
-            ElevationModel.call(this);
+            ElevationModel.call(this, Sector.FULL_SPHERE, new Location(45, 45), 1, " ", " ", 150, 150);
 
             /**
              * Indicates this elevation model's display name.
@@ -40,7 +44,7 @@ define([
              * @default Date.getTime() at construction
              * @readonly
              */
-            this.timestamp = new Date().getTime();
+            this.timestamp = Date.now();
 
             /**
              * This elevation model's minimum elevation, which is always zero.
@@ -65,26 +69,17 @@ define([
         /**
          * Returns the minimum and maximum elevations within a specified sector.
          * @param {Sector} sector The sector for which to determine extreme elevations.
-         * @param {Number[]} result A pre-allocated array in which to return the minimum and maximum elevations.
-         * @returns {Number[]} The specified result argument containing, respectively, the minimum and maximum elevations.
-         * @throws {ArgumentError} If the specified sector or result array is null or undefined.
+         * @returns {Number[]} An array containing the minimum and maximum elevations.
+         * @throws {ArgumentError} If the specified sector is null or undefined.
          */
-        ZeroElevationModel.prototype.minAndMaxElevationsForSector = function (sector, result) {
+        ZeroElevationModel.prototype.minAndMaxElevationsForSector = function (sector) {
             if (!sector) {
                 throw new ArgumentError(
                     Logger.logMessage(Logger.LEVEL_SEVERE, "ZeroElevationModel", "minAndMaxElevationsForSector",
                         "missingSector"));
             }
-            if (!result) {
-                throw new ArgumentError(
-                    Logger.logMessage(Logger.LEVEL_SEVERE, "ZeroElevationModel", "minAndMaxElevationsAtLocation",
-                        "missingResult"));
-            }
 
-            result[0] = 0;
-            result[1] = 0;
-
-            return result;
+            return [0, 0];
         };
 
         /**
@@ -113,8 +108,8 @@ define([
          * to hold numLatitude x numLongitude values.
          */
         ZeroElevationModel.prototype.elevationsForSector = function (sector, numLatitude, numLongitude,
-                                                                        targetResolution, verticalExaggeration,
-                                                                        result) {
+                                                                     targetResolution, verticalExaggeration,
+                                                                     result) {
             if (!sector) {
                 throw new ArgumentError(
                     Logger.logMessage(Logger.LEVEL_SEVERE, "ZeroElevationModel", "elevationsForSector", "missingSector"));

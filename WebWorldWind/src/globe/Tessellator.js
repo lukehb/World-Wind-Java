@@ -80,27 +80,19 @@ define([
                 this.tileWidth,
                 this.tileHeight);
 
-            this.topLevelTiles = undefined;
+            this.topLevelTiles = {};
             this.currentTiles = new TerrainTileList(this);
-            this.currentCoverage = undefined;
 
             this.tileCache = new MemoryCache(5000000, 4000000); // Holds 316 32x32 tiles.
-
-            this.detailHintOrigin = 1.1;
-            this.detailHint = 0;
 
             this.elevationTimestamp = undefined;
             this.lastModelViewProjection = undefined;
 
             this.vertexPointLocation = -1;
             this.vertexTexCoordLocation = -1;
-            this.vertexElevationLocation = -1;
             this.modelViewProjectionMatrixLocation = -1;
 
-            this.elevationShadingEnabled = false;
-
             this.texCoords = undefined;
-            this.numTexCoords = undefined;
             this.texCoordVboCacheKey = 'global_tex_coords';
 
             this.indices = undefined;
@@ -147,9 +139,8 @@ define([
             this.numWireframeIndices = undefined;
             this.wireframeIndicesVboCacheKey = 'global_wireframe_indices';
 
-            this.tileElevations = undefined;
-
             this.scratchMatrix = Matrix.fromIdentity();
+            this.scratchElevations = null;
 
             this.corners = {};
             this.tiles = [];
@@ -168,30 +159,31 @@ define([
             }
 
             var lastElevationsChange = dc.globe.elevationTimestamp();
-            if (this.currentTiles &&
-                this.elevationTimestamp == lastElevationsChange &&
-                !this.lastModelViewProjection &&
-                dc.navigatorState.modelviewProjection.equals(this.lastModelViewProjection)) {
-                return this.currentTiles;
+            if (this.lastGlobeStateKey === dc.globeStateKey
+                && this.elevationTimestamp === lastElevationsChange
+                && this.lastModelViewProjection
+                && dc.navigatorState.modelviewProjection.equals(this.lastModelViewProjection)) {
+
+                return this.lastTerrain;
             }
 
             var navigatorState = dc.navigatorState;
 
             this.lastModelViewProjection = navigatorState.modelviewProjection;
-
-            this.currentTiles.removeAllTiles();
-            this.currentCoverage = undefined;
+            this.lastGlobeStateKey = dc.globeStateKey;
             this.elevationTimestamp = lastElevationsChange;
 
-            if (!this.topLevelTiles || this.topLevelTiles.length == 0) {
-                this.createTopLevelTiles();
+            this.currentTiles.removeAllTiles();
+
+            if (!this.topLevelTiles[dc.globeStateKey] || this.topLevelTiles[dc.globeStateKey].length == 0) {
+                this.createTopLevelTiles(dc);
             }
 
             this.corners = {};
             this.tiles = [];
 
-            for (var index = 0; index < this.topLevelTiles.length; index += 1) {
-                var tile = this.topLevelTiles[index];
+            for (var index = 0, len = this.topLevelTiles[dc.globeStateKey].length; index < len; index += 1) {
+                var tile = this.topLevelTiles[dc.globeStateKey][index];
 
                 tile.update(dc);
 
@@ -204,18 +196,10 @@ define([
 
             this.finishTessellating();
 
-            /*
-            var terrain = new Terrain();
-            terrain.surfaceGeometry = this.currentTiles.tileArray;
-            terrain.globe = globe;
-            terrain.tessellator = this;
-            terrain.verticalExaggeration = dc.verticalExaggeration;
-            terrain.sector = Sector.FULL_SPHERE;
+            this.lastTerrain = this.currentTiles.length === 0 ? null
+                : new Terrain(dc.globe, this, this.currentTiles, dc.verticalExaggeration);
 
-            return terrain;
-            */
-
-            return this.currentTiles;
+            return this.lastTerrain;
         };
 
         /**
@@ -227,7 +211,7 @@ define([
          * @throws {ArgumentError} If the specified sector or level is null or undefined or the row or column arguments
          * are less than zero.
          */
-        Tessellator.prototype.createTile = function(tileSector, level, row, column) {
+        Tessellator.prototype.createTile = function (tileSector, level, row, column) {
             if (!tileSector) {
                 throw new ArgumentError(
                     Logger.logMessage(Logger.LEVEL_SEVERE, "Tile", "constructor", "missingSector"));
@@ -278,10 +262,6 @@ define([
             this.modelViewProjectionMatrixLocation = program.uniformLocation(gl, "mvpMatrix");
             gl.enableVertexAttribArray(this.vertexPointLocation);
 
-            if (this.elevationShadingEnabled && this.vertexElevationLocation >= 0) {
-                gl.enableVertexAttribArray(this.vertexElevationLocation);
-            }
-
             if (this.vertexTexCoordLocation >= 0) { // location of vertexTexCoord attribute is -1 when the basic program is bound
                 var texCoordVbo = gpuResourceCache.resourceForKey(this.texCoordVboCacheKey);
                 gl.bindBuffer(WebGLRenderingContext.ARRAY_BUFFER, texCoordVbo);
@@ -310,8 +290,6 @@ define([
             if (this.vertexPointLocation >= 0) {
                 gl.disableVertexAttribArray(this.vertexPointLocation);
             }
-            if (this.elevationShadingEnabled && this.vertexElevationLocation >= 0)
-                gl.disableVertexAttribArray(this.vertexElevationLocation);
 
             if (this.vertexTexCoordLocation >= 0) { // location of vertexTexCoord attribute is -1 when the basic program is bound
                 gl.disableVertexAttribArray(this.vertexTexCoordLocation);
@@ -340,13 +318,14 @@ define([
             this.scratchMatrix.setToMultiply(dc.navigatorState.modelviewProjection, terrainTile.transformationMatrix);
             GpuProgram.loadUniformMatrix(gl, this.scratchMatrix, this.modelViewProjectionMatrixLocation);
 
-            var vbo = gpuResourceCache.resourceForKey(terrainTile.geometryVboCacheKey);
+            var vboCacheKey = dc.globeStateKey + terrainTile.geometryVboCacheKey,
+                vbo = gpuResourceCache.resourceForKey(vboCacheKey);
             if (!vbo) {
                 vbo = gl.createBuffer();
                 gl.bindBuffer(WebGLRenderingContext.ARRAY_BUFFER, vbo);
                 gl.bufferData(WebGLRenderingContext.ARRAY_BUFFER, terrainTile.points, WebGLRenderingContext.STATIC_DRAW);
                 dc.frameStatistics.incrementVboLoadCount(1);
-                gpuResourceCache.putResource(gl, terrainTile.geometryVboCacheKey, vbo, WorldWind.GPU_BUFFER, terrainTile.points.length * 3 * 4);
+                gpuResourceCache.putResource(vboCacheKey, vbo, terrainTile.points.length * 3 * 4);
                 terrainTile.geometryVboTimestamp = terrainTile.geometryTimestamp;
             }
             else if (terrainTile.geometryVboTimestamp != terrainTile.geometryTimestamp) {
@@ -359,15 +338,6 @@ define([
             }
 
             gl.vertexAttribPointer(this.vertexPointLocation, 3, WebGLRenderingContext.FLOAT, false, 0, 0);
-            if (this.elevationShadingEnabled && this.vertexElevationLocation >= 0) {
-                gl.bindBuffer(WebGLRenderingContext.ARRAY_BUFFER, null);
-                gl.vertexAttribPointer(this.vertexElevationLocation,
-                    1,
-                    WebGLRenderingContext.FLOAT,
-                    false,
-                    0,
-                    terrainTile.elevations);
-            }
         };
 
         /**
@@ -569,8 +539,8 @@ define([
          ***********************************************************************/
 
         Tessellator.prototype.createTopLevelTiles = function (dc) {
-            this.topLevelTiles = [];
-            Tile.createTilesForLevel(this.levels.firstLevel(), this, this.topLevelTiles);
+            this.topLevelTiles[dc.globeStateKey] = [];
+            Tile.createTilesForLevel(this.levels.firstLevel(), this, this.topLevelTiles[dc.globeStateKey]);
         };
 
         Tessellator.prototype.addTileOrDescendants = function (dc, tile) {
@@ -582,7 +552,7 @@ define([
             this.addTileDescendants(dc, tile);
         };
 
-        Tessellator.prototype.addTileDescendants = function(dc, tile) {
+        Tessellator.prototype.addTileDescendants = function (dc, tile) {
             var nextLevel = tile.level.nextLevel();
             var subTiles = tile.subdivideToCache(nextLevel, this, this.tileCache);
             for (var index = 0; index < subTiles.length; index += 1) {
@@ -653,7 +623,7 @@ define([
             }
         };
 
-        Tessellator.prototype.refineNeighbors = function(dc) {
+        Tessellator.prototype.refineNeighbors = function (dc) {
             var tileRefinementSet = {};
 
             for (var idx = 0, len = this.tiles.length; idx < len; idx += 1) {
@@ -786,21 +756,9 @@ define([
             }
         };
 
-        Tessellator.prototype.finishTessellating = function() {
+        Tessellator.prototype.finishTessellating = function () {
             for (var idx = 0, len = this.tiles.length; idx < len; idx += 1) {
                 var tile = this.tiles[idx];
-
-                // Factor tile into coverage.
-                if (!this.currentCoverage) {
-                    this.currentCoverage = new Sector(
-                        tile.sector.minLatitude,
-                        tile.sector.maxLatitude,
-                        tile.sector.minLongitude,
-                        tile.sector.maxLongitude);
-                }
-                else {
-                    this.currentCoverage.union(tile.sector);
-                }
 
                 this.setNeighbors(tile);
 
@@ -808,7 +766,7 @@ define([
             }
         };
 
-        Tessellator.prototype.setNeighbors = function(tile) {
+        Tessellator.prototype.setNeighbors = function (tile) {
             var sector = tile.sector;
 
             // Corners of the tile.
@@ -871,8 +829,11 @@ define([
         };
 
         Tessellator.prototype.isTileVisible = function (dc, tile) {
-            var isVisible =  tile.extent.intersectsFrustum(dc.navigatorState.frustumInModelCoordinates);
-            return isVisible;
+            if (dc.globe.projectionLimits && !tile.sector.overlaps(dc.globe.projectionLimits)) {
+                return false;
+            }
+
+            return tile.extent.intersectsFrustum(dc.navigatorState.frustumInModelCoordinates);
         };
 
         Tessellator.prototype.tileMeetsRenderCriteria = function (dc, tile) {
@@ -890,65 +851,29 @@ define([
         };
 
         Tessellator.prototype.buildTileVertices = function (dc, tile) {
-            var sector = tile.sector,
+            var numLat = tile.tileHeight + 1, // num points in each dimension is 1 more than the number of tile cells
+                numLon = tile.tileWidth + 1,
+                refPoint = tile.referencePoint,
                 ve = dc.verticalExaggeration;
 
-            // Cartesian tile coordinates are relative to a local origin, called the reference center. Compute the reference
-            // center here and establish a translation transform that is used later to move the tile coordinates into place
-            // relative to the globe.
-            var refCenter = tile.referencePoint;
-            tile.transformationMatrix.setTranslation(refCenter[0], refCenter[1], refCenter[2]);
-
-            // The number of vertices in each dimension is 1 more than the number of cells.
-            var numLatVertices = tile.tileWidth + 1,
-                numLonVertices = tile.tileHeight + 1,
-                vertexStride = 3;
-
-            // Retrieve the elevations for all vertices in the tile. The returned elevations will already have vertical
-            // exaggeration applied.
-            if (!this.tileElevations) {
-                this.tileElevations = new Float64Array(numLatVertices * numLonVertices);
-            }
-            dc.globe.elevationsForSector(sector, numLatVertices, numLonVertices, tile.texelSize, ve, this.tileElevations);
-
-            // Allocate space for the Cartesian vertices.
-            var points = tile.points,
-                numPoints = -1;
-            if (!points) {
-                numPoints = numLatVertices * numLonVertices;
-                points = new Float32Array(numPoints * vertexStride);
-                tile.numPoints = numPoints;
-                tile.points = points;
+            // Allocate space for the tile's elevations.
+            if (!this.scratchElevations) {
+                this.scratchElevations = new Float64Array(numLat * numLon);
             }
 
-            var elevations = tile.elevations;
-            if (!elevations) {
-                elevations = new Float32Array(tile.numPoints);
-                tile.elevations = elevations;
+            // Allocate space for the tile's Cartesian coordinates.
+            if (!tile.points) {
+                tile.points = new Float32Array(numLat * numLon * 3);
             }
 
-            // Compute the tile's Cartesian vertices. The tile's min elevation is used to determine the necessary depth of the
-            // tile border. Use the tile's min elevation instead of the global min elevation in order to reduce tile border
-            // height. As of SVN revision 1768 this change reduces worst-case frame time for terrain rendering by ~20 ms.
-            var borderElevation = tile.minElevation * ve;
-            dc.globe.computePointsFromPositions(
-                sector,
-                tile.tileWidth,
-                tile.tileHeight,
-                this.tileElevations,
-                borderElevation,
-                refCenter,
-                points,
-                vertexStride,
-                elevations);
+            // Retrieve the elevations for all points in the tile. The returned values include vertical exaggeration.
+            dc.globe.elevationsForSector(tile.sector, numLat, numLon, tile.texelSize, ve, this.scratchElevations);
 
-            if (ve != 1.0) {
-                // Need to back out vertical exaggeration from the elevations computed above.
-                numPoints = tile.numPoints;
-                for (var i = 0; i < numPoints; i += 1) {
-                    elevations[i] /= ve;
-                }
-            }
+            // Compute the tile's Cartesian coordinates relative to a local origin, called the reference point.
+            dc.globe.computePointsForSector(tile.sector, numLat, numLon, this.scratchElevations, refPoint, tile.points);
+
+            // Establish a transform that is used later to move the tile coordinates into place relative to the globe.
+            tile.transformationMatrix.setTranslation(refPoint[0], refPoint[1], refPoint[2]);
         };
 
         Tessellator.prototype.buildSharedGeometry = function (tile) {
@@ -958,7 +883,7 @@ define([
             this.buildTexCoords(tile.tileWidth, tile.tileHeight);
 
             // TODO: put all indices into a single buffer
-            
+
             // Build the surface-tile indices.
             this.buildIndices(tile.tileWidth, tile.tileHeight);
 
@@ -970,32 +895,29 @@ define([
         };
 
         Tessellator.prototype.buildTexCoords = function (tileWidth, tileHeight) {
-            var numLatVertices = tileHeight + 1,
-                numLonVertices = tileWidth + 1,
-                vertexStride = 2;
+            var numCols = tileWidth + 1,
+                numRows = tileHeight + 1,
+                colDelta = 1 / tileWidth,
+                rowDelta = 1 / tileHeight,
+                buffer = new Float32Array(numCols * numRows * 2),
+                index = 0;
 
-            // Allocate an array to hold the texture coordinates.
-            var numTexCoords = numLatVertices * numLonVertices,
-                texCoords = new Float32Array(numTexCoords * vertexStride);
+            for (var row = 0, t = 0; row < numRows; row++, t += rowDelta) {
+                if (row == numRows - 1) {
+                    t = 1; // explicitly set the last row coordinate to ensure alignment
+                }
 
-            var s, // Horizontal texture coordinate; varies along tile width or longitude.
-                t; // Vertical texture coordinate; varies along tile height or latitude.
+                for (var col = 0, s = 0; col < numCols; col++, s += colDelta) {
+                    if (col == numCols - 1) {
+                        s = 1; // explicitly set the last column coordinate to ensure alignment
+                    }
 
-            var texIndex = 0;
-            for (var row = 0; row <= tileHeight; row += 1) {
-                t = row / tileHeight;
-
-                for (var col = 0; col <= tileWidth; col += 1) {
-                    s = col / tileWidth;
-
-                    texCoords[texIndex] = s;
-                    texCoords[texIndex + 1] = t;
-                    texIndex += vertexStride;
+                    buffer[index++] = s;
+                    buffer[index++] = t;
                 }
             }
 
-            this.texCoords = texCoords;
-            this.numTexCoords = numTexCoords;
+            this.texCoords = buffer;
         };
 
         Tessellator.prototype.buildIndices = function (tileWidth, tileHeight) {
@@ -1413,7 +1335,7 @@ define([
                 gl.bindBuffer(WebGLRenderingContext.ARRAY_BUFFER, texCoordVbo);
                 gl.bufferData(WebGLRenderingContext.ARRAY_BUFFER, this.texCoords, WebGLRenderingContext.STATIC_DRAW);
                 dc.frameStatistics.incrementVboLoadCount(1);
-                gpuResourceCache.putResource(gl, this.texCoordVboCacheKey, texCoordVbo, WorldWind.GPU_BUFFER, this.texCoords.length * 4 / 2);
+                gpuResourceCache.putResource(this.texCoordVboCacheKey, texCoordVbo, this.texCoords.length * 4 / 2);
             }
 
             var indicesVbo = gpuResourceCache.resourceForKey(this.indicesVboCacheKey);
@@ -1422,7 +1344,7 @@ define([
                 gl.bindBuffer(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, indicesVbo);
                 gl.bufferData(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, this.indices, WebGLRenderingContext.STATIC_DRAW);
                 dc.frameStatistics.incrementVboLoadCount(1);
-                gpuResourceCache.putResource(gl, this.indicesVboCacheKey, indicesVbo, WorldWind.GPU_BUFFER, this.indices.length * 2);
+                gpuResourceCache.putResource(this.indicesVboCacheKey, indicesVbo, this.indices.length * 2);
             }
 
             var indicesNorthVbo = gpuResourceCache.resourceForKey(this.indicesNorthVboCacheKey);
@@ -1431,7 +1353,7 @@ define([
                 gl.bindBuffer(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, indicesNorthVbo);
                 gl.bufferData(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, this.indicesNorth, WebGLRenderingContext.STATIC_DRAW);
                 dc.frameStatistics.incrementVboLoadCount(1);
-                gpuResourceCache.putResource(gl, this.indicesNorthVboCacheKey, indicesNorthVbo, WorldWind.GPU_BUFFER, this.indicesNorth.length * 2);
+                gpuResourceCache.putResource(this.indicesNorthVboCacheKey, indicesNorthVbo, this.indicesNorth.length * 2);
             }
 
             var indicesSouthVbo = gpuResourceCache.resourceForKey(this.indicesSouthVboCacheKey);
@@ -1440,7 +1362,7 @@ define([
                 gl.bindBuffer(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, indicesSouthVbo);
                 gl.bufferData(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, this.indicesSouth, WebGLRenderingContext.STATIC_DRAW);
                 dc.frameStatistics.incrementVboLoadCount(1);
-                gpuResourceCache.putResource(gl, this.indicesSouthVboCacheKey, indicesSouthVbo, WorldWind.GPU_BUFFER, this.indicesSouth.length * 2);
+                gpuResourceCache.putResource(this.indicesSouthVboCacheKey, indicesSouthVbo, this.indicesSouth.length * 2);
             }
 
             var indicesWestVbo = gpuResourceCache.resourceForKey(this.indicesWestVboCacheKey);
@@ -1449,7 +1371,7 @@ define([
                 gl.bindBuffer(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, indicesWestVbo);
                 gl.bufferData(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, this.indicesWest, WebGLRenderingContext.STATIC_DRAW);
                 dc.frameStatistics.incrementVboLoadCount(1);
-                gpuResourceCache.putResource(gl, this.indicesWestVboCacheKey, indicesWestVbo, WorldWind.GPU_BUFFER, this.indicesWest.length * 2);
+                gpuResourceCache.putResource(this.indicesWestVboCacheKey, indicesWestVbo, this.indicesWest.length * 2);
             }
 
             var indicesEastVbo = gpuResourceCache.resourceForKey(this.indicesEastVboCacheKey);
@@ -1458,7 +1380,7 @@ define([
                 gl.bindBuffer(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, indicesEastVbo);
                 gl.bufferData(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, this.indicesEast, WebGLRenderingContext.STATIC_DRAW);
                 dc.frameStatistics.incrementVboLoadCount(1);
-                gpuResourceCache.putResource(gl, this.indicesEastVboCacheKey, indicesEastVbo, WorldWind.GPU_BUFFER, this.indicesEast.length * 2);
+                gpuResourceCache.putResource(this.indicesEastVboCacheKey, indicesEastVbo, this.indicesEast.length * 2);
             }
 
             var indicesLoresNorthVbo = gpuResourceCache.resourceForKey(this.indicesLoresNorthVboCacheKey);
@@ -1467,7 +1389,7 @@ define([
                 gl.bindBuffer(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, indicesLoresNorthVbo);
                 gl.bufferData(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, this.indicesLoresNorth, WebGLRenderingContext.STATIC_DRAW);
                 dc.frameStatistics.incrementVboLoadCount(1);
-                gpuResourceCache.putResource(gl, this.indicesLoresNorthVboCacheKey, indicesLoresNorthVbo, WorldWind.GPU_BUFFER, this.indicesLoresNorth.length * 2);
+                gpuResourceCache.putResource(this.indicesLoresNorthVboCacheKey, indicesLoresNorthVbo, this.indicesLoresNorth.length * 2);
             }
 
             var indicesLoresSouthVbo = gpuResourceCache.resourceForKey(this.indicesLoresSouthVboCacheKey);
@@ -1476,7 +1398,7 @@ define([
                 gl.bindBuffer(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, indicesLoresSouthVbo);
                 gl.bufferData(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, this.indicesLoresSouth, WebGLRenderingContext.STATIC_DRAW);
                 dc.frameStatistics.incrementVboLoadCount(1);
-                gpuResourceCache.putResource(gl, this.indicesLoresSouthVboCacheKey, indicesLoresSouthVbo, WorldWind.GPU_BUFFER, this.indicesLoresSouth.length * 2);
+                gpuResourceCache.putResource(this.indicesLoresSouthVboCacheKey, indicesLoresSouthVbo, this.indicesLoresSouth.length * 2);
             }
 
             var indicesLoresWestVbo = gpuResourceCache.resourceForKey(this.indicesLoresWestVboCacheKey);
@@ -1485,7 +1407,7 @@ define([
                 gl.bindBuffer(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, indicesLoresWestVbo);
                 gl.bufferData(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, this.indicesLoresWest, WebGLRenderingContext.STATIC_DRAW);
                 dc.frameStatistics.incrementVboLoadCount(1);
-                gpuResourceCache.putResource(gl, this.indicesLoresWestVboCacheKey, indicesLoresWestVbo, WorldWind.GPU_BUFFER, this.indicesLoresWest.length * 2);
+                gpuResourceCache.putResource(this.indicesLoresWestVboCacheKey, indicesLoresWestVbo, this.indicesLoresWest.length * 2);
             }
 
             var indicesLoresEastVbo = gpuResourceCache.resourceForKey(this.indicesLoresEastVboCacheKey);
@@ -1494,7 +1416,7 @@ define([
                 gl.bindBuffer(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, indicesLoresEastVbo);
                 gl.bufferData(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, this.indicesLoresEast, WebGLRenderingContext.STATIC_DRAW);
                 dc.frameStatistics.incrementVboLoadCount(1);
-                gpuResourceCache.putResource(gl, this.indicesLoresEastVboCacheKey, indicesLoresEastVbo, WorldWind.GPU_BUFFER, this.indicesLoresEast.length * 2);
+                gpuResourceCache.putResource(this.indicesLoresEastVboCacheKey, indicesLoresEastVbo, this.indicesLoresEast.length * 2);
             }
 
             var outlineIndicesVbo = gpuResourceCache.resourceForKey(this.outlineIndicesVboCacheKey);
@@ -1503,7 +1425,7 @@ define([
                 gl.bindBuffer(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, outlineIndicesVbo);
                 gl.bufferData(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, this.outlineIndices, WebGLRenderingContext.STATIC_DRAW);
                 dc.frameStatistics.incrementVboLoadCount(1);
-                gpuResourceCache.putResource(gl, this.outlineIndicesVboCacheKey, outlineIndicesVbo, WorldWind.GPU_BUFFER, this.outlineIndices.length * 2);
+                gpuResourceCache.putResource(this.outlineIndicesVboCacheKey, outlineIndicesVbo, this.outlineIndices.length * 2);
             }
 
             var wireframeIndicesVbo = gpuResourceCache.resourceForKey(this.wireframeIndicesVboCacheKey);
@@ -1512,7 +1434,7 @@ define([
                 gl.bindBuffer(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, wireframeIndicesVbo);
                 gl.bufferData(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, this.wireframeIndices, WebGLRenderingContext.STATIC_DRAW);
                 dc.frameStatistics.incrementVboLoadCount(1);
-                gpuResourceCache.putResource(gl, this.wireframeIndicesVboCacheKey, wireframeIndicesVbo, WorldWind.GPU_BUFFER, this.wireframeIndices.length * 2);
+                gpuResourceCache.putResource(this.wireframeIndicesVboCacheKey, wireframeIndicesVbo, this.wireframeIndices.length * 2);
             }
         };
 

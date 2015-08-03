@@ -18,6 +18,8 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         './layer/BMNGRestLayer',
         './geom/BoundingBox',
         './util/Color',
+        './shapes/Compass',
+        './layer/CompassLayer',
         './gesture/DragRecognizer',
         './render/DrawContext',
         './globe/EarthElevationModel',
@@ -26,11 +28,15 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         './util/Font',
         './util/FrameStatistics',
         './geom/Frustum',
+        './projections/GeographicProjection',
+        './shapes/GeographicText',
         './gesture/GestureRecognizer',
         './globe/Globe',
+        './globe/Globe2D',
         './shaders/GpuProgram',
         './cache/GpuResourceCache',
         './shaders/GpuShader',
+        './render/ImageTile',
         './layer/LandsatRestLayer',
         './layer/Layer',
         './util/Level',
@@ -48,18 +54,25 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         './error/NotYetImplementedError',
         './util/Offset',
         './gesture/PanRecognizer',
+        './shapes/Path',
+        './shapes/PathAttributes',
         './pick/PickedObject',
         './pick/PickedObjectList',
         './gesture/PinchRecognizer',
         './shapes/Placemark',
         './shapes/PlacemarkAttributes',
-        './layer/PlacenameLayer',
         './geom/Plane',
         './geom/Position',
+        './projections/ProjectionEquirectangular',
+        './projections/ProjectionMercator',
+        './projections/ProjectionPolarEquidistant',
+        './projections/ProjectionUPS',
         './geom/Rectangle',
         './render/Renderable',
         './layer/RenderableLayer',
         './gesture/RotationRecognizer',
+        './shapes/ScreenImage',
+        './shapes/ScreenText',
         './geom/Sector',
         './shapes/ShapeAttributes',
         './layer/ShowTessellationLayer',
@@ -72,6 +85,8 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         './shapes/SurfaceRectangle',
         './shapes/SurfaceSector',
         './shapes/SurfaceShape',
+        './shapes/SurfaceShapeTile',
+        './shapes/SurfaceShapeTileBuilder',
         './render/SurfaceTile',
         './render/SurfaceTileRenderer',
         './shaders/SurfaceTileRendererProgram',
@@ -80,7 +95,9 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         './globe/TerrainTile',
         './globe/TerrainTileList',
         './globe/Tessellator',
-        './render/TextRenderer',
+        './shapes/Text',
+        './shapes/TextAttributes',
+        './render/TextSupport',
         './render/Texture',
         './render/TextureTile',
         './util/Tile',
@@ -88,7 +105,6 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         './util/TileFactory',
         './gesture/TiltRecognizer',
         './error/UnsupportedOperationError',
-        './render/UserFacingText',
         './geom/Vec2',
         './geom/Vec3',
         './util/WmsUrlBuilder',
@@ -108,6 +124,8 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
               BMNGRestLayer,
               BoundingBox,
               Color,
+              Compass,
+              CompassLayer,
               DragRecognizer,
               DrawContext,
               EarthElevationModel,
@@ -116,11 +134,15 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
               Font,
               FrameStatistics,
               Frustum,
+              GeographicProjection,
+              GeographicText,
               GestureRecognizer,
               Globe,
+              Globe2D,
               GpuProgram,
               GpuResourceCache,
               GpuShader,
+              ImageTile,
               LandsatRestLayer,
               Layer,
               Level,
@@ -138,18 +160,25 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
               NotYetImplementedError,
               Offset,
               PanRecognizer,
+              Path,
+              PathAttributes,
               PickedObject,
               PickedObjectList,
               PinchRecognizer,
               Placemark,
               PlacemarkAttributes,
-              PlacenameLayer,
               Plane,
               Position,
+              ProjectionEquirectangular,
+              ProjectionMercator,
+              ProjectionPolarEquidistant,
+              ProjectionUPS,
               Rectangle,
               Renderable,
               RenderableLayer,
               RotationRecognizer,
+              ScreenImage,
+              ScreenText,
               Sector,
               ShapeAttributes,
               ShowTessellationLayer,
@@ -162,6 +191,8 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
               SurfaceRectangle,
               SurfaceSector,
               SurfaceShape,
+              SurfaceShapeTile,
+              SurfaceShapeTileBuilder,
               SurfaceTile,
               SurfaceTileRenderer,
               SurfaceTileRendererProgram,
@@ -170,7 +201,9 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
               TerrainTile,
               TerrainTileList,
               Tessellator,
-              TextRenderer,
+              Text,
+              TextAttributes,
+              TextSupport,
               Texture,
               TextureTile,
               Tile,
@@ -178,7 +211,6 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
               TileFactory,
               TiltRecognizer,
               UnsupportedOperationError,
-              UserFacingText,
               Vec2,
               Vec3,
               WmsUrlBuilder,
@@ -247,21 +279,6 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
              * @constant
              */
             FAILED: "failed",
-
-            /**
-             * Indicates a GPU program resource.
-             */
-            GPU_PROGRAM: "gpuProgram",
-
-            /**
-             * Indicates a GPU texture resource.
-             */
-            GPU_TEXTURE: "gpuTexture",
-
-            /**
-             * Indicates a GPU buffer resource.
-             */
-            GPU_BUFFER: "gpuBuffer",
 
             /**
              * Indicates a great circle path.
@@ -342,6 +359,8 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         WorldWind['BMNGRestLayer'] = BMNGRestLayer;
         WorldWind['BoundingBox'] = BoundingBox;
         WorldWind['Color'] = Color;
+        WorldWind['Compass'] = Compass;
+        WorldWind['CompassLayer'] = CompassLayer;
         WorldWind['DragRecognizer'] = DragRecognizer;
         WorldWind['DrawContext'] = DrawContext;
         WorldWind['EarthElevationModel'] = EarthElevationModel;
@@ -350,11 +369,15 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         WorldWind['Font'] = Font;
         WorldWind['FrameStatistics'] = FrameStatistics;
         WorldWind['Frustum'] = Frustum;
+        WorldWind['GeographicProjection'] = GeographicProjection;
+        WorldWind['GeographicText'] = GeographicText;
         WorldWind['GestureRecognizer'] = GestureRecognizer;
         WorldWind['Globe'] = Globe;
+        WorldWind['Globe2D'] = Globe2D;
         WorldWind['GpuProgram'] = GpuProgram;
         WorldWind['GpuResourceCache'] = GpuResourceCache;
         WorldWind['GpuShader'] = GpuShader;
+        WorldWind['ImageTile'] = ImageTile;
         WorldWind['LandsatRestLayer'] = LandsatRestLayer;
         WorldWind['Layer'] = Layer;
         WorldWind['Level'] = Level;
@@ -372,18 +395,25 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         WorldWind['NotYetImplementedError'] = NotYetImplementedError;
         WorldWind['Offset'] = Offset;
         WorldWind['PanRecognizer'] = PanRecognizer;
+        WorldWind['Path'] = Path;
+        WorldWind['PathAttributes'] = PathAttributes;
         WorldWind['PickedObject'] = PickedObject;
         WorldWind['PickedObjectList'] = PickedObjectList;
         WorldWind['PinchRecognizer'] = PinchRecognizer;
         WorldWind['Placemark'] = Placemark;
         WorldWind['PlacemarkAttributes'] = PlacemarkAttributes;
-        WorldWind['PlacenameLayer'] = PlacenameLayer;
         WorldWind['Plane'] = Plane;
         WorldWind['Position'] = Position;
+        WorldWind['ProjectionEquirectangular'] = ProjectionEquirectangular;
+        WorldWind['ProjectionMercator'] = ProjectionMercator;
+        WorldWind['ProjectionPolarEquidistant'] = ProjectionPolarEquidistant;
+        WorldWind['ProjectionUPS'] = ProjectionUPS;
         WorldWind['Rectangle'] = Rectangle;
         WorldWind['Renderable'] = Renderable;
         WorldWind['RenderableLayer'] = RenderableLayer;
         WorldWind['RotationRecognizer'] = RotationRecognizer;
+        WorldWind['ScreenText'] = ScreenText;
+        WorldWind['ScreenImage'] = ScreenImage;
         WorldWind['Sector'] = Sector;
         WorldWind['ShapeAttributes'] = ShapeAttributes;
         WorldWind['ShowTessellationLayer'] = ShowTessellationLayer;
@@ -396,6 +426,8 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         WorldWind['SurfaceRectangle'] = SurfaceRectangle;
         WorldWind['SurfaceSector'] = SurfaceSector;
         WorldWind['SurfaceShape'] = SurfaceShape;
+        WorldWind['SurfaceShapeTile'] = SurfaceShapeTile;
+        WorldWind['SurfaceShapeTileBuilder'] = SurfaceShapeTileBuilder;
         WorldWind['SurfaceTile'] = SurfaceTile;
         WorldWind['SurfaceTileRenderer'] = SurfaceTileRenderer;
         WorldWind['SurfaceTileRendererProgram'] = SurfaceTileRendererProgram;
@@ -404,7 +436,9 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         WorldWind['TerrainTile'] = TerrainTile;
         WorldWind['TerrainTileList'] = TerrainTileList;
         WorldWind['Tessellator'] = Tessellator;
-        WorldWind['TextRenderer'] = TextRenderer;
+        WorldWind['Text'] = Text;
+        WorldWind['TextAttributes'] = TextAttributes;
+        WorldWind['TextSupport'] = TextSupport;
         WorldWind['Texture'] = Texture;
         WorldWind['TextureTile'] = TextureTile;
         WorldWind['Tile'] = Tile;
@@ -412,7 +446,6 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         WorldWind['TileFactory'] = TileFactory;
         WorldWind['TiltRecognizer'] = TiltRecognizer;
         WorldWind['UnsupportedOperationError'] = UnsupportedOperationError;
-        WorldWind['UserFacingText'] = UserFacingText;
         WorldWind['Vec2'] = Vec2;
         WorldWind['Vec3'] = Vec3;
         WorldWind['WmsUrlBuilder'] = WmsUrlBuilder;
@@ -421,7 +454,18 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         WorldWind['WorldWindow'] = WorldWindow;
         WorldWind['ZeroElevationModel'] = ZeroElevationModel;
 
-        WorldWind.configuration = {};
+        /**
+         * Holds configuration parameters for World Wind. Applications may modify these parameters prior to creating
+         * their first World Wind objects. Configuration properties are:
+         * <ul>
+         *     <li><code>gpuCacheSize</code>: A number indicating the size in bytes to allocate from GPU memory for
+         *     resources such as textures, GLSL programs and buffer objects. Default is 250e6 (250 MB).
+         * </ul>
+         * @type {{gpuCacheSize: number}}
+         */
+        WorldWind.configuration = {
+            gpuCacheSize: 250e6
+        };
 
         window.WorldWind = WorldWind;
 

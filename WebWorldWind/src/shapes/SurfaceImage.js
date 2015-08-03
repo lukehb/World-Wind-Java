@@ -9,13 +9,13 @@
 define([
         '../error/ArgumentError',
         '../util/Logger',
-        '../render/SurfaceTile',
-        '../render/Texture'
+        '../pick/PickedObject',
+        '../render/SurfaceTile'
     ],
     function (ArgumentError,
               Logger,
-              SurfaceTile,
-              Texture) {
+              PickedObject,
+              SurfaceTile) {
         "use strict";
 
         /**
@@ -42,13 +42,21 @@ define([
             SurfaceTile.call(this, sector);
 
             /**
+             * Indicates whether this surface image is drawn.
+             * @type {boolean}
+             * @default true
+             */
+            this.enabled = true;
+
+            /**
              * The path to the image.
              * @type {String}
              */
-            this.imagePath = imagePath;
+            this._imagePath = imagePath;
 
             /**
-             * This surface image's opacity.
+             * This surface image's opacity. When this surface image is drawn, the actual opacity is the product of
+             * this opacity and the opacity of the layer containing this surface image.
              * @type {number}
              */
             this.opacity = 1;
@@ -58,40 +66,34 @@ define([
              * @type {string}
              */
             this.displayName = "Surface Image";
-
-            // Internal. Intentionally not documented.
-            this.retrievalInProgress = false;
         };
 
         SurfaceImage.prototype = Object.create(SurfaceTile.prototype);
 
-        SurfaceImage.prototype.bind = function (dc) {
-            var texture = dc.gpuResourceCache.textureForKey(this.imagePath);
-            if (texture) {
-                return texture.bind(dc);
+        Object.defineProperties(SurfaceImage.prototype, {
+            imagePath: {
+                get: function () {
+                    return this._imagePath;
+                },
+                set: function (imagePath) {
+                    if (!imagePath) {
+                        throw new ArgumentError(Logger.logMessage(Logger.LEVEL_SEVERE, "SurfaceImage", "imagePath",
+                            "missingPath"));
+                    }
+
+                    this._imagePath = imagePath;
+                    this.imagePathWasUpdated = true;
+                }
             }
+        });
 
-            if (!this.retrievalInProgress) {
-                var image = new Image(),
-                    imagePath = this.imagePath,
-                    cache = dc.gpuResourceCache,
-                    gl = dc.currentGlContext,
-                    surfaceImage = this;
-
-                image.onload = function () {
-                    var texture = new Texture(gl, image);
-                    cache.putResource(gl, imagePath, texture, WorldWind.GPU_TEXTURE, texture.size);
-
-                    surfaceImage.retrievalInProgress = false;
-
-                    // Send an event to request a redraw.
-                    var e = document.createEvent('Event');
-                    e.initEvent(WorldWind.REDRAW_EVENT_TYPE, true, true);
-                    dc.canvas.dispatchEvent(e);
-                };
-                this.retrievalInProgress = true;
-                image.crossOrigin = 'anonymous';
-                image.src = this.imagePath;
+        SurfaceImage.prototype.bind = function (dc) {
+            var texture = dc.gpuResourceCache.resourceForKey(this._imagePath);
+            if (texture && !this.imagePathWasUpdated) {
+                return texture.bind(dc);
+            } else {
+                dc.gpuResourceCache.retrieveTexture(dc.currentGlContext, this._imagePath);
+                this.imagePathWasUpdated = false;
             }
         };
 
@@ -104,7 +106,23 @@ define([
          * @param {DrawContext} dc The current draw context.
          */
         SurfaceImage.prototype.render = function (dc) {
-            dc.surfaceTileRenderer.renderTiles(dc, [this], this.opacity);
+            if (!this.enabled || !this.sector.overlaps(dc.terrain.sector)) {
+                return;
+            }
+
+            if (dc.pickingMode) {
+                this.pickColor = dc.uniquePickColor();
+            }
+
+            dc.surfaceTileRenderer.renderTiles(dc, [this], this.opacity * dc.currentLayer.opacity);
+
+            if (dc.pickingMode) {
+                var po = new PickedObject(this.pickColor.clone(), this.pickDelegate ? this.pickDelegate : this,
+                    null, this.layer, false);
+                dc.resolvePick(po);
+            }
+
+            dc.currentLayer.inCurrentFrame = true;
         };
 
         return SurfaceImage;

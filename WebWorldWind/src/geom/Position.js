@@ -75,7 +75,7 @@ define([
          * @returns {Position} This position, set to the values of the specified position.
          * @throws {ArgumentError} If the specified position is null or undefined.
          */
-        Position.copy = function (position) {
+        Position.prototype.copy = function (position) {
             if (!position instanceof Position) {
                 throw new ArgumentError(
                     Logger.logMessage(Logger.LEVEL_SEVERE, "Position", "copy", "missingPosition"));
@@ -189,6 +189,11 @@ define([
             Location.interpolateLinear(t, position1, position2, result);
 
             return result;
+        };
+
+        Position.prototype.toString = function () {
+            return "(" + this.latitude.toString() + "\u00b0, " + this.longitude.toString() + "\u00b0, "
+                + this.altitude.toString();
         };
 
         return Position;

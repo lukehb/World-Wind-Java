@@ -10,9 +10,9 @@
 define([
         '../geom/Angle',
         '../error/ArgumentError',
-        '../globe/Globe',
         '../util/Logger',
         '../geom/Plane',
+        '../geom/Position',
         '../geom/Rectangle',
         '../render/Texture',
         '../geom/Vec3',
@@ -20,9 +20,9 @@ define([
     ],
     function (Angle,
               ArgumentError,
-              Globe,
               Logger,
               Plane,
+              Position,
               Rectangle,
               Texture,
               Vec3,
@@ -93,6 +93,39 @@ define([
         };
 
         /**
+         * Computes the principal axes of a point collection expressed in a typed array.
+         * @param {Float32Array} points The points for which to compute the axes.
+         * @param {Vec3} axis1 A vector in which to return the first (longest) principal axis.
+         * @param {Vec3} axis2 A vector in which to return the second (mid-length) principal axis.
+         * @param {Vec3} axis3 A vector in which to return the third (shortest) principal axis.
+         * @throws {ArgumentError} If the specified points array or one of the specified axes is null or undefined.
+         */
+        Matrix.principalAxesFromPoints = function (points, axis1, axis2, axis3) {
+            if (!points || points.length < 1) {
+                throw new ArgumentError(Logger.logMessage(Logger.LEVEL_SEVERE, "Matrix", "principalAxesFromPoints",
+                    "missingPoints"));
+            }
+
+            if (!axis1 || !axis2 || !axis3) {
+                throw new ArgumentError(Logger.logMessage(Logger.LEVEL_SEVERE, "Matrix", "principalAxesFromPoints",
+                    "An axis argument is null or undefined."));
+            }
+
+            // Compute the covariance matrix.
+            var covariance = Matrix.fromIdentity();
+            covariance.setToCovarianceOfPoints(points);
+
+            // Compute the eigenvectors from the covariance matrix. Since the covariance matrix is symmetric by
+            // definition, we can safely use the "symmetric" method below.
+            covariance.eigensystemFromSymmetricMatrix(axis1, axis2, axis3);
+
+            // Normalize the eigenvectors, which are already sorted in order from most prominent to least prominent.
+            axis1.normalize();
+            axis2.normalize();
+            axis3.normalize();
+        };
+
+        /**
          * Sets the components of this matrix to specified values.
          * @param {Number} m11 matrix element at row 1, column 1.
          * @param {Number} m12 matrix element at row 1, column 2.
@@ -157,6 +190,30 @@ define([
             this[13] = 0;
             this[14] = 0;
             this[15] = 1;
+        };
+
+        /**
+         * Copy a matrix.
+         * @param {Matrix} matrix The matrix to copy.
+         * @returns {Matrix} This matrix set to the values of the specified matrix.
+         */
+        Matrix.prototype.copy = function (matrix) {
+            this[0] = matrix[0];
+            this[1] = matrix[1];
+            this[2] = matrix[2];
+            this[3] = matrix[3];
+            this[4] = matrix[4];
+            this[5] = matrix[5];
+            this[6] = matrix[6];
+            this[7] = matrix[7];
+            this[8] = matrix[8];
+            this[9] = matrix[9];
+            this[10] = matrix[10];
+            this[11] = matrix[11];
+            this[12] = matrix[12];
+            this[13] = matrix[13];
+            this[14] = matrix[14];
+            this[15] = matrix[15];
         };
 
         /**
@@ -433,7 +490,7 @@ define([
          * value. If any entry is zero, then there's no correlation between the two coordinates defining that entry. If the
          * returned matrix is diagonal, then all three coordinates are uncorrelated, and the specified point is
          * distributed evenly about its mean point.
-         * @param {Vec3[]} points The points to consider.
+         * @param {Float32Array} points The points to consider.
          * @returns {Matrix} This matrix set to the covariance matrix for the specified list of points.
          * @throws {ArgumentError} If the specified array of points is null, undefined or empty.
          */
@@ -454,12 +511,14 @@ define([
                 c12 = 0,
                 c13 = 0,
                 c23 = 0,
-                vec;
+                vec = new Vec3(0, 0, 0);
 
-            mean = Vec3.average(points, new Vec3(0, 0, 0));
+            mean = Vec3.averageOfBuffer(points, new Vec3(0, 0, 0));
 
-            for (var i = 0, len = points.length; i < len; i++) {
-                vec = points[i];
+            for (var i = 0, len = points.length / 3; i < len; i++) {
+                vec[0] = points[i * 3];
+                vec[1] = points[i * 3 + 1];
+                vec[2] = points[i * 3 + 2];
 
                 dx = vec[0] - mean[0];
                 dy = vec[1] - mean[1];
@@ -1147,18 +1206,19 @@ define([
 
             // Transform the modelview matrix to a local coordinate system at the origin. This eliminates the geographic
             // transform contained in the modelview matrix while maintaining rotation and translation relative to the origin.
+            modelviewLocal.copy(this);
             modelviewLocal.multiplyByLocalCoordinateTransform(origin, globe);
 
             range = -modelviewLocal[11];
             ct = modelviewLocal[10];
             st = Math.sqrt(modelviewLocal[2] * modelviewLocal[2] + modelviewLocal[6] * modelviewLocal[6]);
-            tilt = Math.atan2(st, ct);
+            tilt = Math.atan2(st, ct) * Angle.RADIANS_TO_DEGREES;
 
             cr = Math.cos(roll * Angle.DEGREES_TO_RADIANS);
             sr = Math.sin(roll * Angle.DEGREES_TO_RADIANS);
             ch = cr * modelviewLocal[0] - sr * modelviewLocal[4];
             sh = sr * modelviewLocal[5] - cr * modelviewLocal[1];
-            heading = Math.atan2(sh, ch);
+            heading = Math.atan2(sh, ch) * Angle.RADIANS_TO_DEGREES;
 
             result['origin'] = originPos;
             result['range'] = range;

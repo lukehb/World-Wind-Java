@@ -122,7 +122,7 @@ define([
              * @readonly
              * @default Date.getTime() at construction
              */
-            this.timestamp = new Date().getTime();
+            this.timestamp = Date.now();
 
             /**
              * This elevation model's minimum elevation
@@ -160,32 +160,46 @@ define([
             this.imageCache = new MemoryCache(10000000, 8000000); // for the elevations, themselves
             this.currentRetrievals = []; // Identifies elevation retrievals in progress
             this.absentResourceList = new AbsentResourceList(3, 5e3);
+            this.id = ++ElevationModel.idPool;
+            this._stateKey = "elevationModel " + this.id.toString() + " ";
         };
+
+        ElevationModel.idPool = 0; // Used to assign unique IDs to elevation models for use in their state key.
+
+        Object.defineProperties(ElevationModel.prototype, {
+            /**
+             * A string identifying this elevation model's current state. Used to compare states during rendering to
+             * determine whether globe-state dependent cached values must be updated. Applications typically do not
+             * interact with this property.
+             * @memberof ElevationModel.prototype
+             * @readonly
+             * @type {String}
+             */
+            stateKey: {
+                get: function () {
+                    return this._stateKey;
+                }
+            }
+        });
 
         /**
          * Returns the minimum and maximum elevations within a specified sector.
          * @param {Sector} sector The sector for which to determine extreme elevations.
-         * @param {Number[]} result A pre-allocated array in which to return the extreme elevations.
-         * @returns {Number[]} The specified result argument containing, respectively, the minimum and maximum
-         * elevations within the specified sector.
-         * @throws {ArgumentError} If the specified sector or result array is null or undefined.
+         * @returns {Number[]} An array containing the minimum and maximum elevations within the specified sector,
+         * or null if the specified sector is outside this elevation model's coverage area.
+         * @throws {ArgumentError} If the specified sector is null or undefined.
          */
-        ElevationModel.prototype.minAndMaxElevationsForSector = function (sector, result) {
+        ElevationModel.prototype.minAndMaxElevationsForSector = function (sector) {
             if (!sector) {
                 throw new ArgumentError(
                     Logger.logMessage(Logger.LEVEL_SEVERE, "ElevationModel", "minAndMaxElevationsForSector", "missingSector"));
-            }
-
-            if (!result) {
-                throw new ArgumentError(
-                    Logger.logMessage(Logger.LEVEL_SEVERE, "ElevationModel", "minAndMaxElevationsForSector", "missingResult"));
             }
 
             var level = this.levels.levelForTexelSize(sector.deltaLatitude() * Angle.DEGREES_TO_RADIANS / 64);
             this.assembleTiles(level, sector, false);
 
             if (this.currentTiles.length == 0) {
-                return result; // Sector is outside the elevation model's coverage area. Do not modify the result array.
+                return null; // Sector is outside the elevation model's coverage area. Do not modify the result array.
             }
 
             // Assign the output extreme elevations to the largest and smallest double values, respectively. This has the effect
@@ -196,7 +210,8 @@ define([
                 max = -min,
                 image,
                 imageMin,
-                imageMax;
+                imageMax,
+                result = [];
 
             for (var i = 0, len = this.currentTiles.length; i < len; i++) {
                 image = this.currentTiles[i].image();
@@ -244,7 +259,7 @@ define([
                 image = null;
 
             for (var i = level.levelNumber; i >= 0; i--) {
-                tile = this.tileCache.entryForKey(level.levelNumber.toString() + "." + r.toString() + "." + c.toString());
+                tile = this.tileCache.entryForKey(i.toString() + "." + r.toString() + "." + c.toString());
                 if (tile) {
                     image = tile.image();
                     if (image) {
@@ -513,7 +528,7 @@ define([
 
         // Intentionally not documented.
         ElevationModel.prototype.isTileImageExpired = function (tile) {
-            return !(!this.expiration || this.expiration > new Date().getTime);
+            return !(!this.expiration || this.expiration > Date.now());
         };
 
         // Intentionally not documented.
@@ -630,7 +645,7 @@ define([
             if (elevationImage.imageData) {
                 elevationImage.findMinAndMaxElevation();
                 this.imageCache.putEntry(tile.imagePath, elevationImage, elevationImage.size);
-                this.timestamp = new Date().getTime();
+                this.timestamp = Date.now();
             }
         };
 

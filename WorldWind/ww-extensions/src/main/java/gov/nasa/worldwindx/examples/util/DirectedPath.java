@@ -300,6 +300,7 @@ public class DirectedPath extends Path
 
         // Step through polePositions to find the original path locations.
         int poleA = polePositions.get(0) / 2;
+        Vec4 polePtA = this.computePoint(dc, terrain, tessellatedPositions.get(poleA));
 
         // Draw one arrowhead for each segment in the original position list. The path may be tessellated,
         // so we need to find the tessellated segment halfway between each pair of original positions.
@@ -310,19 +311,12 @@ public class DirectedPath extends Path
             // Find the position of this pole and the next pole. Divide by 2 to convert an index in the
             // renderedPath buffer to a index in the tessellatedPositions list.
             int poleB = polePositions.get(i) / 2;
-            
-            // Find the segment that is midway between the two poles.
-            int midPoint = (int)Math.floor(this.arrowOffset * (poleA + poleB));
+            Vec4 polePtB = this.computePoint(dc, terrain, tessellatedPositions.get(poleB));
 
-            Position posA = tessellatedPositions.get(midPoint);
-            Position posB = tessellatedPositions.get(midPoint + 1);
-
-            Vec4 ptA = this.computePoint(dc, terrain, posA);
-            Vec4 ptB = this.computePoint(dc, terrain, posB);
-
-            this.computeArrowheadGeometry(dc, poleA, poleB, ptA, ptB, buffer, pathData);
+            this.computeArrowheadGeometry(dc, poleA, poleB, polePtA, polePtB, buffer, pathData);
             
             poleA = poleB;
+            polePtA = polePtB;
         }
 
         buffer.flip();
@@ -363,7 +357,7 @@ public class DirectedPath extends Path
         double poleDistance = polePtA.distanceTo3(polePtB);
 
         // Find the segment that is midway between the two poles.
-        int midIndex = (poleA + poleB) / 2;
+        int midIndex = (int)Math.floor(this.arrowOffset * (poleA + poleB));
         List<Position> tessellatedPositions = pathData.getTessellatedPositions();
         Position posA = tessellatedPositions.get(midIndex);
         Position posB = tessellatedPositions.get(midIndex + 1);

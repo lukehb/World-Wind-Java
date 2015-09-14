@@ -203,7 +203,7 @@ public class ShapeEditor implements SelectListener
     /**
      * The control point annotation.
      */
-    protected EditorAnnotation annotation;
+    protected ScreenAnnotation annotation;
     /**
      * The units formatter to use when creating control point annotations.
      */
@@ -253,7 +253,7 @@ public class ShapeEditor implements SelectListener
      * Indicates track legs that are adjacent to their previous leg in the track.
      */
     protected List<Box> trackAdjacencyList;
-
+    
     /**
      * Attributes used to represent shape vertices.
      */
@@ -328,9 +328,7 @@ public class ShapeEditor implements SelectListener
         this.accessoryLayer.setValue(AVKey.IGNORE, true);
 
         // Set up the Path for the rotation line.
-        ShapeAttributes lineAttrs = new BasicShapeAttributes();
-        lineAttrs.setOutlineMaterial(Material.GREEN);
-        lineAttrs.setOutlineWidth(2);
+        ShapeAttributes lineAttrs = makeRotationLineAttributes();
         java.util.List<Position> lineLocations = new ArrayList<Position>(2);
         lineLocations.add(Position.ZERO);
         lineLocations.add(Position.ZERO);
@@ -347,7 +345,7 @@ public class ShapeEditor implements SelectListener
         this.annotationLayer.setValue(AVKey.IGNORE, true);
 
         // Create the annotation.
-        this.annotation = new EditorAnnotation("");
+        this.annotation = createAnnotation();
         this.annotationLayer.addRenderable(this.annotation);
 
         // Create a layer to hold the shadow shape, the shape that shows the state before an editing operation.
@@ -361,6 +359,19 @@ public class ShapeEditor implements SelectListener
 
         // Create the attributes assigned to the control points.
         this.makeControlPointAttributes();
+    }
+    
+    protected ScreenAnnotation createAnnotation()
+    {
+        return new EditorAnnotation("");
+    }
+    
+    protected ShapeAttributes makeRotationLineAttributes()
+    {
+        ShapeAttributes lineAttrs = new BasicShapeAttributes();
+        lineAttrs.setOutlineMaterial(Material.GREEN);
+        lineAttrs.setOutlineWidth(2);
+        return lineAttrs;
     }
 
     protected void makeControlPointAttributes()
@@ -459,7 +470,7 @@ public class ShapeEditor implements SelectListener
      *
      * @return the annotation used to show shape locations and measurements.
      */
-    public EditorAnnotation getAnnotation()
+    public ScreenAnnotation getAnnotation()
     {
         return annotation;
     }
@@ -1155,13 +1166,25 @@ public class ShapeEditor implements SelectListener
 
         String annotationText;
         if (controlPoint.size != null)
-            annotationText = this.unitsFormat.length(null, controlPoint.size);
+            annotationText = formatSizeText(controlPoint.size);
         else if (controlPoint.rotation != null)
-            annotationText = this.unitsFormat.angle(null, controlPoint.rotation);
+            annotationText = formatRotationText(controlPoint.rotation);
         else
-            annotationText = this.unitsFormat.latLon2(controlPoint.getPosition());
+            annotationText = formatPositionText(controlPoint.getPosition());
 
         this.getAnnotation().setText(annotationText);
+    }
+    
+    protected String formatSizeText(double size) {
+        return this.unitsFormat.length(null, size);
+    }
+    
+    protected String formatRotationText(Angle rotation) {
+        return this.unitsFormat.angle(null, rotation);
+    }
+    
+    protected String formatPositionText(LatLon position) {
+        return this.unitsFormat.latLon2(position);
     }
 
     /**

@@ -6,6 +6,7 @@
 package gov.nasa.worldwindx.examples.analytics;
 
 import gov.nasa.worldwind.WorldWind;
+import gov.nasa.worldwind.analytics.*;
 import gov.nasa.worldwind.avlist.*;
 import gov.nasa.worldwind.data.*;
 import gov.nasa.worldwind.exception.WWRuntimeException;
@@ -184,7 +185,7 @@ public class AnalyticSurfaceDemo extends ApplicationTemplate
                 if ((ti % 2) == 0)
                     a = 1d - a;
 
-                surface.setValues(createMixedColorGradientGridValues(
+                surface.setGridValues(createMixedColorGradientGridValues(
                     a, firstBuffer, secondBuffer, minValue, maxValue, minHue, maxHue));
 
                 if (surface.getClientLayer() != null)
@@ -229,7 +230,7 @@ public class AnalyticSurfaceDemo extends ApplicationTemplate
         final AnalyticSurface surface = new AnalyticSurface();
         surface.setSector(raster.getSector());
         surface.setDimensions(raster.getWidth(), raster.getHeight());
-        surface.setValues(AnalyticSurface.createColorGradientValues(
+        surface.setGridValues(AnalyticSurface.createColorGradientValues(
             raster.getBuffer(), raster.getTransparentValue(), extremes[0], extremes[1], minHue, maxHue));
         surface.setVerticalScale(5e3);
 

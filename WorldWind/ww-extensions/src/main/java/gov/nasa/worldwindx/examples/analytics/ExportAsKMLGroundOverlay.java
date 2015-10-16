@@ -6,6 +6,7 @@
 package gov.nasa.worldwindx.examples.analytics;
 
 import gov.nasa.worldwind.*;
+import gov.nasa.worldwind.analytics.*;
 import gov.nasa.worldwind.avlist.*;
 import gov.nasa.worldwind.data.*;
 import gov.nasa.worldwind.exception.WWRuntimeException;
@@ -40,7 +41,7 @@ public class ExportAsKMLGroundOverlay
         final ExportableAnalyticSurface surface = new ExportableAnalyticSurface();
         surface.setSector(raster.getSector());
         surface.setDimensions(raster.getWidth(), raster.getHeight());
-        surface.setValues(AnalyticSurface.createColorGradientValues(
+        surface.setGridValues(AnalyticSurface.createColorGradientValues(
             raster.getBuffer(), raster.getTransparentValue(), extremes[0], extremes[1], HUE_BLUE, HUE_RED));
         surface.setVerticalScale(5e3);
 

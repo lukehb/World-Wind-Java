@@ -912,19 +912,6 @@ public class ShapeEditor implements SelectListener
             return new SurfacePolyline((SurfacePolyline) this.getShape());
         else if (this.getShape() instanceof SurfacePolygon)
             return new SurfacePolygon((SurfacePolygon) this.getShape());
-        else if (this.getShape() instanceof AnalyticSurface)
-        {
-            AnalyticSurface surface = (AnalyticSurface)this.getShape();
-            int[] dimensions = surface.getDimensions();
-            return new AnalyticSurface
-            (
-                surface.getSector(),
-                surface.getAltitude(),
-                dimensions[0],
-                dimensions[1],
-                surface.getGridValues()
-            );
-        }
 
         return null;
     }

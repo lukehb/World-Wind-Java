@@ -1,26 +1,23 @@
 /**
  * Created by Matthew on 7/31/2015.
+ *
+ * Adapted from http://worldwindserver.net/webworldwind/examples/LayerManager.js
  */
 define(['HUDMaker'], function (HUDMaker) {
         function LayerManager ( worldWindow ) {
             var thisExplorer = this;
-            console.log('yo')
-
 
             this.wwd = worldWindow;
 
             this.roundGlobe = this.wwd.globe;
 
             this.createProjectionList();
-            $("#projectionDropdown").find(" li").on("click", function (e) {
+
+            $("#projectionDropdown").find("li").on("click", function (e) {
                 thisExplorer.onProjectionClick(e);
             });
 
             this.synchronizeLayerList();
-
-            $("#layerList").find("button").on("click", function (e) {
-                thisExplorer.onLayerClick($(this));
-            });
 
             $("#searchBox").find("button").on("click", function (e) {
                 thisExplorer.onSearchButton(e);
@@ -31,13 +28,6 @@ define(['HUDMaker'], function (HUDMaker) {
             $("#searchText").on("keypress", function (e) {
                 thisExplorer.onSearchTextKeyPress($(this), e);
             });
-
-            //
-            //this.wwd.redrawCallbacks.push(function (worldWindow, stage) {
-            //    if (stage == WorldWind.AFTER_REDRAW) {
-            //        thisExplorer.updateVisibilityState(worldWindow);
-            //    }
-            //});
         };
 
         LayerManager.prototype.onProjectionClick = function (event) {
@@ -102,6 +92,7 @@ define(['HUDMaker'], function (HUDMaker) {
         };
 
         LayerManager.prototype.synchronizeLayerList = function () {
+            var thisExplorer = this;
             var layerListItem = $("#layerList");
 
             layerListItem.find("button").off("click");
@@ -123,27 +114,14 @@ define(['HUDMaker'], function (HUDMaker) {
                 }
                 this.wwd.redraw();
             }
+
+            layerListItem.find("button").on("click", function (e) {
+                thisExplorer.onLayerClick($(this));
+            });
+
+
+
         };
-        //
-        //LayerManager.prototype.updateVisibilityState = function (worldWindow) {
-        //    var layerButtons = $("#layerList").find("button"),
-        //        layers = worldWindow.layers;
-        //
-        //    for (var i = 0; i < layers.length; i++) {
-        //        var layer = layers[i];
-        //        for (var j = 0; j < layerButtons.length; j++) {
-        //            var button = layerButtons[j];
-        //
-        //            if (layer.displayName === button.innerText) {
-        //                if (layer.inCurrentFrame) {
-        //                    button.innerHTML = "<em>" + layer.displayName + "</em>";
-        //                } else {
-        //                    button.innerHTML = layer.displayName;
-        //                }
-        //            }
-        //        }
-        //    }
-        //};
 
         LayerManager.prototype.createProjectionList = function () {
             var projectionNames = [
@@ -161,6 +139,7 @@ define(['HUDMaker'], function (HUDMaker) {
             projectionDropdown.append(dropdownButton);
 
             var ulItem = $('<ul class="dropdown-menu">');
+
             projectionDropdown.append(ulItem);
 
             for (var i = 0; i < projectionNames.length; i++) {
@@ -209,21 +188,22 @@ define(['HUDMaker'], function (HUDMaker) {
             }
         };
 
+        /*
+        * Creates a hud with an html anchor for the layer manager to construct itself on.
+        *
+        * @param wwd: Worldwindow to apply to.
+         */
         function LayerManagerHud ( wwd ) {
-            console.log('Hud made')
-            var anchorForLayerManager = new HUDMaker('LayerMenuHAHA', [0,0])
+            var jQueryDoc = $(window.document);
 
-            var projectionAnchor = $('<div>')
-            projectionAnchor.attr('class', 'dropdown')
-            projectionAnchor.attr('id', 'projectionDropdown')
-            anchorForLayerManager.addAnchor(projectionAnchor)
+            var anchorForLayerManager = new HUDMaker('Layer Menu', [jQueryDoc.width()-240,0]);
 
-            var layerAnchor = $('<div>')
-            layerAnchor.attr('class', 'list-group')
-            layerAnchor.attr('id', 'layerList')
-            anchorForLayerManager.addAnchor(layerAnchor)
-
-            window.layerManager = new LayerManager(wwd)
+            var layerAnchor = $('<div>');
+            layerAnchor.attr('class', 'list-group');
+            layerAnchor.attr('id', 'layerList');
+            anchorForLayerManager.addAnchor(layerAnchor);
+            this.anchor = anchorForLayerManager
+            this.layerMan = new LayerManager(wwd)
 
         }
 

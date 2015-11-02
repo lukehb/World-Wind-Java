@@ -1,128 +1,178 @@
 
 /*
-* Author: Inzamam Rahaman
-* Extended by Matt Evers
+* Author: Matthew Evers, Inzamam Rahaman
+*
 */
 /*
-    This module acts as the application entry point
- */
 
+
+ */
+/*
+* This module acts as the application entry point for the citysmart application.
+*
+* This module is to behave as a SINGLETON application. All queries from the canvas will be handled by ONE instance.
+* (See CanvasAppManager)
+*
+* This application creates 3 layers. A routelayer on which routing will be drawn; a renderable layer on which pins and
+*   placemarks will be drawn; and a building layer on which building polygons will be drawn.
+*
+* This application creates a listener for all placemarks and pins and creates a hud to appear on click. It also creates
+*   a HUD with the building color key.
+ */
 define(['http://worldwindserver.net/webworldwind/worldwindlib.js',
-        'OpenStreetMapLayer',
         'OpenStreetMapConfig',
         'jquery',
-        'OSMDataRetriever','RouteLayer', 'Route','RouteAPIWrapper','NaturalLanguageHandler', 'polyline',
+        'OSMDataRetriever',
+        'RouteLayer',
+        'Route',
+        'RouteAPIWrapper',
+        'NaturalLanguageHandler',
+        'polyline',
         'MapQuestGeocoder',
         'nlform',
         'nlbuilder',
         'HUDMaker',
-        'OSMBuildingDataRetriever'],
+        'OSMBuildingDataRetriever',
+        'BuildingColorMapping',
+        'ApplicationHUDManager',
+        'OpenStreetMapRBushLayer'],
     function(ww,
-             OpenStreetMapLayer,
              OpenStreetMapConfig,
              $,
-             OSMDataRetriever, RouteLayer, Route, RouteAPIWrapper, NaturalLanguageHandler, polyline, MapQuestGeocoder,
-             NLForm, NLBuilder, HUDMaker, OSMBuildingDataRetriever) {
+             OSMDataRetriever,
+             RouteLayer,
+             Route,
+             RouteAPIWrapper,
+             NaturalLanguageHandler,
+             polyline,
+             MapQuestGeocoder,
+             NLForm,
+             NLBuilder,
+             HUDMaker,
+             OSMBuildingDataRetriever,
+             BuildingColorMapping,
+             ApplicationHUDManager,
+             OpenStreetMapRBushLayer) {
 
 
         'use strict';
 
         WorldWind.Logger.setLoggingLevel(WorldWind.Logger.LEVEL_WARNING);
 
-        /*
-        * Removes all special characters from a string
-        *
-        * @param str: any string
-        *
-        * @return: the input string with special characters ommitted.
-         */
-        function removeSpecials(str) {
-            var lower = str.toLowerCase();
-            var upper = str.toUpperCase();
-
-            var res = "";
-            for(var i=0; i<lower.length; ++i) {
-                if(lower[i] != upper[i] || lower[i].trim() === '')
-                    res += str[i];
+        if (!String.prototype.capitalizeFirstLetter) {
+            String.prototype.capitalizeFirstLetter = function () {
+                return this.charAt(0).toUpperCase() + this.slice(1);
             }
-            return res;
         }
 
-        var OpenStreetMapApp = function(worldwindow, amenity, address) {
+        var OpenStreetMapApp = function(worldwindow, argumentarray) {
             var self = this;
+
+            // This is a requirement if we dont want the app to be run anew for each query.
+            this.singletonApplication = true;
+
+            this.HUDManager = new ApplicationHUDManager()
 
             this._osmBuildingRetriever = new OSMBuildingDataRetriever();
             this._wwd = worldwindow;
 
-            var openStreetMapLayer = new OpenStreetMapLayer(this._wwd);
+            var openStreetMapLayer = new OpenStreetMapRBushLayer(this._wwd);
+            this.openStreetMapLayer = openStreetMapLayer;
 
             this._wwd.addLayer(openStreetMapLayer);
 
             this._animator = new WorldWind.GoToAnimator(self._wwd);
 
-            //this._animator.goTo(self._config.startPosition);
-
             var naturalLanguageHandler = new NaturalLanguageHandler(self._wwd);
+            this.naturalLanguageHandler = naturalLanguageHandler;
 
             var routeLayer = new RouteLayer();
+            this.routeLayer = routeLayer;
 
             this._wwd.addLayer(routeLayer);
 
-            var renderableLayer = new WorldWind.RenderableLayer('Pins');
+            this.renderableLayers = []
 
-            this._wwd.addLayer(renderableLayer);
-            //
-            //var polygonLayer = new WorldWind.RenderableLayer('Building Layers');
-            //
-            //this._wwd.addLayer(polygonLayer);
-            //this.DIDCALL = false;
-            //if (!this.DIDCALL){
-            //    this._osmBuildingRetriever.requestOSMBuildingData([0,0,0,0], function(buildingData) {
-            //        //console.log('building data for ', boundingBox);
-            //        console.log(buildingData);
-            //        buildingData.forEach(function (building){
-            //            var geometries = building.geometry.coordinates;
-            //            // Turn the raw lat long data into worldwind positions
-            //            building.geometry.worldWindCoordinates = [];
-            //            geometries.forEach(function (boundary) {
-            //                var boundaryToPush = [];
-            //                boundary.forEach(function (point){
-            //                    boundaryToPush.push(new WorldWind.Position(point[1], point[0], 5e1))
-            //                });
-            //                building.geometry.worldWindCoordinates.push(boundaryToPush)
-            //            })
-            //        });
-            //        console.log(buildingData)
-            //
-            //        buildingData.forEach(function (building) {
-            //            self.drawPolygon(polygonLayer, building.geometry.worldWindCoordinates)
-            //        })
-            //    });
-            //    this.DIDCALL = true;
-            //}
-
-            //amenity = 'cafe';
-            //address = 'mountain view';
             var routeLayerRouteBuilder = new (this.RouteBuilder(routeLayer));
+            this.routeLayerRouteBuilder = routeLayerRouteBuilder;
 
+            self.newCall(worldwindow, argumentarray)
+        };
+
+        /*
+        * This function is called by the canvas when the canvas is fully faded out.
+         */
+        OpenStreetMapApp.prototype.isFocussed = function () {
+            if (!this.colorKey) {
+                this.colorKey = this.buildColorKey();
+            }
+            this.HUDManager.unFadeAll()
+        };
+
+        /*
+         * This function is called by the canvas when the canvas is returned.
+         */
+        OpenStreetMapApp.prototype.isNotFocussed = function () {
+            this.HUDManager.fadeAll()
+        };
+
+        /*
+        * If this application were to be called a second time by the canvas, it does not a create a new application.
+        *   Populates the renderable layer with the amenities queried for inside the bounding box. Builds each placemark
+        *   and assigns a HUD to display when each is clicked.
+        *
+        * @param address: The address to build the bounding box around that bounds the query area.
+        * @param amenity: The amenity key to query the OSM Database for.
+         */
+        OpenStreetMapApp.prototype.newCall = function(ww, argumentarray) {
+            var renderableLayer = new WorldWind.RenderableLayer(argumentarray[0].capitalizeFirstLetter());
+            //console.log(argumentarray)
+            var self = this,
+                amenity = argumentarray[0],
+                address = argumentarray[1];
+            self._wwd.addLayer(renderableLayer);
+            self.renderableLayers.push(renderableLayer);
             //First, geocode the address
             this.callGeocoder(address, amenity, function(returnedSpecs) {
                 // Second, call the natural language handler with the specs.
                 // This calls the callback with data corrosponding to all the amenities of the given
                 // amenity type inside a bounding box around the address provided. (returned Specs is the geocoded address)
-                naturalLanguageHandler.receiveInput(returnedSpecs, function(newSpecs, returnedData){
+                self.naturalLanguageHandler.receiveInput(returnedSpecs, function(newSpecs, returnedData){
                     // Third, build the layer.
                     self.buildPlacemarkLayer(renderableLayer, returnedData);
-                    // Fourth, add the selection controller to the layer.
-                    self.HighlightAndSelectController(renderableLayer, function (returnedRenderable){
+                    // Fourth, add the selection controller to the layer if one does not already exist.
+                    self.HighlightAndSelectController(renderableLayer, function (returnedRenderable) {
                         var pointOfRenderable = self.getPointFromRenderableSelection(returnedRenderable.amenity);
-                        var hudID = removeSpecials(returnedRenderable.amenity._amenity.split(' ').join(''));
+                        var hudID = returnedRenderable.amenity._amenity;
+
+                        // Build an overlay when a placemark is clicked on.
                         var HudTest = new HUDMaker(
                             hudID,
-                            [returnedRenderable.clickedEvent.x,returnedRenderable.clickedEvent.y]
+                            [returnedRenderable.clickedEvent.x, returnedRenderable.clickedEvent.y]
                         );
+
+                        console.log('hud called');
                         //Sixth, add this point to the route layer and see if it is enough to build a route.
-                        routeLayerRouteBuilder.processPoint(pointOfRenderable);
+                        if (self.routeLayerRouteBuilder.routeArray.length === 0) {
+                            HudTest.assembleDisplay(
+                                'Get directions',
+                                'from Here',
+                                function (o) {
+                                    self.routeLayerRouteBuilder.processPoint(pointOfRenderable);
+                                    HudTest.close()
+                                })
+                        } else {
+                            HudTest.assembleDisplay(
+                                'Get directions',
+                                'to Here',
+                                function (o) {
+                                    self.routeLayerRouteBuilder.processPoint(pointOfRenderable);
+                                    HudTest.close()
+                                })
+                        }
+
+                        self.HUDManager.subscribeHUD(HudTest);
+
                     })
 
                 })
@@ -142,25 +192,25 @@ define(['http://worldwindserver.net/webworldwind/worldwindlib.js',
          */
         OpenStreetMapApp.prototype.RouteBuilder = function (routeLayer) {
             var self = this;
-            var RouteBuilderMod = function  (){
-                var routeBuilder = this;
-                //This should eventually look like [fromLatitude, fromLongitude, toLatitude, toLongitude]
-                // This refers to RouteBuilder
-                routeBuilder.routeArray = [];
-                routeBuilder.routeLayer = routeLayer;
+             var RouteBuilderMod = function  (){
+                 var routeBuilder = this;
+                 //This should eventually look like [fromLatitude, fromLongitude, toLatitude, toLongitude]
+                 // This refers to RouteBuilder
+                 routeBuilder.routeArray = [];
+                 routeBuilder.routeLayer = routeLayer;
 
-                // A singleton routefinder.
-                if (!self.routeFinder) {
-                    self.routeFinder = new RouteAPIWrapper();
-                }
-            };
+                 // A singleton routefinder.
+                 if (!self.routeFinder) {
+                 self.routeFinder = new RouteAPIWrapper();
+                 }
+             };
 
-            /*
-            * Concatenates a pointArray of the form [lat, lon] to the attribute routeBuilder.routeArray. Then if
-            * the routeArray has 2 points (i.e. a start and stop) then it calls the function to draw the route on the
-            * layer.
-            *
-            * @param pointArray: a pointArray of the form [lat, lon]
+             /*
+             * Concatenates a pointArray of the form [lat, lon] to the attribute routeBuilder.routeArray. Then if
+             * the routeArray has 2 points (i.e. a start and stop) then it calls the function to draw the route on the
+             * layer.
+             *
+             * @param pointArray: a pointArray of the form [lat, lon]
              */
             RouteBuilderMod.prototype.processPoint = function (pointArray) {
                 var routeBuilder = this;
@@ -173,18 +223,104 @@ define(['http://worldwindserver.net/webworldwind/worldwindlib.js',
                 }
             };
 
+            RouteBuilderMod.prototype.displayInstructions = function (text) {
+                var jQueryDoc = $(window.document);
+                var directionDisplay = new HUDMaker(
+                    'Route Instructions',
+                    [jQueryDoc.width() *.3, 0]
+                );
+                directionDisplay.assembleDisplay(text)
+            };
+
             /*
             * Draws the desired route onto the layer this routebuilder is bound to.
             *
             * @param routeArray: an array of the form [fromLatitude, fromLongitude, toLatitude, toLongitude]
-             */
+            */
             RouteBuilderMod.prototype.drawRoute = function (routeArray) {
                 var routeBuilder = this;
                 self.routeFinder.getRouteData(routeArray, function(routeData) {
                     //console.log('routeInformation : ', routeData);
+                    routeBuilder.displayInstructions(routeBuilder.buildTextInstructions(routeData['route_instructions']));
                     routeBuilder.routeLayer.addRoute(routeData);
                 });
             };
+
+            /*
+            * Constructs a string based on the corrosponding number. If the number contains a dash, for example, 11-2,
+            *   it constructs the first number + 'then" + the second number.
+            *
+            * @param angle: integer, or string of integers separated by a dash corresponding to route instructions.
+             */
+            RouteBuilderMod.prototype.decodeRouteAngle = function (angle) {
+                var routeBuilder = this;
+
+                for (var i = 0; i < angle.length; i++){
+                    var character = angle[i];
+                    if (character === '-'){
+                        return routeBuilder.decodeRouteAngle(angle.slice(0,i)) + ' then ' +
+                            routeBuilder.decodeRouteAngle(angle.slice(i+1,angle.length))
+                    }
+                }
+
+                if (angle == 1) {
+                    return 'Go Straight';
+                } else if (angle == 2) {
+                    return 'Turn Slight Right';
+                } else if (angle == 3) {
+                    return 'Turn Right';
+                } else if (angle == 4) {
+                    return 'Turn Sharp Right';
+                } else if (angle == 5) {
+                    return 'U-Turn';
+                } else if (angle == 6) {
+                    return 'Turn Sharp Left';
+                } else if (angle == 7) {
+                    return 'Turn Left';
+                } else if (angle == 8) {
+                    return 'Turn Slight Left';
+                } else if (angle == 9) {
+                    return 'Reach Via Location';
+                } else if (angle == 10) {
+                    return 'Head On';
+                } else if (angle == 11) {
+                    return 'Enter Round About';
+                } else if (angle == 12) {
+                    return 'Leave Round About';
+                } else if (angle == 13) {
+                    return 'Stay on Round About';
+                } else if (angle == 14) {
+                    return 'Start at End of Street';
+                } else if (angle == 15) {
+                    return 'Arrive at Your Destination'
+                }
+
+
+            };
+
+            /*
+            * Builds the html text of instructions.
+            *
+            * @param arrayOfInstructions: An array containing strings of step by step instructions.
+             */
+            RouteBuilderMod.prototype.buildTextInstructions = function (arrayOfInstructions) {
+                var routeBuilder = this;
+                var instructions = '';
+                arrayOfInstructions.forEach(function(instruction) {
+                    var instructionst = routeBuilder.decodeRouteAngle(instruction[0]);
+                    if (instruction[1]){
+                        instructionst += ' onto ' + instruction[1];
+                    }
+                    if (instruction[5] && instruction[5] != '0m'){
+                        instructionst += ' for ' + instruction[5];
+                    }
+                    instructionst += '<br>';
+                    instructions += instructionst
+                });
+                console.log(instructions);
+                return instructions
+            };
+
             return RouteBuilderMod
 
         };
@@ -197,6 +333,7 @@ define(['http://worldwindserver.net/webworldwind/worldwindlib.js',
         */
         OpenStreetMapApp.prototype.HighlightController = function (renderableLayer) {
             var self = this;
+            self.hasHighlightController = true;
             var ListenerForHighlightOnLayer = function(o) {
                 var worldWindow = self._wwd,
                     highlightedItems = [];
@@ -244,7 +381,7 @@ define(['http://worldwindserver.net/webworldwind/worldwindlib.js',
          */
         OpenStreetMapApp.prototype.HighlightAndSelectController = function (renderableLayer, callback, callbackWithMouse) {
             var self = this;
-
+            self.hasSelectionController = true;
             //Create a highlight controller for the layer.
             self.HighlightController(renderableLayer);
 
@@ -269,7 +406,7 @@ define(['http://worldwindserver.net/webworldwind/worldwindlib.js',
         * @param renderableLayer: A worldwind layer to populate.
         */
         OpenStreetMapApp.prototype.buildPlacemarkLayer = function (renderableLayer, arrayofamenities) {
-            var pinImgLocation = '../NaturalLanguageForm/img/pin.png' , // location of the image files
+            var pinImgLocation = '../NaturalLanguageForm/img/pinclosed.gif' , // location of the image files
                 placemark,
                 placemarkAttributes = new WorldWind.PlacemarkAttributes(null),
                 highlightAttributes,
@@ -294,7 +431,7 @@ define(['http://worldwindserver.net/webworldwind/worldwindlib.js',
                 latitude = amenity['_location']['latitude'];
                 longitude = amenity['_location']['longitude'];
                 // Create the placemark and its label.
-                placemark = new WorldWind.Placemark(new WorldWind.Position(latitude, longitude, 1e2, true, null));
+                placemark = new WorldWind.Placemark(new WorldWind.Position(latitude, longitude, 1e1, true, null));
                 placemark.label = amenity['_amenity'];
                 placemark.altitudeMode = WorldWind.RELATIVE_TO_GROUND;
 
@@ -370,26 +507,24 @@ define(['http://worldwindserver.net/webworldwind/worldwindlib.js',
 
         };
 
-        ////TEMP
-        //OpenStreetMapApp.prototype.drawPolygon = function (layer, boundaries) {
-        //    var self = this;
-        //
-        //
-        //    // Create and set attributes for it. The shapes below except the surface polyline use this same attributes
-        //    // object. Real apps typically create new attributes objects for each shape unless they know the attributes
-        //    // can be shared among shapes.
-        //    var attributes = new WorldWind.ShapeAttributes(null);
-        //    attributes.outlineColor = WorldWind.Color.BLUE;
-        //    attributes.interiorColor = new WorldWind.Color(0, 1, 1, 0.5);
-        //
-        //    var highlightAttributes = new WorldWind.ShapeAttributes(attributes);
-        //    highlightAttributes.interiorColor = new WorldWind.Color(1, 1, 1, 1);
-        //    console.log(boundaries)
-        //    var shape = new WorldWind.SurfacePolygon(boundaries, attributes);
-        //    shape.highlightAttributes = highlightAttributes;
-        //    console.log(shape)
-        //    layer.addRenderable(shape);
-        //};
+        /*
+        * Builds and displays the color key for buildings.
+        */
+        OpenStreetMapApp.prototype.buildColorKey = function () {
+            var self = this;
+            var openStreetMapKey = (new BuildingColorMapping()).getColorKey();
+            var jQueryDoc = $(window.document);
+            var keyDisplay = new HUDMaker('Building Color Key', [jQueryDoc.width()-260,jQueryDoc.height()-320]);
+            openStreetMapKey.forEach(function(pair){
+                var colorBox = $('<div>');
+                colorBox.css('background', pair[1]);
+                colorBox.css('color', 'white');
+                colorBox.append(pair[0].capitalizeFirstLetter());
+                keyDisplay.addAnchor(colorBox)
+            });
+            self.HUDManager.subscribeHUD(keyDisplay);
+            return keyDisplay
+        };
 
         return OpenStreetMapApp;
 

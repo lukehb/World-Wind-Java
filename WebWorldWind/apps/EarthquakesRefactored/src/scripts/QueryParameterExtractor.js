@@ -1,8 +1,3 @@
-
-/*
-
- */
-
 define(function() {
 
     // get an object containing all uri parameters

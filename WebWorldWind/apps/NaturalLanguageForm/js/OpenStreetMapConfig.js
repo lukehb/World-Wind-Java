@@ -1,6 +1,7 @@
 
 /*
     Author : Inzamam Rahaman
+    Modified by Matthew Evers
     Provides the configuration for the globe
  */
 
@@ -14,6 +15,8 @@ define(['http://worldwindserver.net/webworldwind/worldwindlib.js',
 
         this._drawHeightInM = 10000;
 
+        this._maxBuildingDrawHeight = 3000
+
         this._drawHeightInKm = this._drawHeightInM * 1000;
 
         this._drawRadiusInMiles = 20.0;
@@ -26,7 +29,7 @@ define(['http://worldwindserver.net/webworldwind/worldwindlib.js',
 
         this._boundBoxWidth = 1.6;
 
-        this._rTreeSize = 100000;
+        this._rTreeSize = 100;
 
         this._canvasWidthFactor = 0.9;
 
@@ -55,7 +58,7 @@ define(['http://worldwindserver.net/webworldwind/worldwindlib.js',
 
         this._boundingBoxHeight = 0.75;
 
-        this._nodeLimit = 100;
+        this._nodeLimit = 10;
 
         this._mapQuestAPIBase = 'http://www.mapquestapi.com/geocoding/v1/address?key=';
         this._mapQuestAPIKey = 'oa1pl9hIxUNigL3uwrAkERWczhGqDdAk';

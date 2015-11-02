@@ -7,7 +7,6 @@ define(['jquery',
         'HUDMaker',
         'OverlayButton',
         'OpenStreetMapApp',
-        'EarthquakeViewerWrapper',
         'LayerManager'],
     function($,
              NaturalLanguageCanvas,
@@ -15,10 +14,10 @@ define(['jquery',
              HUDMaker,
              OverlayButton,
              OpenStreetMapApp,
-             EarthquakeViewerWrapper,
              LayerManager){
 
         function Canvas () {
+            var self = this;
             /*
              * Create the html, css, and js for the wind icon in the bottom left. This will act as a menu for the canvas.
              */
@@ -31,29 +30,16 @@ define(['jquery',
                 '.content'
             );
 
-            /*
-             * Note that each form must have exactly as many fields as the app takes arguments.
-             */
-            var nLForm1 = new NLBuilder('Form1');
-            nLForm1.addBasicText('I want an earthquake viewer named: ');
-            nLForm1.addField('nameField', 'name', "For example: <em>Data</em>");
-            nLForm1.setApplication(EarthquakeViewerWrapper);
-
-
+            // Form for open street map.
             var nLForm2 = new NLBuilder('Form2');
             nLForm2.addBasicText('I\'m looking for ');
             nLForm2.addField('amenityField2', 'amenity', "For example: <em>cafe</em>");
             nLForm2.addBasicText(' near ');
-            nLForm2.addField('addressField2', 'address', "For example: <em>Mountain View</em>");
+            nLForm2.addField('addressField2', 'location', "For example: <em>Mountain View</em>");
             nLForm2.setApplication(OpenStreetMapApp);
 
-
-
-            //var newLayer = new EarthquakeViewLayer(wwd,"Data Display");
-            //newLayer.Manage.setDisplayType('placemarks');
-
             var naturalLanguageCanvas = new NaturalLanguageCanvas( window , [nLForm2]);
-            naturalLanguageCanvas.setClosingAction(function () {
+            naturalLanguageCanvas.addClosingAction(function (NLHandler) {
                 var buttonY = jQueryDoc.height() * .02;
                 var buttonX = jQueryDoc.width() * .02;
                 var returnButton = new OverlayButton(
@@ -68,6 +54,8 @@ define(['jquery',
                     var windIcon = $(o.target).parent();
                     var INDEX = 0;
                     $('#landingScreen').fadeIn(400);
+                    // Hide the layer manager upon return the NLH
+                    self.layerManager.anchor.DIV.fadeOut(10);
                     windIcon.fadeOut(400);
                     var loadTimeAnimator = window.setInterval(function () {
                         if (INDEX < 20){
@@ -78,14 +66,18 @@ define(['jquery',
                         }
                         $(o.target).css('width', 75 + 2*INDEX);
                         $(o.target).css('height', 75 + 2*INDEX);
-
                     },20);
 
-                })
-
-                var layerManager = new LayerManager( window.worldWindow )
+                    NLHandler.applicationManager.unFocusAll()
+                });
+                if (!self.layerManager){
+                    self.layerManager = new LayerManager( window.worldWindow )
+                } else {
+                    // Fade the layer manager in if already created.
+                    self.layerManager.anchor.DIV.fadeIn(10)
+                    self.layerManager.layerMan.synchronizeLayerList();
+                }
             });
-
 
             /*
              * Add the function that is called when the wind icon is clicked.
@@ -111,14 +103,14 @@ define(['jquery',
                     clearInterval(clickAwayAnimationTimer);
 
                     // Creates the menu
-                    var menuDisplay = new HUDMaker('AppMenu', [0,0], '.content');
+                    var menuDisplay = new HUDMaker('Application Menu', [0,0], '.content');
 
                     /*
                      * Creates the button that appends a new OSM query to the screen.
                      */
-                    menuDisplay.assembleDisplay('', 'Earthquake Viewer', function (e) {
-                        naturalLanguageCanvas.addForm(nLForm1)
-                    });
+                    //menuDisplay.assembleDisplay('', 'Earthquake Viewer', function (e) {
+                    //    naturalLanguageCanvas.addForm(nLForm1)
+                    //});
                     menuDisplay.assembleDisplay('', 'New OSM Query', function (e) {
                         naturalLanguageCanvas.addForm(nLForm2)
                     });
@@ -141,9 +133,6 @@ define(['jquery',
                     })
                 })
             });
-
-
-            //new (naturalLanguageCanvas.NLForm(document.getElementById( 'nl-form' )))
 
         }
 

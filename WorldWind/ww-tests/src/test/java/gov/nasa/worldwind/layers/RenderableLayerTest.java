@@ -61,7 +61,7 @@ public class RenderableLayerTest
         
         // Test that the layer contains the renderables.
         assertEquals("", renderables, layer.getRenderables());
-        }
+    }
 
     @Test
     public void testAddRenderables()
@@ -73,7 +73,75 @@ public class RenderableLayerTest
 
         // Test that the layer contains the renderables.
         assertEquals("", renderables, layer.getRenderables());
+    }
+
+    @Test
+    public void testInsertRenderable()
+    {
+        Iterable<Renderable> source = createExampleIterable();
+
+        List<Renderable> renderables = new ArrayList<Renderable>();
+        RenderableLayer layer = new RenderableLayer();
+
+        for (Renderable renderable : source)
+        {
+            renderables.add(renderables.size(), renderable);
+            layer.addRenderable(layer.getNumRenderables(), renderable);
         }
+
+        assertEquals("", renderables, layer.getRenderables());
+    }
+
+    @Test
+    public void testInsertRenderableAtBeginning()
+    {
+        Collection<Renderable> source = createExampleIterable();
+
+        List<Renderable> renderables = new ArrayList<Renderable>();
+        RenderableLayer layer = new RenderableLayer();
+        renderables.addAll(source);
+        layer.addRenderables(source);
+
+        Polyline inserted = new Polyline();
+        renderables.add(0, inserted);
+        layer.addRenderable(0, inserted);
+
+        assertEquals("", renderables, layer.getRenderables());
+    }
+
+    @Test
+    public void testInsertRenderableAfterFirst()
+    {
+        Collection<Renderable> source = createExampleIterable();
+
+        List<Renderable> renderables = new ArrayList<Renderable>();
+        RenderableLayer layer = new RenderableLayer();
+        renderables.addAll(source);
+        layer.addRenderables(source);
+
+        Polyline inserted = new Polyline();
+        renderables.add(1, inserted);
+        layer.addRenderable(1, inserted);
+
+        assertEquals("", renderables, layer.getRenderables());
+    }
+
+    @Test
+    public void testInsertRenderableAtEnd()
+    {
+        Collection<Renderable> source = createExampleIterable();
+
+        List<Renderable> renderables = new ArrayList<Renderable>();
+        RenderableLayer layer = new RenderableLayer();
+        renderables.addAll(source);
+        layer.addRenderables(source);
+
+        Polyline inserted = new Polyline();
+        renderables.add(renderables.size(), inserted);
+        layer.addRenderable(layer.getNumRenderables(), inserted);
+
+        assertEquals("", renderables, layer.getRenderables());
+    }
 
     @Test
     public void testRemoveRenderable()
@@ -267,6 +335,18 @@ public class RenderableLayerTest
     }
 
     @Test(expected = IllegalStateException.class)
+    public void testInsertRenderableFail()
+    {
+        Iterable<Renderable> renderables = createExampleIterable();
+
+        RenderableLayer layer = new RenderableLayer();
+        layer.setRenderables(renderables);
+
+        // Expecting an IllegalStateException here.
+        layer.addRenderable(0, new Polyline());
+    }
+    
+    @Test(expected = IllegalStateException.class)
     public void testRemoveRenderableFail()
     {
         Iterable<Renderable> renderables = createExampleIterable();
@@ -326,7 +406,7 @@ public class RenderableLayerTest
         }
     }
 
-    private static Iterable<Renderable> createExampleIterable()
+    private static Collection<Renderable> createExampleIterable()
     {
         //noinspection RedundantArrayCreation
         return Arrays.asList(new Renderable[] {

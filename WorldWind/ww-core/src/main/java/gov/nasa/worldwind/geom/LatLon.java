@@ -9,6 +9,7 @@ import gov.nasa.worldwind.avlist.AVKey;
 import gov.nasa.worldwind.globes.*;
 import gov.nasa.worldwind.util.*;
 
+import java.io.Serializable;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -22,8 +23,10 @@ import java.util.regex.Pattern;
  * @author Tom Gaskins
  * @version $Id$
  */
-public class LatLon
+public class LatLon implements Serializable
 {
+    private static final long serialVersionUID = 5863704950955584531L;
+    
     public static final LatLon ZERO = new LatLon(Angle.ZERO, Angle.ZERO);
     
     private static final String SEPARATORS = "(\\s*|,|,\\s*)";
@@ -39,7 +42,7 @@ public class LatLon
         "([-|\\+]?\\d{1,3}[d|D|\u00B0|\\s](\\s*\\d{1,2}['|\u2019|\\s])?(\\s*\\d{1,2}(\\.\\d+?)??[\"|\u201d])?\\s*[E|e|W|w]?)");
     
     public static final Pattern PATTERN = Pattern.compile(DECIMAL_PATTERN.pattern() + "|" + DMS_PATTERN.pattern());
-
+    
     public final Angle latitude;
     public final Angle longitude;
 

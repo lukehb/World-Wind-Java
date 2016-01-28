@@ -16,8 +16,10 @@ import java.util.*;
  */
 public class Position extends LatLon
 {
+    private static final long serialVersionUID = -3353046291652200565L;
+    
     public static final Position ZERO = new Position(Angle.ZERO, Angle.ZERO, 0d);
-
+    
     public final double elevation;
 
     public static Position fromRadians(double latitude, double longitude, double elevation)

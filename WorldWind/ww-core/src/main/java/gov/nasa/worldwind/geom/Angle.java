@@ -7,6 +7,7 @@ package gov.nasa.worldwind.geom;
 
 import gov.nasa.worldwind.util.Logging;
 
+import java.io.Serializable;
 import java.util.regex.*;
 
 /**
@@ -16,8 +17,10 @@ import java.util.regex.*;
  * @author Tom Gaskins
  * @version $Id$
  */
-public class Angle implements Comparable<Angle>
+public class Angle implements Comparable<Angle>, Serializable
 {
+    private static final long serialVersionUID = 8804184154686826050L;
+    
     // Angle format
     public final static String ANGLE_FORMAT_DD = "gov.nasa.worldwind.Geom.AngleDD";
     public final static String ANGLE_FORMAT_DM = "gov.nasa.worldwind.Geom.AngleDM";

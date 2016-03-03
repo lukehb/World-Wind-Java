@@ -1,29 +1,30 @@
 [![Build Status](https://travis-ci.org/wcmatthysen/World-Wind-Java.svg?branch=master)](https://travis-ci.org/wcmatthysen/World-Wind-Java)
 
-This file explains the organization of the World Wind Subversion repository's directories, and briefly outlines their contents.
+If you've ever tried to use WorldWind as a dependency in Gradle-based Java project you'd know it is quite hellish.
+WorldWind itself is fine, but it has dependencies on Jogl, Gluegen, and GDAL. All of which use jars to wrap native
+libraries. For example, when the main Jogl and Gluegen jars load they then look at the OS and architecture 
+and try to find the specific wrapped native jar to suit. So if you are on windows x64 jogl-all.jar will load and then it
+will look for jogl-all-natives-windows-amd64.jar. The problem is it only looks for jars in the same folder. This is
+fine for Maven projects, but for Gradle projects dependencies will not end up in the same folder.
 
-WorldWind
-=========
-The 'WorldWind' folder contains the World Wind Java SDK project. Many resources are available at http://goworldwind.org to help you understand and use World Wind. Key files and folders in the World Wind Java SDK:
-* src: Contains all Java source files for the World Wind Java SDK.
-* build.xml: Apache ANT build file for the World Wind Java SDK.
-* lib-external/gdal: Contains the GDAL native binary libraries that may optionally be distributed with World Wind.
+So, how can we have WorldWind as a dependency in a Gradle-based project?
 
-WorldWindIOS
-============
-The 'WorldWindIOS' folder contains the World Wind iOS SDK project. Many resource are available at http://goworldwind.org/world-wind-ios to help you understand and use World Wind on iOS. Key files and folders in the World Wind iOS SDK:
-* WorldWind/WorldWind: Contains all Objective-C source files for the World Wind iOS SDK.
-* WorldWind/WorldWind.xcodeproj: Xcode project file for the World Wind iOS SDK.
-* HelloWorldWind: Universal iOS app demonstrating basic usage of the World Wind iOS SDK.
-* TAIGA: iPad app for the NASA TAIGA project.  
+One solution for Jogl and Gluegen (not GDAL) is discussed [here][forum-post], he provides a custom loading action
+for resolving the wrapped natives. So you can grab his `GLBootstrap.java` [here][glbootstrap] and you use it like this:
+```java
+JNILibLoaderBase.setLoadingAction(new GLBootstrap());
+```
 
-WWAndroid
-=========
-the 'WWAndroid' folder contains the World Wind Android SDK project. Many resource are available at http://goworldwind.org/android to help you understand and use World Wind on Android. Key files and folders in the World Wind Android SDK:
-* src: Contains all Java source files for the World Wind Android SDK.
-* build.xml: Apache ANT build file for the World Wind Android SDK.
-* examples: Example Android apps that use the World Wind Android SDK.
+That still doesn't fully help for using WorldWind in Gradle-based projects, we still have to handle GDAL. What I have done in
+this repo is re-write the WorldWind build configs in Gradle (because why not) so that WorldWind is packaged in one fat jar 
+(uber jar) with Jogl, Gluegen, and GDAL inside it. 
 
-GDAL
-====
-The 'GDAL' folder contains the GDAL native library project. This project produces the GDAL native libraries used by the World Wind Java SDK (see WorldWind/lib-external/gdal). The GDAL native library project contains detailed instructions for building the GDAL native libraries on the three supported platforms: Linux, Mac OS X, and Windows.
+TLDR - Grab the jar that "just works"
+=====================================
+
+Choose the jar that is suitable for your project:
+
+**To do: host the built fat-jars in some artefactory.**
+
+[forum-post]: http://forum.jogamp.org/Atomic-jars-in-Maven-Central-Gradle-build-system-td4029555.html
+[glbootstrap]: https://github.com/jjzazuet/jgl/blob/965cb8030cbed1fbe15cf1ca23017f1b7817a520/jgl-opengl/src/main/java/net/tribe7/opengl/platform/GLBootstrap.java

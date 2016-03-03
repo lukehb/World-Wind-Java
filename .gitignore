@@ -1,6 +1,6 @@
-/WorldWind/ww-core/target/
-/WorldWind/ww-extensions/target/
-/WorldWind/ww-extensions/tmplib/
-/WorldWind/ww-performance/target/
-/WorldWind/ww-tests/target/
-/WorldWind/ww-server/target/
+/ww-core/build/
+/ww-extensions/build/
+*.iml
+/.idea/
+/lib/
+*.properties

@@ -1,0 +1,4 @@
+rootProject.name = 'worldwind-fat'
+include 'ww-core'
+include 'ww-extensions'
+

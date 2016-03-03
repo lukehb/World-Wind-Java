@@ -1,0 +1,16 @@
+group 'gov.nasa'
+version '2.1.0-SNAPSHOT'
+
+apply plugin: 'java'
+
+repositories {
+    mavenCentral()
+    maven{url 'https://dl.bintray.com/lukehb/gdal-fat'}
+    maven{url 'https://clojars.org/repo'}
+}
+
+dependencies {
+    testCompile group: 'junit', name: 'junit', version: '4.11'
+    compile project (':ww-core')
+    compile project (':ww-extensions')
+}

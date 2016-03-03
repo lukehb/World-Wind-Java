@@ -1,0 +1,93 @@
+buildscript {
+    repositories {
+        jcenter()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.jfrog.bintray.gradle:gradle-bintray-plugin:1.6'
+        // NOTE: Do not place your application dependencies here; they belong
+        // in the individual module build.gradle files
+    }
+}
+apply plugin: 'com.jfrog.bintray'
+
+group 'gov.nasa'
+version '0.0.1'
+
+repositories {
+    mavenCentral()
+    jcenter()
+    maven{url 'https://dl.bintray.com/lukehb/gdal-fat'}
+    maven{url 'https://clojars.org/repo'}
+}
+
+apply plugin: 'maven'
+apply plugin: 'maven-publish'
+apply plugin: 'java'
+apply plugin: 'application'
+
+dependencies {
+    testCompile group: 'junit', name: 'junit', version: '4.11'
+    compile "quil:jogl-all-fat:2.1.5"
+    compile "quil:gluegen-rt-fat:2.1.5"
+    compile group: 'org.gdal', name: 'gdal-fat', version: '0.0.1'
+    compile group: 'org.codehaus.jackson', name: 'jackson-core-asl', version: '1.9.13'
+}
+
+jar {
+    manifest {
+        attributes("Implementation-Title": project.name,
+                "Implementation-Version": version,
+                'Built-By': System.getProperty('user.name'),
+                'Built-Date': new Date(),
+                'Built-JDK': System.getProperty('java.version'))
+    }
+}
+
+task sourcesJar(type: Jar, dependsOn: classes) {
+    classifier = 'sources'
+    from sourceSets.main.allSource
+}
+
+artifacts {
+    archives sourcesJar
+}
+
+publishing {
+    publications {
+        MyPublication(MavenPublication) {
+            from components.java
+            groupId group
+            artifactId project.name
+            version version
+
+            artifact sourcesJar
+        }
+    }
+}
+
+
+
+bintray {
+    user = project.hasProperty('bintrayUser') ? project.bintrayUser : System.getenv('BINTRAY_USER')
+    key = project.hasProperty('bintrayKey') ? project.bintrayKey : System.getenv('BINTRAY_KEY')
+    publications = ['MyPublication']
+    publish = true //If version should be auto published after an upload
+    pkg {
+        repo = 'worldwind-bundled'
+        name = project.name
+        licenses = ['NASA-1.3']
+        desc = 'This is just the core WorldWind library with modified Jogl, ' +
+                'Gluegen, and Gdal libraries to make it easier to use in ' +
+                'Gradle and easier to bundle in fat (uber) jars.' +
+                'It has dependencies on some my other (non-central) ' +
+                'bintray repos, check the github page for usage details.'
+        websiteUrl = 'https://github.com/lukehb/World-Wind-Java'
+        issueTrackerUrl = 'https://github.com/lukehb/World-Wind-Java/issues'
+        vcsUrl = 'https://github.com/lukehb/World-Wind-Java.git'
+        labels = ['worldwind', 'nasa', 'java', 'bundled', 'core']
+        publicDownloadNumbers = true
+        githubRepo = 'lukehb/World-Wind-Java'
+        githubReleaseNotesFile = 'README.md'
+    }
+}

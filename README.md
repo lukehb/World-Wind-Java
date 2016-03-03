@@ -1,9 +1,6 @@
 If you've ever tried to use WorldWind as a dependency in Gradle-based Java project you'd know it is quite hellish.
 WorldWind itself is fine, but it has dependencies on Jogl, Gluegen, and GDAL. All of which use jars to wrap native
-libraries. For example, when the main Jogl and Gluegen jars load they then look at the OS and architecture 
-and try to find the specific wrapped native jar to suit. So if you are on windows x64 jogl-all.jar will load and then it
-will look for jogl-all-natives-windows-amd64.jar. The problem is it only looks for jars in the same folder. This is
-fine for Maven projects, but for Gradle projects dependencies will not end up in the same folder.
+libraries. For example, in **older versions** of Jogl (such as the version WorldWind has a dependency on) when the main Jogl jar loads it looks at the OS and architecture and trys to find the specific wrapped native jar to suit. So if you are on windows x64 jogl-all.jar will load and then it will look for jogl-all-natives-windows-amd64.jar. The problem is it only looks for jars in the same folder. This is fine for Maven projects, but for Gradle projects dependencies will not end up in the same folder.
 
 So, how can we have WorldWind as a dependency in a Gradle-based project?
 

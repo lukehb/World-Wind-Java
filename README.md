@@ -22,6 +22,7 @@ Then in my build.gradle I have something like this:
 ```groovy
 repositories {
     mavenCentral()
+    maven{url 'https://dl.bintray.com/lukehb/worldwind-bundled'} //for the modified worldwind core
     maven{url 'https://dl.bintray.com/lukehb/gdal-fat'} //for gdal fat jar
     maven{url 'https://clojars.org/repo'} //for jogl and gluegen fat jars
 }

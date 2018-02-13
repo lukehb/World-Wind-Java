@@ -1,6 +1,10 @@
 /ww-core/build/
+/ww-core/.gradle/
+/ww-core/out/
+/ww-extensions/out/
 /ww-extensions/build/
 *.iml
 /.idea/
 /lib/
 *.properties
+/.gradle/

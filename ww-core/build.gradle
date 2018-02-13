@@ -1,30 +1,23 @@
-buildscript {
+plugins {
+    id "com.jfrog.bintray" version "1.7.3"
+}
+
+allprojects {
     repositories {
         jcenter()
         mavenCentral()
+        mavenLocal()
+        maven{url 'https://dl.bintray.com/lukehb/gdal-fat'}
+        maven{url 'https://clojars.org/repo'}
     }
-    dependencies {
-        classpath 'com.jfrog.bintray.gradle:gradle-bintray-plugin:1.6'
-        // NOTE: Do not place your application dependencies here; they belong
-        // in the individual module build.gradle files
-    }
+    apply plugin: 'maven'
+    apply plugin: 'maven-publish'
+    apply plugin: 'java'
 }
-apply plugin: 'com.jfrog.bintray'
 
 group 'gov.nasa'
-version '0.0.1'
+version '0.0.2'
 
-repositories {
-    mavenCentral()
-    jcenter()
-    maven{url 'https://dl.bintray.com/lukehb/gdal-fat'}
-    maven{url 'https://clojars.org/repo'}
-}
-
-apply plugin: 'maven'
-apply plugin: 'maven-publish'
-apply plugin: 'java'
-apply plugin: 'application'
 
 dependencies {
     testCompile group: 'junit', name: 'junit', version: '4.11'
@@ -36,7 +29,8 @@ dependencies {
 
 jar {
     manifest {
-        attributes("Implementation-Title": project.name,
+        attributes(
+                "Implementation-Title": project.name,
                 "Implementation-Version": version,
                 'Built-By': System.getProperty('user.name'),
                 'Built-Date': new Date(),
@@ -49,8 +43,19 @@ task sourcesJar(type: Jar, dependsOn: classes) {
     from sourceSets.main.allSource
 }
 
+javadoc{
+    failOnError = false
+}
+
+task javadocJar(type: Jar, dependsOn: javadoc) {
+    classifier = "javadoc"
+    from 'build/docs/javadoc'
+}
+
 artifacts {
+    archives jar
     archives sourcesJar
+    archives javadocJar
 }
 
 publishing {
@@ -60,13 +65,11 @@ publishing {
             groupId group
             artifactId project.name
             version version
-
-            artifact sourcesJar
+            Artifact sourcesJar
+            Artifact javadocJar
         }
     }
 }
-
-
 
 bintray {
     user = project.hasProperty('bintrayUser') ? project.bintrayUser : System.getenv('BINTRAY_USER')

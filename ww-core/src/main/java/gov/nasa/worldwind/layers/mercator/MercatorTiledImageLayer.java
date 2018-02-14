@@ -190,6 +190,10 @@ public abstract class MercatorTiledImageLayer extends AbstractLayer
         this.useMipMaps = useMipMaps;
     }
 
+    public void setSplitScale(double splitScale) {
+        this.splitScale = splitScale;
+    }
+
     private void createTopLevelTiles()
     {
         MercatorSector sector = (MercatorSector) this.levels.getSector();

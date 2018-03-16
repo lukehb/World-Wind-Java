@@ -23,7 +23,7 @@ dependencies {
     testCompile group: 'junit', name: 'junit', version: '4.11'
     compile "quil:jogl-all-fat:2.1.5"
     compile "quil:gluegen-rt-fat:2.1.5"
-    compile group: 'org.gdal', name: 'gdal-fat', version: '0.0.1'
+    compile group: 'org.gdal', name: 'gdal-fat', version: '0.0.2'
     compile group: 'org.codehaus.jackson', name: 'jackson-core-asl', version: '1.9.13'
 }
 
